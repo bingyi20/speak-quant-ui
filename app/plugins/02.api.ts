@@ -1,3 +1,4 @@
+import { disableGoogleAutoSelect } from '~/features/auth/google'
 import { createHttpClient } from '~/lib/http/client'
 import { createAuthSession } from '~/lib/http/session'
 import { createAuthApi } from '~/features/auth/api'
@@ -10,6 +11,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   const auth = useAuthStore()
   const router = useRouter()
   const preferences = usePreferencesStore()
+  const localePreference = useCookie('trade-locale')
   const enabled = String(config.public.apiEnabled) === 'true'
   const baseURL = import.meta.server ? config.apiBase : config.public.apiBase
   const origin = import.meta.client ? location.origin : config.public.siteUrl
@@ -20,7 +22,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     refresh: authApi.refresh,
     onUser: (user) => {
       auth.setUser(user)
-      preferences.locale = user.locale
+      if (!localePreference.value) preferences.locale = user.locale
     },
     onClear: () => {
       const previousUser = auth.user
@@ -60,6 +62,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     // Clear browser state only after backend revocation succeeds; failures remain retryable.
     if (enabled && auth.isAuthenticated) await createAuthApi(http).logout()
     session.clear()
+    if (import.meta.client) disableGoogleAutoSelect()
   }
   if (import.meta.client) {
     if (enabled) void restoreAuth()

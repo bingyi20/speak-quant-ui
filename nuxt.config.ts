@@ -8,12 +8,14 @@ export default defineNuxtConfig({
   fonts: { providers: { google: false, googleicons: false } },
   icon: { provider: 'none', serverBundle: 'local', clientBundle: { scan: true } },
   runtimeConfig: {
-    apiBase: 'http://127.0.0.1:6001/api',
+    apiBase: 'http://localhost:6001/api',
     public: {
-      apiBase: process.env.NODE_ENV === 'production' ? '/api' : 'http://127.0.0.1:6001/api',
-      apiEnabled: false,
+      apiBase: process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:6001/api',
+      apiEnabled: true,
       enableDarkTheme: false,
-      siteUrl: 'http://127.0.0.1:6002',
+      termsUrl: '',
+      privacyUrl: '',
+      siteUrl: 'http://localhost:6002',
     },
   },
   routeRules: {

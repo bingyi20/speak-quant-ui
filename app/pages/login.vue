@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import LoginPlaceholder from '~/features/auth/components/LoginPlaceholder.vue'
+import LoginView from '~/features/auth/components/LoginView.vue'
 definePageMeta({ layout: 'auth' })
 const { t } = useI18n()
 usePageSeo(
@@ -7,4 +7,4 @@ usePageSeo(
   () => t('auth.subtitle'),
 )
 </script>
-<template><LoginPlaceholder /></template>
+<template><LoginView /></template>

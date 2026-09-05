@@ -4,7 +4,7 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: true,
   use: {
-    baseURL: 'http://127.0.0.1:6002',
+    baseURL: 'http://localhost:6002',
     locale: 'zh-CN',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
@@ -18,7 +18,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'pnpm dev',
-    url: 'http://127.0.0.1:6002',
+    url: 'http://localhost:6002',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

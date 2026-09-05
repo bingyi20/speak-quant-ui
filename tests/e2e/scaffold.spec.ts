@@ -1,4 +1,18 @@
 import { expect, test } from '@playwright/test'
+import { anonymous, authResponse, envelope, stubGoogle } from './auth-fixtures'
+test.beforeEach(async ({ page }) => {
+  await stubGoogle(page)
+  await page.route('**/api/auth/google/config', (route) =>
+    route.fulfill({ json: envelope({ client_id: 'test', nonce: 'test' }) }),
+  )
+  await page.route('**/api/auth/refresh', (route) => {
+    const login = route.request().headers().referer?.includes('/login')
+    return route.fulfill({
+      status: login ? 401 : 200,
+      json: login ? anonymous : envelope(authResponse),
+    })
+  })
+})
 
 test('public landing renders on the server and links into the workspace', async ({
   page,
@@ -24,7 +38,8 @@ test('public landing renders on the server and links into the workspace', async 
 test('draft survives navigation/reload without fake research creation', async ({ page }) => {
   const writes: string[] = []
   page.on('request', (request) => {
-    if (request.method() === 'POST') writes.push(request.url())
+    if (request.method() === 'POST' && !request.url().endsWith('/auth/refresh'))
+      writes.push(request.url())
   })
   await page.goto('/new-task')
   await page.getByRole('button', { name: '趋势跟随' }).click()
@@ -83,7 +98,7 @@ test('all routes return 200, show the correct page, and have no horizontal overf
   const routes = [
     ['/', /让每一个想法，\s*经得起验证。/],
     ['/new-task', '今天，想验证什么？'],
-    ['/login', '回到你的研究'],
+    ['/login', '登录或注册'],
     ['/conversations/preview', '为你的研究，留一处空间。'],
   ] as const
   for (const [path, title] of routes) {
