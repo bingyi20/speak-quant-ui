@@ -1,0 +1,25 @@
+/* Engineering theme for verification; gated until the visual design is approved. */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-brand: #c69a58;
+  --color-brand-hover: #dfb778;
+  --color-brand-on: #211b13;
+  --color-bg-canvas: #1c1d1a;
+  --color-bg-sidebar: #171815;
+  --color-bg-surface: #242520;
+  --color-bg-subtle: #2d2f28;
+  --color-bg-selected: #3a3123;
+  --color-text-primary: #e9e8e1;
+  --color-text-secondary: #bcbbb0;
+  --color-text-muted: #a5a69a;
+  --color-border-default: #3f4137;
+  --color-border-focus: #c69a58;
+  --color-success: #8fc5af;
+  --color-danger: #dfa096;
+  --color-chart-up: #81bda9;
+  --color-chart-down: #d5948b;
+  --color-chart-grid: #36382f;
+  --color-overlay: rgb(0 0 0 / 55%);
+  --shadow-composer: 0 4px 20px rgb(0 0 0 / 12%);
+  --shadow-panel: 0 6px 30px rgb(0 0 0 / 16%);
+}

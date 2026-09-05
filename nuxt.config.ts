@@ -1,0 +1,43 @@
+export default defineNuxtConfig({
+  compatibilityDate: '2026-09-05',
+  modules: ['@nuxt/ui', '@pinia/nuxt', '@nuxtjs/i18n', '@nuxt/eslint'],
+  devtools: { enabled: false },
+  devServer: { host: '127.0.0.1', port: 6002 },
+  css: ['~/assets/css/main.css'],
+  ui: { colorMode: false },
+  fonts: { providers: { google: false, googleicons: false } },
+  icon: { provider: 'none', serverBundle: 'local', clientBundle: { scan: true } },
+  runtimeConfig: {
+    apiBase: 'http://127.0.0.1:6001/api',
+    public: {
+      apiBase: process.env.NODE_ENV === 'production' ? '/api' : 'http://127.0.0.1:6001/api',
+      apiEnabled: false,
+      enableDarkTheme: false,
+      siteUrl: 'http://127.0.0.1:6002',
+    },
+  },
+  routeRules: {
+    '/new-task': {
+      ssr: false,
+      headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' },
+    },
+    '/conversations/**': {
+      ssr: false,
+      headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' },
+    },
+    '/login': { headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' } },
+  },
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'zh-CN',
+    detectBrowserLanguage: false,
+    vueI18n: './i18n.config.ts',
+    locales: [
+      { code: 'zh-CN', language: 'zh-CN', name: '简体中文' },
+      { code: 'en-US', language: 'en-US', name: 'English' },
+    ],
+  },
+  typescript: { strict: true, tsConfig: { exclude: ['../prototype/**'] } },
+  ignore: ['prototype/**'],
+  app: { head: { link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }] } },
+})

@@ -1,0 +1,48 @@
+{
+  "name": "trade-lab-ui",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
+  "scripts": {
+    "dev": "nuxt dev --host 127.0.0.1 --port 6002",
+    "build": "nuxt build",
+    "preview": "nuxt preview --host 127.0.0.1 --port 6002",
+    "postinstall": "nuxt prepare",
+    "lint": "eslint .",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "format": "prettier --write app shared i18n tests *.ts *.mjs *.json README.md AGENTS.md .github",
+    "format:check": "prettier --check app shared i18n tests *.ts *.mjs *.json README.md AGENTS.md .github"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.106",
+    "@nuxt/ui": "^4.7.1",
+    "@nuxtjs/i18n": "^10.0.0",
+    "@pinia/nuxt": "^0.11.3",
+    "decimal.js": "^10.6.0",
+    "marked": "^18.0.0",
+    "nuxt": "4.5.2",
+    "ofetch": "^1.5.1",
+    "pinia": "^3.0.4",
+    "sanitize-html": "^2.17.0",
+    "tailwindcss": "^4.3.0",
+    "vue": "^3.5.33"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.15.2",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^22.0.0",
+    "@types/sanitize-html": "^2.16.0",
+    "eslint": "^10.3.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.0",
+    "vue-tsc": "^3.2.8"
+  }
+}

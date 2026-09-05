@@ -1,0 +1,8 @@
+prototype/
+node_modules/
+.nuxt/
+.output/
+docs/
+pnpm-lock.yaml
+playwright-report/
+test-results/

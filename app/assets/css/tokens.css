@@ -1,0 +1,16 @@
+:root {
+  --font-body: 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Songti SC', 'STSong', Georgia, serif;
+  --font-mono: 'SFMono-Regular', Consolas, monospace;
+  --radius-control: 10px;
+  --radius-panel: 14px;
+  --radius-composer: 20px;
+  --sidebar-width: 224px;
+  --conversation-width: 736px;
+  --home-width: 650px;
+  --landing-width: 820px;
+  --motion-fast: 160ms;
+  --motion-panel: 260ms;
+  --z-header: 10;
+  --z-panel: 20;
+}
