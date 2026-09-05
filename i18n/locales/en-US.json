@@ -149,5 +149,19 @@
     "network": "Unable to connect. Check your network.",
     "timeout": "The request timed out. Please retry.",
     "empty": "Nothing here yet."
+  },
+  "history": {
+    "list": "History",
+    "favorites": "Pinned",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "rename": "Rename",
+    "delete": "Delete",
+    "more": "Manage research: {title}",
+    "noFavorites": "Pinned research will appear here.",
+    "renameHint": "Enter to save, Escape to cancel, or click elsewhere to save. Empty names keep the original title.",
+    "titleLabel": "Research name",
+    "deleteTitle": "Delete research?",
+    "deleteDescription": "Delete “{title}”? This cannot be undone."
   }
 }

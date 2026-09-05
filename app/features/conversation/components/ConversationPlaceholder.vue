@@ -11,22 +11,29 @@ const { panel, show, close } = useWorkspace()
     :class="{ 'has-panel': panel.open, 'panel-fullscreen': panel.fullscreen }"
   >
     <section class="conversation-column">
-      <header class="conversation-header">
-        <span>{{ $t('conversation.title') }}</span
-        ><button
+      <Teleport
+        to="#workspace-actions"
+        defer
+      >
+        <button
           class="text-button"
           @click="show(panel.view)"
         >
           <UIcon name="i-lucide-panels-top-left" />{{ $t('conversation.assets') }}
         </button>
-      </header>
+      </Teleport>
       <div class="conversation-empty">
         <CommonBrandMark :wordmark="false" />
         <h1>{{ $t('conversation.emptyTitle') }}</h1>
         <p>{{ $t('conversation.emptyDescription') }}</p>
         <span class="preview-label">{{ $t('conversation.emptyNote') }}</span>
       </div>
-      <div class="conversation-input"><ResearchEntry compact /></div>
+      <div class="conversation-input">
+        <ResearchEntry
+          compact
+          :show-hint="false"
+        />
+      </div>
     </section>
     <section
       v-if="panel.open"

@@ -21,7 +21,13 @@ pnpm dev
 | `/conversations/:id`     | 研究详情路由骨架；当前不读取 ID 对应的数据 |
 | `/login`                 | 邮箱验证码 / Google 登录                   |
 
-工作台左下角打开个人信息与偏好弹窗；移动端通过右上角设置按钮打开。语言设置和侧栏折叠可保存。输入草稿只保存到当前标签页；发送按钮只提示业务尚未接入，不创建模拟资产。登录页通过统一 HTTP 客户端连接真实接口。
+工作台左下角打开个人信息与偏好弹窗；移动端展开侧栏后打开。语言设置和侧栏折叠可保存。输入草稿只保存到当前标签页；发送按钮只提示业务尚未接入，不创建模拟资产。登录页通过统一 HTTP 客户端连接真实接口。
+
+工作台侧栏收起后只保留顶部展开入口；悬停时浮层预览，点击后固定展开并重新排布正文。对话页顶部保留标题，仅在侧栏收起时显示新研究快捷入口（开发环境匹配 Mock 历史标题，其余仍为占位，尚未请求真实对话数据）。快捷例子点击后填入并聚焦输入框，侧栏底部使用已恢复的用户头像、昵称和邮箱；头像缺失或加载失败时使用 `public/avatar-default.svg`。
+
+研究历史 UI 使用开发环境专用 Mock（`app/features/conversation/mock-history.ts`），字段与接口文档的 `ConversationSummary` 一致。收藏和其余历史分组独立折叠，条目支持路由选中、收藏切换、重命名和删除；标题同步到对话工具栏。操作只改变当前应用内存，刷新会恢复示例，生产构建不加载 Mock，未调用研究历史 API。后台 `scope=all` 包含收藏，后续接入时需按 `is_favorite` 分组，避免重复显示。菜单与分组 UI 位于 `ResearchHistory.vue`，状态集中在 `history-store.ts`。重命名由 `HistoryRenameInput.vue` 原位编辑并全选文本；Enter 或失焦保存，Esc 取消，空名称保留原标题，输入法组合过程中不提交。
+
+侧栏可点击条目统一使用 `sidebar-item`，Hover、键盘聚焦和 `.is-selected` 选中态共用 `--color-bg-sidebar-interactive` 背景色。新研究及后续聊天历史链接使用 `class="sidebar-item" exact-active-class="is-selected"`，由 NuxtLink 按当前页面路由保持选中背景；头像入口仅使用交互反馈，不保留选中背景。
 
 ## 环境与联调
 

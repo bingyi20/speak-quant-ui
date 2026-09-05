@@ -11,10 +11,8 @@ usePageSeo(
 <template>
   <section class="new-task-page">
     <div class="new-task-inner">
-      <CommonBrandMark :wordmark="false" />
       <h1>{{ $t('research.title') }}</h1>
-      <p class="new-task-subtitle">{{ $t('research.subtitle') }}</p>
-      <ResearchEntry /><NuxtLink
+      <ResearchEntry :show-hint="false" /><NuxtLink
         v-if="scaffold"
         to="/conversations/preview"
         class="explore-link"

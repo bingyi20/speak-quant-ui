@@ -1,9 +1,20 @@
 <script setup lang="ts">
 import { useResearchEntry } from '../composables/useResearchEntry'
-withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
+withDefaults(defineProps<{ compact?: boolean; showHint?: boolean }>(), {
+  compact: false,
+  showHint: true,
+})
 const { draft, notice, submit } = useResearchEntry()
 const { t } = useI18n()
 const composing = ref(false)
+const input = useTemplateRef<HTMLTextAreaElement>('input')
+function chooseExample(n: number) {
+  draft.value = t(`research.prompt${n}`)
+  nextTick(() => {
+    input.value?.focus()
+    input.value?.setSelectionRange(draft.value.length, draft.value.length)
+  })
+}
 function keydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !composing.value) {
     event.preventDefault()
@@ -24,6 +35,7 @@ function keydown(event: KeyboardEvent) {
       >
       <textarea
         :id="`research-${compact ? 'compact' : 'full'}`"
+        ref="input"
         v-model="draft"
         :placeholder="$t('research.placeholder')"
         :rows="compact ? 2 : 3"
@@ -32,7 +44,7 @@ function keydown(event: KeyboardEvent) {
         @compositionend="composing = false"
       />
       <div class="composer-bottom">
-        <span>{{ $t('research.hint') }}</span
+        <span v-if="showHint">{{ $t('research.hint') }}</span
         ><button
           type="submit"
           class="send-button"
@@ -57,7 +69,7 @@ function keydown(event: KeyboardEvent) {
       <button
         v-for="n in 4"
         :key="n"
-        @click="draft = t(`research.prompt${n}`)"
+        @click="chooseExample(n)"
       >
         <svg
           viewBox="0 0 64 28"

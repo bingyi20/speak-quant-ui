@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { anonymous, authResponse, envelope, stubGoogle } from './auth-fixtures'
+import { anonymous, authResponse, envelope, settingsTrigger, stubGoogle } from './auth-fixtures'
 
 test.beforeEach(async ({ page }) => {
   await stubGoogle(page)
@@ -66,8 +66,8 @@ test('email login submits once, preserves draft, restores the session and signs 
   expect(refreshCount).toBe(2)
   const storage = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))
   expect(storage).not.toContain('test-memory-access')
-  await page.getByRole('button', { name: '个人信息与偏好' }).filter({ visible: true }).click()
-  await expect(page.getByText('tester@example.com')).toBeVisible()
+  await (await settingsTrigger(page)).click()
+  await expect(page.getByRole('dialog').last().getByText('tester@example.com')).toBeVisible()
   await page.getByRole('button', { name: '退出登录' }).click()
   await expect(page).toHaveURL(/\/login/)
 })

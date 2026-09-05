@@ -21,9 +21,12 @@ async function logout() {
     <section>
       <h3>{{ $t('settings.profile') }}</h3>
       <div class="profile-line">
-        <span class="avatar large"><UIcon name="i-lucide-user-round" /></span>
+        <CommonUserAvatar
+          :src="auth.user?.avatar_url"
+          large
+        />
         <div>
-          <strong>{{ auth.user?.display_name || $t('settings.guest') }}</strong>
+          <strong>{{ auth.user?.display_name || auth.user?.email || $t('settings.guest') }}</strong>
           <p>{{ auth.user?.email || $t('settings.profileHint') }}</p>
         </div>
       </div>

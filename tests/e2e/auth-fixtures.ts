@@ -31,3 +31,10 @@ export async function stubGoogle(page: Page) {
     }),
   )
 }
+
+export async function settingsTrigger(page: Page) {
+  const trigger = page.getByRole('button', { name: '个人信息与偏好' }).filter({ visible: true })
+  if ((page.viewportSize()?.width ?? 1440) <= 760)
+    await page.getByRole('button', { name: '展开侧栏' }).filter({ visible: true }).click()
+  return trigger
+}

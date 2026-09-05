@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { anonymous, authResponse, envelope, stubGoogle } from './auth-fixtures'
+import { anonymous, authResponse, envelope, settingsTrigger, stubGoogle } from './auth-fixtures'
 test.beforeEach(async ({ page }) => {
   await stubGoogle(page)
   await page.route('**/api/auth/google/config', (route) =>
@@ -68,9 +68,12 @@ test('workspace panels switch and close while keeping the conversation', async (
   await expect(page.getByText('回测完成后，在这里查看图表、交易与洞察。')).toBeVisible()
 })
 
-test('settings modal saves language, restores focus, and contains no tokens', async ({ page }) => {
+test('settings modal saves language, restores focus, and contains no tokens', async ({
+  page,
+  isMobile,
+}) => {
   await page.goto('/new-task')
-  const trigger = page.getByRole('button', { name: '个人信息与偏好' }).filter({ visible: true })
+  const trigger = await settingsTrigger(page)
   await trigger.click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
@@ -79,7 +82,9 @@ test('settings modal saves language, restores focus, and contains no tokens', as
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
   await expect(
-    page.getByRole('button', { name: 'Profile & preferences' }).filter({ visible: true }),
+    isMobile
+      ? page.locator('.workspace-expand')
+      : page.getByRole('button', { name: 'Profile & preferences' }).filter({ visible: true }),
   ).toBeFocused()
   await page.reload()
   await expect(page.getByRole('heading', { name: 'What will you explore today?' })).toBeVisible()

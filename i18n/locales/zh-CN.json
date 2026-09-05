@@ -149,5 +149,19 @@
     "network": "连接暂时不可用，请检查网络。",
     "timeout": "请求超时，请重试。",
     "empty": "这里还没有内容。"
+  },
+  "history": {
+    "list": "历史",
+    "favorites": "收藏",
+    "pin": "收藏",
+    "unpin": "取消收藏",
+    "rename": "重命名",
+    "delete": "删除",
+    "more": "管理研究：{title}",
+    "noFavorites": "收藏的研究会显示在这里。",
+    "renameHint": "Enter 保存，Esc 取消；点击其他位置保存。空名称会保留原名称。",
+    "titleLabel": "研究名称",
+    "deleteTitle": "删除研究？",
+    "deleteDescription": "确定删除「{title}」吗？此操作无法撤销。"
   }
 }
