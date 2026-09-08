@@ -38,7 +38,7 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
   const expandedProfile = await sidebar.locator('.account-trigger').boundingBox()
   await page.getByRole('button', { name: '收起侧栏' }).click()
   const expand = page.locator('.workspace-expand')
-  // The preview immediately replaces this button under the pointer.
+  // Move onto the persistent toggle to open the hover preview.
   const hoverExpand = async () => {
     const bounds = await expand.boundingBox()
     expect(bounds).not.toBeNull()
@@ -66,7 +66,7 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
   await page.getByRole('heading', { name: '今天，想验证什么？' }).hover()
   await expect(page.locator('.workspace-sidebar')).toBeHidden()
   await hoverExpand()
-  await sidebar.getByRole('button', { name: '展开侧栏' }).click()
+  await expand.click()
   await expect(page.locator('.workspace-shell')).not.toHaveClass(/sidebar-collapsed/)
   await expect.poll(async () => (await main.boundingBox())?.x).toBe(300)
   await expect(sidebar.getByRole('link', { name: 'Trade Lab' })).toBeVisible()
@@ -78,6 +78,69 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
   await page.keyboard.press('Escape')
   await expect(page.locator('.workspace-sidebar')).toBeHidden()
   await expect(expand).toBeFocused()
+})
+
+test('collapse keeps one continuous toggle and cannot reopen from a stationary pointer', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop sidebar motion')
+  await page.goto('/new-task')
+  const toggle = page.locator('.workspace-expand')
+  await expect(toggle).toHaveAccessibleName('收起侧栏')
+  const originalButton = await toggle.elementHandle()
+  for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+    await page.emulateMedia({ reducedMotion })
+    // Record every animation frame, including the moment the click changes state.
+    const frames = toggle.evaluate(
+      (button) =>
+        new Promise<Array<{ x: number; visible: boolean; preview: boolean }>>((resolve) => {
+          button.addEventListener(
+            'click',
+            () => {
+              const samples: Array<{ x: number; visible: boolean; preview: boolean }> = []
+              const start = performance.now()
+              const sample = () => {
+                const rect = button.getBoundingClientRect()
+                samples.push({
+                  x: rect.x,
+                  visible:
+                    rect.width === 32 &&
+                    getComputedStyle(button).visibility === 'visible' &&
+                    document.elementFromPoint(rect.x + 16, rect.y + 16)?.closest('button') ===
+                      button,
+                  preview: !!button.closest('.sidebar-preview'),
+                })
+                if (performance.now() - start < 400) requestAnimationFrame(sample)
+                else resolve(samples)
+              }
+              sample()
+            },
+            { once: true },
+          )
+        }),
+    )
+    await toggle.click()
+    const samples = await frames
+    expect(samples.every((sample) => sample.visible && !sample.preview)).toBe(true)
+    expect(samples[0]!.x).toBe(252)
+    expect(samples.at(-1)!.x).toBe(16)
+    for (let index = 1; index < samples.length; index++) {
+      expect(samples[index]!.x).toBeLessThanOrEqual(samples[index - 1]!.x)
+    }
+    if (reducedMotion === 'no-preference') {
+      expect(samples.some((sample) => sample.x > 16 && sample.x < 252)).toBe(true)
+    }
+    await expect(page.locator('.workspace-sidebar')).toBeHidden()
+    expect(await toggle.evaluate((button, original) => button === original, originalButton)).toBe(
+      true,
+    )
+    await toggle.hover()
+    await expect(page.locator('.workspace-sidebar')).toBeVisible()
+    await toggle.click()
+    await expect.poll(async () => (await toggle.boundingBox())?.x).toBe(252)
+    await expect(toggle).toHaveAccessibleName('收起侧栏')
+  }
 })
 
 test('conversation toolbar provides title and new research while collapsed', async ({

@@ -63,6 +63,15 @@ function cancelClose() {
   clearTimeout(closeTimer)
 }
 function preview() {
+  // Only actual pointer movement can open a preview. A sliding button passing
+  // under a stationary pointer must not undo an explicit collapse.
+  if (
+    expand.value
+      ?.closest('.workspace-shell')
+      ?.getAnimations()
+      .some((animation: Animation) => animation.playState === 'running')
+  )
+    return
   cancelClose()
   if (preferences.sidebarCollapsed && matchMedia('(min-width: 761px) and (hover: hover)').matches) {
     previewMode.value = true
@@ -75,6 +84,7 @@ function closePreview() {
     if (
       navigationBusy.value ||
       sidebar.value?.matches(':hover') ||
+      expand.value?.matches(':hover') ||
       sidebar.value?.contains(document.activeElement)
     )
       return
@@ -96,11 +106,7 @@ function toggle() {
   if (matchMedia('(max-width: 760px)').matches) mobileOpen.value = true
   else preferences.sidebarCollapsed = !preferences.sidebarCollapsed
   previewOpen.value = false
-  if (!isMobile.value)
-    nextTick(() => {
-      if (preferences.sidebarCollapsed) expand.value?.focus()
-      else sidebar.value?.querySelector<HTMLButtonElement>('button')?.focus()
-    })
+  if (!isMobile.value) nextTick(() => expand.value?.focus())
 }
 function dismiss(event: KeyboardEvent) {
   if (event.defaultPrevented) return
@@ -152,6 +158,23 @@ onBeforeUnmount(() => {
       class="skip-link"
       >{{ $t('nav.workspace') }}</a
     >
+    <div class="workspace-toggle-rail">
+      <button
+        ref="expand"
+        type="button"
+        class="icon-button sidebar-toggle workspace-expand"
+        :aria-label="$t(isMobile || preferences.sidebarCollapsed ? 'nav.expand' : 'nav.collapse')"
+        :title="$t(isMobile || preferences.sidebarCollapsed ? 'nav.expand' : 'nav.collapse')"
+        aria-controls="workspace-sidebar"
+        :aria-expanded="isMobile ? mobileOpen : !preferences.sidebarCollapsed || previewOpen"
+        @pointermove="preview"
+        @mouseleave="closePreview"
+        @click="toggle"
+        @keydown.down.prevent="previewFromKeyboard"
+      >
+        <UIcon name="i-lucide-panel-left" />
+      </button>
+    </div>
     <aside
       id="workspace-sidebar"
       ref="sidebar"
@@ -164,8 +187,7 @@ onBeforeUnmount(() => {
       @focusout="closePreview"
     >
       <WorkspaceNavigation
-        :collapsed="preferences.sidebarCollapsed"
-        @toggle="toggle"
+        :collapsed="previewOpen"
         @settings="openSettings"
         @interaction="setNavigationBusy"
       />
@@ -175,21 +197,6 @@ onBeforeUnmount(() => {
       class="workspace-main"
     >
       <header class="workspace-toolbar">
-        <button
-          ref="expand"
-          type="button"
-          class="icon-button sidebar-toggle workspace-expand"
-          :aria-label="$t('nav.expand')"
-          :title="$t('nav.expand')"
-          aria-controls="workspace-sidebar"
-          :aria-expanded="isMobile ? mobileOpen : !preferences.sidebarCollapsed || previewOpen"
-          @mouseenter="preview"
-          @mouseleave="closePreview"
-          @click="toggle"
-          @keydown.down.prevent="previewFromKeyboard"
-        >
-          <UIcon name="i-lucide-panel-left" />
-        </button>
         <template v-if="isConversation">
           <NuxtLink
             v-if="showNewTaskShortcut"

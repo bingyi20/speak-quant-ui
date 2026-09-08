@@ -17,11 +17,12 @@ defineEmits<{
       ><CommonBrandMark
     /></NuxtLink>
     <UiIconButton
+      v-if="mobile"
       class="sidebar-toggle"
-      :label="mobile ? $t('common.close') : $t(collapsed ? 'nav.expand' : 'nav.collapse')"
+      :label="$t('common.close')"
       @click="$emit('toggle')"
     >
-      <UIcon :name="mobile ? 'i-lucide-x' : 'i-lucide-panel-left'" />
+      <UIcon name="i-lucide-x" />
     </UiIconButton>
   </div>
   <NuxtLink
