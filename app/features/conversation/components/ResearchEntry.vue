@@ -1,69 +1,83 @@
 <script setup lang="ts">
+import { useTemplateRef } from 'vue'
 import { useResearchEntry } from '../composables/useResearchEntry'
-withDefaults(defineProps<{ compact?: boolean; showHint?: boolean }>(), {
-  compact: false,
-  showHint: true,
-})
-const { draft, notice, submit } = useResearchEntry()
+import MessageComposer from './MessageComposer.vue'
+withDefaults(
+  defineProps<{
+    compact?: boolean
+    showHint?: boolean
+    showExamples?: boolean
+    placeholder?: string
+  }>(),
+  { compact: false, showHint: true, placeholder: undefined, showExamples: undefined },
+)
+const { draft, error, busy, intent, canEdit, blocked, submit, retry, dismiss } = useResearchEntry()
 const { t } = useI18n()
-const composing = ref(false)
-const input = useTemplateRef<HTMLTextAreaElement>('input')
+const composer = useTemplateRef('composer')
 function chooseExample(n: number) {
   draft.value = t(`research.prompt${n}`)
-  nextTick(() => {
-    input.value?.focus()
-    input.value?.setSelectionRange(draft.value.length, draft.value.length)
-  })
-}
-function keydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !composing.value) {
-    event.preventDefault()
-    submit()
-  }
+  void composer.value?.focus()
 }
 </script>
 <template>
   <div class="research-entry">
-    <form
-      class="research-composer"
-      @submit.prevent="submit"
+    <MessageComposer
+      ref="composer"
+      v-model="draft"
+      :compact="compact"
+      :show-hint="showHint"
+      :placeholder="placeholder"
+      :blocked="blocked"
+      @submit="submit"
+    />
+    <div
+      v-if="intent"
+      class="entry-submission"
     >
-      <label
-        :for="`research-${compact ? 'compact' : 'full'}`"
-        class="sr-only"
-        >{{ $t('research.label') }}</label
+      <p class="entry-submission-text">{{ intent.display }}</p>
+      <p
+        v-if="error"
+        class="chat-error"
+        role="alert"
       >
-      <textarea
-        :id="`research-${compact ? 'compact' : 'full'}`"
-        ref="input"
-        v-model="draft"
-        :placeholder="$t('research.placeholder')"
-        :rows="compact ? 2 : 3"
-        @keydown="keydown"
-        @compositionstart="composing = true"
-        @compositionend="composing = false"
-      />
-      <div class="composer-bottom">
-        <span v-if="showHint">{{ $t('research.hint') }}</span
-        ><button
-          type="submit"
-          class="send-button"
-          :disabled="!draft.trim()"
-          :aria-label="$t('research.send')"
+        {{ $t(error) }}
+      </p>
+      <div
+        v-if="!busy"
+        class="chat-inline-actions"
+      >
+        <button
+          class="text-button"
+          @click="retry"
         >
-          <UIcon name="i-lucide-arrow-up" />
+          {{
+            $t(
+              intent.kind === 'message'
+                ? 'chat.openOriginal'
+                : intent.acceptedConversationId
+                  ? 'chat.openConversation'
+                  : 'common.retry',
+            )
+          }}
+        </button>
+        <button
+          v-if="canEdit"
+          class="text-button"
+          @click="dismiss"
+        >
+          {{ $t('chat.editDraft') }}
         </button>
       </div>
-    </form>
+    </div>
     <p
-      v-if="notice"
-      class="inline-notice"
-      role="status"
+      v-else-if="error"
+      class="chat-error"
+      role="alert"
     >
-      {{ notice }}
+      {{ $t(error) }}
     </p>
     <div
-      v-if="!compact"
+      v-if="showExamples ?? !compact"
       class="quick-examples"
     >
       <button

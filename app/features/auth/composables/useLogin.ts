@@ -1,3 +1,5 @@
+import { onBeforeRouteLeave } from 'vue-router'
+import { transferGuestSubmission, cancelGuestSubmission } from '~/features/conversation'
 import { createAuthApi } from '../api'
 import type { AuthResponse, EmailChallenge } from '../types'
 import { useAuthStore } from '../stores/auth'
@@ -115,6 +117,7 @@ export function useLogin() {
     } catch {
       /* Browser storage is optional; it must never prevent sign-in. */
     }
+    transferGuestSubmission(result.user.id)
     credential = ''
     code.value = ''
     $acceptAuth(result)
@@ -186,6 +189,9 @@ export function useLogin() {
       },
       { immediate: true },
     )
+  })
+  onBeforeRouteLeave(() => {
+    if (!completed && !auth.isAuthenticated) cancelGuestSubmission()
   })
   onBeforeUnmount(() => {
     alive = false

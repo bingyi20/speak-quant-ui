@@ -1,3 +1,4 @@
+@import './conversation.css';
 @import 'tailwindcss';
 @import '@nuxt/ui';
 @import './tokens.css';
@@ -23,6 +24,40 @@
 }
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+/* Native scrollbar colors override WebKit thumb hover styles in Chromium. */
+@supports selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-color: var(--color-scrollbar-thumb);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-thumb-hover);
+  }
+  ::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
 html {
   scroll-behavior: smooth;
@@ -210,12 +245,15 @@ p {
 .research-composer textarea {
   width: 100%;
   display: block;
-  resize: vertical;
+  resize: none;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--color-text-primary);
-  min-height: 65px;
-  max-height: 220px;
+  min-height: 2lh;
+  max-height: 16lh;
   outline: none;
   font-size: 16px;
   line-height: 1.7;
@@ -354,6 +392,7 @@ p {
   color: var(--color-text-muted);
 }
 .workspace-shell {
+  --workspace-toolbar-height: 48px;
   position: relative;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
@@ -369,7 +408,7 @@ p {
   background: var(--color-bg-sidebar);
   display: flex;
   flex-direction: column;
-  padding: 8px 16px 14px;
+  padding: calc(var(--workspace-toolbar-height) / 2 - 20px) 16px 14px;
   min-width: 0;
   transform: translateX(0);
   visibility: visible;
@@ -384,6 +423,10 @@ p {
   height: 40px;
   flex-shrink: 0;
   margin-bottom: 25px;
+}
+.sidebar-top > a {
+  display: flex;
+  align-items: center;
 }
 .sidebar-top .brand {
   font-size: 16px;
@@ -416,7 +459,6 @@ p {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
   padding: 20px 0;
 }
 .history-group + .history-group {
@@ -717,8 +759,8 @@ p {
   padding-bottom: env(safe-area-inset-bottom);
 }
 .workspace-toolbar {
-  height: 56px;
-  min-height: 56px;
+  height: var(--workspace-toolbar-height);
+  min-height: var(--workspace-toolbar-height);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -741,13 +783,14 @@ p {
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
-  height: 56px;
+  height: var(--workspace-toolbar-height);
   z-index: 46;
   pointer-events: none;
 }
 .workspace-expand {
   position: absolute;
-  top: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   /* Follow the sliding sidebar, then stop at the left toolbar inset. */
   left: max(16px, calc(100% - 48px));
   pointer-events: auto;
@@ -1561,9 +1604,11 @@ p {
   list-style: decimal;
   padding-left: 1.5em;
 }
-.markdown-content table {
-  display: block;
+.markdown-table-scroll {
   overflow: auto;
+}
+.markdown-content table {
+  width: 100%;
 }
 .markdown-content td,
 .markdown-content th {
@@ -1677,7 +1722,6 @@ p {
     width: 0;
   }
   .workspace-expand {
-    top: 6px;
     left: 12px;
     width: 40px;
     height: 40px;

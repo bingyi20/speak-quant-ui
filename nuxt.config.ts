@@ -1,4 +1,15 @@
+import { createRequire } from 'node:module'
+import { dirname } from 'node:path'
+
+// Resolve Vue internals from this project's Vue, never a parent's node_modules.
+const vueRequire = createRequire(import.meta.resolve('vue'))
+const runtimeRequire = createRequire(vueRequire.resolve('@vue/runtime-dom'))
+
 export default defineNuxtConfig({
+  alias: {
+    '@vue/runtime-core': dirname(runtimeRequire.resolve('@vue/runtime-core/package.json')),
+    '@vue/compiler-sfc': dirname(vueRequire.resolve('@vue/compiler-sfc/package.json')),
+  },
   compatibilityDate: '2026-09-05',
   modules: ['@nuxt/ui', '@pinia/nuxt', '@nuxtjs/i18n', '@nuxt/eslint'],
   devtools: { enabled: false },
@@ -39,7 +50,18 @@ export default defineNuxtConfig({
       { code: 'en-US', language: 'en-US', name: 'English' },
     ],
   },
-  typescript: { strict: true, tsConfig: { exclude: ['../prototype/**'] } },
+  typescript: {
+    strict: true,
+    tsConfig: {
+      exclude: ['../prototype/**'],
+      compilerOptions: {
+        paths: {
+          '@vue/runtime-core': [dirname(runtimeRequire.resolve('@vue/runtime-core/package.json'))],
+          '@vue/compiler-sfc': [dirname(vueRequire.resolve('@vue/compiler-sfc/package.json'))],
+        },
+      },
+    },
+  },
   ignore: ['prototype/**'],
   app: { head: { link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }] } },
 })

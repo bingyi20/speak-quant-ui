@@ -30,7 +30,9 @@ function unique(rows: ConversationSummary[]) {
 }
 
 /** Instance-local requests are never serialized into Pinia or persisted. */
-export function createHistoryState(api: ConversationApi) {
+export function createHistoryState(
+  api: Pick<ConversationApi, 'list' | 'detail' | 'update' | 'remove'>,
+) {
   const pages = reactive({ favorite: emptyPage(), non_favorite: emptyPage() })
   const pendingId = ref('')
   const actionError = ref('')
@@ -119,18 +121,30 @@ export function createHistoryState(api: ConversationApi) {
     if (pendingId.value) return
     await load(scope, true)
   }
-  async function loadDetail(id: string) {
+  async function refreshDetail(id: string, signal?: AbortSignal) {
     detailRequest?.abort()
-    detail.value = null
-    if (!id || items.value.some((item) => item.id === id)) return
     const controller = new AbortController()
     detailRequest = controller
+    const current = generation
+    const result = await api.detail(
+      id,
+      signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+    )
+    if (
+      !controller.signal.aborted &&
+      !signal?.aborted &&
+      detailRequest === controller &&
+      generation === current
+    )
+      detail.value = result.conversation
+    return result.conversation
+  }
+  async function loadDetail(id: string) {
+    if (!id || items.value.some((item) => item.id === id)) return
     try {
-      const result = await api.detail(id, controller.signal)
-      if (!controller.signal.aborted && detailRequest === controller)
-        detail.value = result.conversation
+      await refreshDetail(id)
     } catch {
-      /* The conversation page handles its own missing/unavailable state. */
+      /* Page controller displays detail errors. */
     }
   }
   function replace(item: ConversationSummary) {
@@ -207,6 +221,7 @@ export function createHistoryState(api: ConversationApi) {
     retry,
     reset,
     loadDetail,
+    refreshDetail,
     rename,
     toggleFavorite,
     remove: (id: string) => write(id),

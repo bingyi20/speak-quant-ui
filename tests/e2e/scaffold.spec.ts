@@ -43,7 +43,7 @@ test('public landing renders on the server and links into the workspace', async 
   expect(errors).toEqual([])
 })
 
-test('draft survives navigation/reload without fake research creation', async ({ page }) => {
+test('typing and examples preserve drafts without creating research', async ({ page }) => {
   const writes: string[] = []
   page.on('request', (request) => {
     if (request.method() === 'POST' && !request.url().endsWith('/auth/refresh'))
@@ -54,26 +54,22 @@ test('draft survives navigation/reload without fake research creation', async ({
   const input = page.getByRole('textbox', { name: '交易想法' })
   await expect(input).toHaveValue(/BTC/)
   await input.fill('测试我的研究假设')
-  await input.press('Enter')
-  await expect(page.getByRole('status').filter({ hasText: '想法已保存在本标签页' })).toBeVisible()
   await page.reload()
   await expect(input).toHaveValue('测试我的研究假设')
   expect(writes).toEqual([])
 })
 
-test('workspace panels switch and close while keeping the conversation', async ({ page }) => {
-  await page.goto('/conversations/preview')
+test('workspace assets show a real empty state and preserve the conversation draft', async ({
+  page,
+}) => {
+  await page.goto('/conversations/01K4ABCDE00000000000000001')
+  await page.getByRole('textbox', { name: '交易想法' }).fill('保持草稿')
   await page.getByRole('button', { name: '查看资产' }).click()
-  await page.getByRole('button', { name: '当前策略 查看策略设计与历史' }).click()
-  await expect(page.getByText('策略形成后，设计文档将在这里展示。')).toBeVisible()
-  await page.getByRole('button', { name: '返回', exact: true }).click()
-  await page.getByRole('button', { name: 'Replay 回看历史交易与研究证据' }).click()
-  await expect(page.getByText('回测完成后，在这里查看图表、交易与洞察。')).toBeVisible()
+  await expect(page.getByText('策略形成后会出现在这里。')).toBeVisible()
+  await expect(page.getByText('还没有完成的 Replay。')).toBeVisible()
   await page.getByRole('button', { name: '全屏', exact: true }).click()
   await page.getByRole('button', { name: '关闭', exact: true }).click()
-  await expect(page.getByRole('heading', { name: '为你的研究，留一处空间。' })).toBeVisible()
-  await page.getByRole('button', { name: '查看资产' }).click()
-  await expect(page.getByText('回测完成后，在这里查看图表、交易与洞察。')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '交易想法' })).toHaveValue('保持草稿')
 })
 
 test('settings modal saves language, restores focus, and contains no tokens', async ({
@@ -113,12 +109,13 @@ test('all routes return 200, show the correct page, and have no horizontal overf
     ['/', /让每一个想法，\s*经得起验证。/],
     ['/new-task', '今天，想验证什么？'],
     ['/login', '登录或注册'],
-    ['/conversations/preview', '为你的研究，留一处空间。'],
+    ['/conversations/01K4ABCDE00000000000000001', null],
   ] as const
   for (const [path, title] of routes) {
     const response = await page.goto(path)
     expect(response?.status()).toBe(200)
-    await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    if (title) await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    else await expect(page.getByRole('textbox', { name: '交易想法' })).toBeVisible()
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy()

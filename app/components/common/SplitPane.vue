@@ -1,23 +1,93 @@
 <script setup lang="ts">
-const props = withDefaults(defineProps<{ min?: number; max?: number }>(), { min: 30, max: 70 })
+import { computed, ref, useId, watch } from 'vue'
+const props = withDefaults(
+  defineProps<{ min?: number; max?: number; enabled?: boolean; resizable?: boolean }>(),
+  { min: 30, max: 70, enabled: true, resizable: true },
+)
 const ratio = defineModel<number>({ default: 50 })
+const emit = defineEmits<{ closed: [] }>()
+const transitioning = ref(false)
+watch(
+  () => props.enabled,
+  () => {
+    transitioning.value = true
+  },
+  { flush: 'sync' },
+)
+function entered() {
+  transitioning.value = false
+}
+function left() {
+  transitioning.value = false
+  emit('closed')
+}
 const root = ref<HTMLElement>()
 const dragging = ref(false)
+const hovered = ref(false)
+const pointer = ref({ x: 0, y: 0 })
+const tooltipId = useId()
+const hintReady = ref(false)
+const canShowHint = computed(
+  () => props.enabled && props.resizable && hovered.value && !dragging.value,
+)
+const showHint = computed(() => canShowHint.value && hintReady.value)
+watch(
+  canShowHint,
+  (show, _, onCleanup) => {
+    hintReady.value = false
+    if (!show) return
+    const timer = setTimeout(() => {
+      hintReady.value = true
+    }, 400)
+    onCleanup(() => clearTimeout(timer))
+  },
+  { flush: 'sync' },
+)
+let grabOffset = 0
 function update(value: number) {
   ratio.value = Math.max(props.min, Math.min(props.max, value))
 }
 function move(event: PointerEvent) {
-  if (!dragging.value || !root.value) return
+  if (!root.value) return
+  if (!dragging.value) {
+    hovered.value = event.pointerType === 'mouse' && event.buttons === 0
+    pointer.value = { x: event.clientX, y: event.clientY }
+    return
+  }
   const bounds = root.value.getBoundingClientRect()
-  update(((event.clientX - bounds.left) / bounds.width) * 100)
+  update(((event.clientX - bounds.left - grabOffset) / bounds.width) * 100)
 }
 function start(event: PointerEvent) {
+  if (event.button !== 0 || !event.isPrimary || !root.value) return
+  event.preventDefault()
+  const bounds = root.value.getBoundingClientRect()
+  grabOffset = event.clientX - bounds.left - (ratio.value / 100) * bounds.width
   dragging.value = true
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  hovered.value = false
+  const handle = event.currentTarget as HTMLElement
+  handle.focus({ preventScroll: true })
+  handle.setPointerCapture(event.pointerId)
 }
-function stop() {
+function stop(event: PointerEvent) {
+  if (!dragging.value) return
   dragging.value = false
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  hovered.value =
+    event.type === 'pointerup' &&
+    event.pointerType === 'mouse' &&
+    event.clientX >= bounds.left &&
+    event.clientX <= bounds.right &&
+    event.clientY >= bounds.top &&
+    event.clientY <= bounds.bottom
+  pointer.value = { x: event.clientX, y: event.clientY }
 }
+watch(
+  () => props.enabled && props.resizable,
+  () => {
+    dragging.value = false
+    hovered.value = false
+  },
+)
 function keydown(event: KeyboardEvent) {
   if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
     event.preventDefault()
@@ -35,46 +105,153 @@ function keydown(event: KeyboardEvent) {
   <div
     ref="root"
     class="split-pane"
-    :style="{ gridTemplateColumns: `minmax(0, ${ratio}fr) 12px minmax(0, ${100 - ratio}fr)` }"
+    :class="{ 'is-dragging': dragging, 'is-transitioning': transitioning }"
+    :style="{
+      gridTemplateColumns: enabled
+        ? `minmax(0, ${ratio}fr) minmax(0, ${100 - ratio}fr)`
+        : 'minmax(0, 100fr) minmax(0, 0fr)',
+      '--split-panel-width': `${100 - ratio}cqw`,
+    }"
   >
     <div><slot name="left" /></div>
-    <div
-      role="separator"
-      tabindex="0"
-      aria-orientation="vertical"
-      :aria-label="$t('common.resize')"
-      :aria-valuenow="Math.round(ratio)"
-      :aria-valuemin="min"
-      :aria-valuemax="max"
-      class="split-handle"
-      @pointerdown="start"
-      @pointermove="move"
-      @pointerup="stop"
-      @pointercancel="stop"
-      @lostpointercapture="stop"
-      @keydown="keydown"
-    />
-    <div><slot name="right" /></div>
+    <Transition
+      name="split-reveal"
+      @after-enter="entered"
+      @after-leave="left"
+      ><div
+        v-show="enabled"
+        class="split-right"
+        :inert="!enabled || undefined"
+        :aria-hidden="!enabled || undefined"
+      >
+        <div
+          v-if="enabled && resizable"
+          role="separator"
+          tabindex="0"
+          aria-orientation="vertical"
+          :aria-label="$t('common.resize')"
+          :aria-describedby="showHint ? tooltipId : undefined"
+          :aria-valuenow="Math.round(ratio)"
+          :aria-valuemin="min"
+          :aria-valuemax="max"
+          class="split-handle"
+          :class="{ 'is-hovered': hovered }"
+          @pointerenter="move"
+          @pointerleave="hovered = false"
+          @pointerdown="start"
+          @pointermove="move"
+          @pointerup="stop"
+          @pointercancel="stop"
+          @lostpointercapture="stop"
+          @keydown="keydown"
+        >
+          <span
+            class="split-grip"
+            aria-hidden="true"
+          />
+        </div>
+        <slot name="right" /></div
+    ></Transition>
+    <Teleport to="body">
+      <span
+        v-if="showHint"
+        :id="tooltipId"
+        class="split-tooltip"
+        role="tooltip"
+        :style="{
+          left: `${pointer.x - 12}px`,
+          top: `clamp(24px, ${pointer.y}px, calc(100dvh - 24px))`,
+        }"
+        >{{ $t('common.dragToResize') }}</span
+      >
+    </Teleport>
   </div>
 </template>
 <style scoped>
 .split-pane {
   display: grid;
+  container-type: inline-size;
   min-width: 0;
   height: 100%;
+}
+.split-pane.is-transitioning:not(.is-dragging) {
+  transition: grid-template-columns var(--motion-panel) cubic-bezier(0.2, 0, 0, 1);
+}
+.split-reveal-enter-active,
+.split-reveal-leave-active {
+  transition: transform var(--motion-panel) cubic-bezier(0.2, 0, 0, 1);
+}
+.split-reveal-enter-from,
+.split-reveal-leave-to {
+  transform: translateX(100%);
+}
+.split-reveal-leave-active {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .split-pane.is-transitioning,
+  .split-reveal-enter-active,
+  .split-reveal-leave-active {
+    transition: none;
+  }
+}
+.split-pane > div {
+  min-width: 0;
+  min-height: 0;
+}
+.split-right {
+  position: relative;
+}
+.is-dragging {
+  cursor: col-resize;
+  user-select: none;
 }
 .split-handle {
   cursor: col-resize;
   touch-action: none;
-  position: relative;
-}
-.split-handle::after {
-  content: '';
   position: absolute;
-  inset: 0 5px;
-  background: var(--color-border-default);
+  top: var(--split-edge-top, 0px);
+  bottom: var(--split-edge-bottom, 0px);
+  left: var(--split-edge-left, 0px);
+  width: 10px;
+  transform: translateX(-50%);
+  z-index: 26;
+}
+.split-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 48px;
+  border-radius: 3px;
+  background: var(--color-text-muted);
+  opacity: 0;
+  pointer-events: none;
+}
+.split-handle.is-hovered .split-grip,
+.split-handle:focus-visible .split-grip {
+  opacity: 0.4;
+}
+.split-pane.is-dragging .split-grip {
+  background: var(--color-text-secondary);
+  opacity: 1;
 }
 .split-handle:focus-visible {
-  outline: 2px solid var(--color-border-focus);
+  outline: none;
+}
+.split-tooltip {
+  position: fixed;
+  z-index: 70;
+  transform: translate(-100%, -50%);
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--color-text-primary);
+  color: var(--color-bg-surface);
+  box-shadow: var(--shadow-panel);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
 }
 </style>

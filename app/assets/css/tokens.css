@@ -11,6 +11,8 @@
   --landing-width: 820px;
   --motion-fast: 160ms;
   --motion-panel: 260ms;
+  --color-scrollbar-thumb: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
+  --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-muted) 50%, transparent);
   --z-header: 10;
   --z-panel: 20;
 }

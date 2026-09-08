@@ -144,32 +144,69 @@ test('collapse keeps one continuous toggle and cannot reopen from a stationary p
   }
 })
 
-test('conversation toolbar provides title and new research while collapsed', async ({
+test('conversation toolbar stays aligned with the sidebar expanded and collapsed', async ({
   page,
   isMobile,
 }) => {
   await page.goto('/conversations/example')
   const shortcut = page.locator('.new-task-shortcut')
+  const expand = page.locator('.workspace-expand')
+  const centerY = async (selector: string) => {
+    const bounds = await page.locator(selector).boundingBox()
+    expect(bounds).not.toBeNull()
+    return bounds!.y + bounds!.height / 2
+  }
+  const expectExpandedAlignment = async () => {
+    expect((await page.locator('.workspace-toolbar').boundingBox())!.height).toBe(48)
+    const toolbarCenter = await centerY('.workspace-toolbar')
+    expect(await centerY('.workspace-expand')).toBe(toolbarCenter)
+    expect(await centerY('.workspace-sidebar .brand')).toBeCloseTo(toolbarCenter, 1)
+    expect(await centerY('.workspace-conversation-title')).toBeCloseTo(toolbarCenter, 1)
+  }
   if (!isMobile) {
     await expect(shortcut).toHaveCount(0)
+    await expectExpandedAlignment()
+    const brandY = await centerY('.workspace-sidebar .brand')
+    const navigationY = await centerY('.workspace-sidebar .new-research')
+    await page.locator('.workspace-sidebar .new-research').click()
+    await expect(page).toHaveURL(/\/new-task$/)
+    expect((await page.locator('.workspace-toolbar').boundingBox())!.height).toBe(48)
+    expect(await centerY('.workspace-sidebar .brand')).toBe(brandY)
+    expect(await centerY('.workspace-sidebar .new-research')).toBe(navigationY)
+    await page.goBack()
+    await expect(page).toHaveURL(/\/conversations\/example$/)
+    await expectExpandedAlignment()
+    expect(await centerY('.workspace-sidebar .new-research')).toBe(navigationY)
+    await page.screenshot({ path: test.info().outputPath('conversation-toolbar-expanded.png') })
     await page.getByRole('button', { name: '收起侧栏' }).click()
     await expect(shortcut).toBeVisible()
     await page.locator('.workspace-expand').press('Enter')
     await expect(shortcut).toHaveCount(0)
+    await expectExpandedAlignment()
     await page.getByRole('button', { name: '收起侧栏' }).click()
   } else {
     await expect(shortcut).toBeVisible()
     await page.locator('.workspace-expand').click()
     await expect(shortcut).toHaveCount(0)
     await page.keyboard.press('Escape')
+    await expect(page.locator('.mobile-navigation')).toBeHidden()
   }
   await expect(shortcut).toBeVisible()
   await expect(page.locator('.workspace-conversation-title')).toHaveText('研究工作台')
+  await expect
+    .poll(async () => (await centerY('.workspace-expand')) - (await centerY('.new-task-shortcut')))
+    .toBe(0)
+  expect(await centerY('.workspace-conversation-title')).toBeCloseTo(
+    await centerY('.workspace-expand'),
+    1,
+  )
+  await page.screenshot({ path: test.info().outputPath('conversation-toolbar.png') })
   await page.locator('.new-task-shortcut').click()
   await expect(page).toHaveURL((url) => url.pathname === '/new-task')
   await expect(page.locator('.workspace-conversation-title')).toHaveCount(0)
   await expect(page.locator('.new-task-shortcut')).toHaveCount(0)
-  await expect(page.locator('.workspace-expand')).toBeVisible()
+  await expect(expand).toBeVisible()
+  expect(await centerY('.workspace-expand')).toBe(await centerY('.workspace-toolbar'))
 })
 
 test('profile uses account details and falls back to a default image on load failure', async ({

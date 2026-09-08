@@ -100,5 +100,18 @@ export async function stubHistory(page: Page) {
       await route.fulfill({ json: envelope({ conversation: item }) })
     }
   })
+  await page.route(/\/api\/conversations\/[^/?]+\/messages(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({ items: [], has_more: false, next_before_sequence: null, active_run: null }),
+    }),
+  )
+  await page.route(/\/api\/conversations\/[^/?]+\/assets(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        strategy: null,
+        replays: { items: [], page: 1, size: 20, total: 0, total_pages: 0 },
+      }),
+    }),
+  )
   return calls
 }
