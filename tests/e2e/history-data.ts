@@ -1,6 +1,6 @@
-import type { ConversationSummary } from './types'
+import type { ConversationSummary } from '../../app/features/conversation/types'
 
-// Development-only fixtures shaped like GET /conversations. Never sent to the API.
+// Test-only conversation fixtures; application code never imports these.
 export function createMockHistory(): ConversationSummary[] {
   const titles = [
     'BTC 均线趋势策略',

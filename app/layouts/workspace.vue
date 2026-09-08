@@ -45,6 +45,13 @@ const previewOpen = ref(false)
 const previewMode = ref(false)
 const route = useRoute()
 const { t } = useI18n()
+watch(
+  () => route.params.id,
+  (id) => {
+    if (import.meta.client) void history.loadDetail(typeof id === 'string' ? id : '')
+  },
+  { immediate: true },
+)
 const isConversation = computed(() => route.path.startsWith('/conversations/'))
 const showNewTaskShortcut = computed(
   () => isConversation.value && (isMobile.value ? !mobileOpen.value : preferences.sidebarCollapsed),

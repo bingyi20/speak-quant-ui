@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test'
-import { anonymous, authResponse, envelope, settingsTrigger, stubGoogle } from './auth-fixtures'
+import {
+  stubHistory,
+  anonymous,
+  authResponse,
+  envelope,
+  settingsTrigger,
+  stubGoogle,
+} from './auth-fixtures'
 test.beforeEach(async ({ page }) => {
+  await stubHistory(page)
   await stubGoogle(page)
   await page.route('**/api/auth/google/config', (route) =>
     route.fulfill({ json: envelope({ client_id: 'test', nonce: 'test' }) }),

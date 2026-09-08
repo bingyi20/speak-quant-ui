@@ -23,17 +23,22 @@ watch(
   { flush: 'sync' },
 )
 const editingId = ref<string | null>(null)
+const renameAttempt = ref(0)
 const targetId = ref('')
 const target = computed(() => history.items.find((item) => item.id === targetId.value))
 const groups = computed(() => [
   {
     key: 'favorites',
+    scope: 'favorite' as const,
+    page: history.pages.favorite,
     label: t('history.favorites'),
     items: history.favorites,
     collapsed: history.favoritesCollapsed,
   },
   {
     key: 'history',
+    scope: 'non_favorite' as const,
+    page: history.pages.non_favorite,
     label: t('history.list'),
     items: history.history,
     collapsed: history.historyCollapsed,
@@ -44,25 +49,40 @@ const busy = computed(
 )
 watch(busy, (value) => emit('interaction', value), { flush: 'sync' })
 onBeforeUnmount(() => emit('interaction', false))
-onMounted(() => history.initializePreview())
 
+function refreshHistory() {
+  history.actionError = ''
+  void history.refresh()
+}
 function toggleGroup(key: string) {
   if (key === 'favorites') history.favoritesCollapsed = !history.favoritesCollapsed
   else history.historyCollapsed = !history.historyCollapsed
 }
 function startRename(item: ConversationSummary) {
+  history.actionError = ''
   editingId.value = item.id
   menuId.value = null
 }
-function finishRename(title: string | null, restore: boolean) {
+async function finishRename(title: string | null, restore: boolean) {
   const id = editingId.value
   if (!id) return
   const item = history.items.find((item) => item.id === id)
-  if (title && title !== item?.title) history.rename(id, title)
+  if (title && title !== item?.title) {
+    const saved = await history.rename(id, title)
+    if (!saved) {
+      renameAttempt.value++
+      if (restore)
+        nextTick(() =>
+          root.value?.querySelector<HTMLInputElement>('.history-rename-input')?.focus(),
+        )
+      return
+    }
+  }
   editingId.value = null
   if (restore) nextTick(() => focusItem(id))
 }
 function requestDelete(item: ConversationSummary) {
+  history.actionError = ''
   targetId.value = item.id
   dialogOpen.value = true
   menuId.value = null
@@ -71,14 +91,16 @@ function menuItems(item: ConversationSummary): DropdownMenuItem[][] {
   return [
     [
       {
+        disabled: !!history.pendingId,
         label: t(item.is_favorite ? 'history.unpin' : 'history.pin'),
         icon: item.is_favorite ? 'i-lucide-pin-off' : 'i-lucide-pin',
         onSelect: () => {
           menuId.value = null
-          history.toggleFavorite(item.id)
+          void history.toggleFavorite(item.id)
         },
       },
       {
+        disabled: !!history.pendingId,
         label: t('history.rename'),
         icon: 'i-lucide-square-pen',
         onSelect: () => startRename(item),
@@ -86,6 +108,7 @@ function menuItems(item: ConversationSummary): DropdownMenuItem[][] {
     ],
     [
       {
+        disabled: !!history.pendingId,
         label: t('history.delete'),
         icon: 'i-lucide-trash-2',
         class: 'history-menu-delete',
@@ -96,8 +119,9 @@ function menuItems(item: ConversationSummary): DropdownMenuItem[][] {
 }
 async function remove() {
   if (!target.value) return
-  history.remove(targetId.value)
-  if (route.params.id === targetId.value) await navigateTo('/new-task')
+  const id = targetId.value
+  if (!(await history.remove(id))) return
+  if (route.params.id === id) await navigateTo('/new-task')
   dialogOpen.value = false
 }
 function focusItem(id: string) {
@@ -120,6 +144,27 @@ function closeMenuFocus(event: Event) {
     class="sidebar-history"
     :aria-label="$t('nav.history')"
   >
+    <p
+      v-if="!history.enabled"
+      class="history-empty"
+    >
+      {{ $t('history.offline') }}
+    </p>
+    <p
+      v-if="history.actionError && !dialogOpen"
+      role="alert"
+      class="history-request-error"
+    >
+      {{ $t(history.actionError) }}
+      <button
+        type="button"
+        class="history-load-more"
+        :disabled="!!history.pendingId"
+        @click="refreshHistory"
+      >
+        {{ $t('history.refresh') }}
+      </button>
+    </p>
     <section
       v-for="group in groups"
       :key="group.key"
@@ -155,6 +200,8 @@ function closeMenuFocus(event: Event) {
           <HistoryRenameInput
             v-if="editingId === item.id"
             :title="item.title"
+            :pending="history.pendingId === item.id"
+            :retry-revision="renameAttempt"
             @commit="finishRename"
             @cancel="finishRename(null, $event)"
           />
@@ -191,13 +238,52 @@ function closeMenuFocus(event: Event) {
               type="button"
               class="history-more icon-button"
               :aria-label="$t('history.more', { title: item.title })"
+              :disabled="!!history.pendingId"
             >
               <UIcon name="i-lucide-ellipsis" />
             </button>
           </UDropdownMenu>
         </div>
         <p
-          v-if="!group.items.length"
+          v-if="group.page.loading"
+          role="status"
+          class="history-empty"
+        >
+          {{ $t('history.loading') }}
+        </p>
+        <div
+          v-else-if="group.page.error"
+          class="history-request-error"
+          role="alert"
+        >
+          <span>{{ $t(group.page.error) }}</span>
+          <button
+            type="button"
+            class="history-load-more"
+            :disabled="!!history.pendingId"
+            @click="history.retry(group.scope)"
+          >
+            {{ $t('history.retry') }}
+          </button>
+        </div>
+        <button
+          v-else-if="group.page.hasMore"
+          type="button"
+          class="history-load-more"
+          :disabled="!!history.pendingId"
+          @click="history.loadMore(group.scope)"
+        >
+          {{ $t('history.loadMore') }}
+        </button>
+        <p
+          v-if="
+            history.enabled &&
+            group.page.page &&
+            !group.page.loading &&
+            !group.page.error &&
+            !group.page.hasMore &&
+            !group.items.length
+          "
           class="history-empty"
         >
           {{ $t(group.key === 'favorites' ? 'history.noFavorites' : 'nav.historyEmpty') }}
@@ -209,13 +295,23 @@ function closeMenuFocus(event: Event) {
       :title="$t('history.deleteTitle')"
       :description="$t('history.deleteDescription', { title: target?.title ?? '' })"
       :ui="{ content: 'history-dialog' }"
+      :dismissible="!history.pendingId"
+      :close="!history.pendingId"
       @after:leave="restoreFocus"
     >
       <template #body>
+        <p
+          v-if="history.actionError"
+          role="alert"
+          class="history-request-error"
+        >
+          {{ $t(history.actionError) }}
+        </p>
         <div class="history-dialog-actions">
           <button
             type="button"
             class="outline-button"
+            :disabled="!!history.pendingId"
             @click="dialogOpen = false"
           >
             {{ $t('common.cancel') }}
@@ -223,9 +319,10 @@ function closeMenuFocus(event: Event) {
           <button
             type="button"
             class="primary-button history-delete-button"
+            :disabled="!!history.pendingId"
             @click="remove"
           >
-            {{ $t('history.delete') }}
+            {{ $t(history.pendingId ? 'history.deleting' : 'history.delete') }}
           </button>
         </div>
       </template>

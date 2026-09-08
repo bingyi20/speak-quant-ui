@@ -1,52 +1,45 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
-import type { ConversationSummary } from './types'
+import { ref, watch } from 'vue'
+import { useNuxtApp, useRuntimeConfig } from '#app'
+import { useAuthStore } from '~/features/auth'
+import { createConversationApi } from './api'
+import { createHistoryState } from './history-state'
 
 export const useConversationHistoryStore = defineStore('conversation-history', () => {
-  const items = ref<ConversationSummary[]>([])
+  const auth = useAuthStore()
+  const enabled = String(useRuntimeConfig().public.apiEnabled) === 'true'
+  const state = createHistoryState(createConversationApi(useNuxtApp().$http))
   const favoritesCollapsed = ref(false)
   const historyCollapsed = ref(false)
-  const initialized = ref(false)
-  const sorted = computed(() =>
-    [...items.value].sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+  let owner: string | null = null
+  // Reset synchronously on logout/account changes so previous records cannot reappear.
+  watch(
+    () => [auth.user?.id, auth.isAuthenticated] as const,
+    ([id, authenticated]) => {
+      const next = authenticated && id ? id : null
+      if (owner !== next) {
+        state.reset()
+        owner = next
+      }
+      if (import.meta.client && enabled && next) void state.ensureLoaded()
+    },
+    { immediate: true, flush: 'sync' },
   )
-  const favorites = computed(() => sorted.value.filter((item) => item.is_favorite))
-  const history = computed(() => sorted.value.filter((item) => !item.is_favorite))
-
-  async function initializePreview() {
-    if (initialized.value) return
-    initialized.value = true
-    if (import.meta.dev) {
-      const { createMockHistory } = await import('./mock-history')
-      items.value = createMockHistory()
+  async function toggleFavorite(id: string) {
+    const changed = await state.toggleFavorite(id)
+    if (changed) {
+      if (state.items.value.find((item) => item.id === id)?.is_favorite)
+        favoritesCollapsed.value = false
+      else historyCollapsed.value = false
     }
-  }
-  function toggleFavorite(id: string) {
-    const item = items.value.find((item) => item.id === id)
-    if (!item) return
-    item.is_favorite = !item.is_favorite
-    item.updated_at = new Date().toISOString()
-    if (item.is_favorite) favoritesCollapsed.value = false
-    else historyCollapsed.value = false
-  }
-  function rename(id: string, title: string) {
-    const item = items.value.find((item) => item.id === id)
-    if (!item || !title.trim()) return
-    item.title = title.trim()
-    item.updated_at = new Date().toISOString()
-  }
-  function remove(id: string) {
-    items.value = items.value.filter((item) => item.id !== id)
+    return changed
   }
   return {
-    items,
-    favorites,
-    history,
+    ...state,
+    loadDetail: (id: string) => (enabled && owner ? state.loadDetail(id) : Promise.resolve()),
+    enabled,
     favoritesCollapsed,
     historyCollapsed,
-    initializePreview,
     toggleFavorite,
-    rename,
-    remove,
   }
 })

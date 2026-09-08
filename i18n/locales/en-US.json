@@ -180,6 +180,15 @@
     "renameHint": "Enter to save, Escape to cancel, or click elsewhere to save. Empty names keep the original title.",
     "titleLabel": "Research name",
     "deleteTitle": "Delete research?",
-    "deleteDescription": "Delete “{title}”? This cannot be undone."
+    "deleteDescription": "Delete “{title}”? This cannot be undone.",
+    "loading": "Loading…",
+    "loadMore": "Load more",
+    "retry": "Retry",
+    "requestFailed": "Unable to load or save. Please try again.",
+    "notFound": "This research no longer exists. Refresh the list.",
+    "invalidTitle": "Use 1–200 characters for the research title.",
+    "deleting": "Deleting…",
+    "offline": "Research history is unavailable in offline preview.",
+    "refresh": "Refresh list"
   }
 }

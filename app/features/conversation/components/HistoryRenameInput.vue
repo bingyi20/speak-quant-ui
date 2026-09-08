@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{ title: string }>()
+const props = defineProps<{ title: string; pending?: boolean; retryRevision?: number }>()
 const emit = defineEmits<{
   (event: 'commit', title: string, restoreFocus: boolean): void
   (event: 'cancel', restoreFocus: boolean): void
@@ -8,6 +8,12 @@ const draft = ref(props.title)
 const field = useTemplateRef<HTMLInputElement>('field')
 const hintId = useId()
 let finished = false
+watch(
+  () => props.retryRevision,
+  () => {
+    finished = false
+  },
+)
 const composing = ref(false)
 let focusFrame: number | undefined
 onMounted(() => {
@@ -21,7 +27,7 @@ onBeforeUnmount(() => {
   if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
 })
 function commit(restoreFocus: boolean) {
-  if (finished) return
+  if (finished || props.pending) return
   finished = true
   if (draft.value.trim()) emit('commit', draft.value.trim(), restoreFocus)
   else emit('cancel', restoreFocus)
@@ -48,6 +54,8 @@ function keydown(event: KeyboardEvent) {
     :aria-label="$t('history.titleLabel')"
     :aria-describedby="hintId"
     autocomplete="off"
+    :disabled="pending"
+    :aria-busy="pending"
     @keydown="keydown"
     @blur="commit(false)"
     @compositionstart="composing = true"

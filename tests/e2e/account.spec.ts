@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { authResponse, envelope, settingsTrigger } from './auth-fixtures'
+import { stubHistory, authResponse, envelope, settingsTrigger } from './auth-fixtures'
 
 test.beforeEach(async ({ page }) => {
+  await stubHistory(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({ json: envelope(authResponse) }),
   )
@@ -23,8 +24,13 @@ test('account tabs keep the conversation and present unavailable billing honestl
   await expect(dialog.getByText('tester@example.com', { exact: true })).toBeVisible()
   const accountTab = dialog.getByRole('tab', { name: '账户与偏好' })
   const planTab = dialog.getByRole('tab', { name: '订阅与积分' })
-  const accountBounds = await accountTab.boundingBox()
-  const planBounds = await planTab.boundingBox()
+  // Sample both tabs in the same frame while the dialog entrance animates.
+  const [accountBounds, planBounds] = await dialog.getByRole('tab').evaluateAll((tabs) =>
+    tabs.slice(0, 2).map((tab) => {
+      const { x, y } = tab.getBoundingClientRect()
+      return { x, y }
+    }),
+  )
   if (isMobile) expect(accountBounds!.y).toBeCloseTo(planBounds!.y, 0)
   else expect(accountBounds!.x).toBeCloseTo(planBounds!.x, 0)
   await dialog.getByRole('button', { name: '升级套餐', exact: true }).click()

@@ -1,7 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { authResponse, envelope } from './auth-fixtures'
+import { stubHistory, authResponse, envelope } from './auth-fixtures'
 
 test.beforeEach(async ({ page }) => {
+  await stubHistory(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({ json: envelope(authResponse) }),
   )
@@ -44,13 +45,14 @@ test('history groups collapse independently and selection follows navigation', a
   await expect(nav.locator('.new-research')).not.toHaveClass(/is-selected/)
 })
 
-test('pin, rename and delete work locally, including deleting the current research', async ({
+test('pin, rename and delete use the API, including deleting the current research', async ({
   page,
   isMobile,
 }) => {
-  const requests: string[] = []
+  const requests: { method: string; headers: Record<string, string> }[] = []
   page.on('request', (request) => {
-    if (request.url().includes('/api/conversations')) requests.push(request.url())
+    if (request.url().includes('/api/conversations'))
+      requests.push({ method: request.method(), headers: request.headers() })
   })
   await page.goto('/new-task')
   let nav = await navigation(page, isMobile)
@@ -105,7 +107,14 @@ test('pin, rename and delete work locally, including deleting the current resear
   await expect(page).toHaveURL(/\/new-task$/)
   if (isMobile) nav = await navigation(page, true)
   await expect(nav.getByRole('link', { name: '新的趋势研究', exact: true })).toHaveCount(0)
-  expect(requests).toEqual([])
+  expect(requests.filter((request) => request.method === 'PATCH')).toHaveLength(3)
+  const deletion = requests.filter((request) => request.method === 'DELETE')
+  expect(deletion).toHaveLength(1)
+  expect(deletion[0]!.headers['x-confirm-delete']).toBe('permanent')
+  expect(deletion[0]!.headers['idempotency-key']).toBeTruthy()
+  await page.reload()
+  nav = await navigation(page, isMobile)
+  await expect(nav.getByRole('link', { name: '新的趋势研究', exact: true })).toHaveCount(0)
 })
 
 test('hover sidebar stays open while renaming inline and Escape cancels editing first', async ({
@@ -161,4 +170,50 @@ test('inline rename saves on blur and does not submit during IME composition', a
   await rename.dispatchEvent('compositionend')
   await rename.press('Enter')
   await expect(nav.getByRole('link', { name: '中文输入研究', exact: true })).toBeVisible()
+})
+
+test('failed list retries and failed inline rename preserves the draft for retry', async ({
+  page,
+  isMobile,
+}) => {
+  let failList = true
+  let failWrite = true
+  await page.route(/\/api\/conversations(?:\/[^/?]+)?(?:\?.*)?$/, async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    if (
+      request.method() === 'GET' &&
+      url.searchParams.get('scope') === 'non_favorite' &&
+      failList
+    ) {
+      failList = false
+      await route.fulfill({
+        status: 503,
+        json: { code: 50300, data: null, error: { key: 'SERVICE_UNAVAILABLE' } },
+      })
+    } else if (request.method() === 'PATCH' && failWrite) {
+      failWrite = false
+      await route.fulfill({
+        status: 503,
+        json: { code: 50300, data: null, error: { key: 'SERVICE_UNAVAILABLE' } },
+      })
+    } else await route.fallback()
+  })
+  await page.goto('/new-task')
+  const nav = await navigation(page, isMobile)
+  const recent = nav.locator('.history-group').nth(1)
+  await expect(recent.getByRole('alert')).toBeVisible()
+  await recent.getByRole('button', { name: '重试', exact: true }).click()
+  await expect(recent.locator('.history-row')).toHaveCount(9)
+  await menu(nav, 'BTC 均线趋势策略', isMobile)
+  await page.getByRole('menuitem', { name: '重命名', exact: true }).click()
+  const rename = nav.getByRole('textbox', { name: '研究名称' })
+  await rename.fill('失败后保留的名称')
+  await rename.press('Enter')
+  await expect(nav.getByRole('alert')).toContainText('加载或保存失败')
+  await expect(rename).toHaveValue('失败后保留的名称')
+  await expect(rename).toBeEnabled()
+  await rename.press('Enter')
+  await expect(nav.getByRole('link', { name: '失败后保留的名称', exact: true })).toBeVisible()
+  await expect(rename).toHaveCount(0)
 })

@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { authResponse, envelope, settingsTrigger } from './auth-fixtures'
+import { stubHistory, authResponse, envelope, settingsTrigger } from './auth-fixtures'
 
 test.beforeEach(async ({ page }) => {
+  await stubHistory(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({ json: envelope(authResponse) }),
   )
@@ -33,7 +34,7 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
   await page.goto('/new-task')
   const main = page.locator('.workspace-main')
   const sidebar = page.locator('.workspace-sidebar')
-  await expect.poll(async () => (await main.boundingBox())?.x).toBe(300)
+  await expect.poll(async () => (await main.boundingBox())?.x).toBe(260)
   const expandedNavigation = await sidebar.locator('.new-research').boundingBox()
   const expandedProfile = await sidebar.locator('.account-trigger').boundingBox()
   await page.getByRole('button', { name: '收起侧栏' }).click()
@@ -54,7 +55,7 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
   expect(previewBounds).toMatchObject({
     x: 0,
     y: 0,
-    width: 300,
+    width: 260,
     height: page.viewportSize()!.height,
   })
   await expect(sidebar.getByRole('link', { name: 'Trade Lab' })).toHaveCount(0)
@@ -68,7 +69,7 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
   await hoverExpand()
   await expand.click()
   await expect(page.locator('.workspace-shell')).not.toHaveClass(/sidebar-collapsed/)
-  await expect.poll(async () => (await main.boundingBox())?.x).toBe(300)
+  await expect.poll(async () => (await main.boundingBox())?.x).toBe(260)
   await expect(sidebar.getByRole('link', { name: 'Trade Lab' })).toBeVisible()
   await page.getByRole('button', { name: '收起侧栏' }).click()
   await page.reload()
@@ -123,13 +124,13 @@ test('collapse keeps one continuous toggle and cannot reopen from a stationary p
     await toggle.click()
     const samples = await frames
     expect(samples.every((sample) => sample.visible && !sample.preview)).toBe(true)
-    expect(samples[0]!.x).toBe(252)
+    expect(samples[0]!.x).toBe(212)
     expect(samples.at(-1)!.x).toBe(16)
     for (let index = 1; index < samples.length; index++) {
       expect(samples[index]!.x).toBeLessThanOrEqual(samples[index - 1]!.x)
     }
     if (reducedMotion === 'no-preference') {
-      expect(samples.some((sample) => sample.x > 16 && sample.x < 252)).toBe(true)
+      expect(samples.some((sample) => sample.x > 16 && sample.x < 212)).toBe(true)
     }
     await expect(page.locator('.workspace-sidebar')).toBeHidden()
     expect(await toggle.evaluate((button, original) => button === original, originalButton)).toBe(
@@ -138,7 +139,7 @@ test('collapse keeps one continuous toggle and cannot reopen from a stationary p
     await toggle.hover()
     await expect(page.locator('.workspace-sidebar')).toBeVisible()
     await toggle.click()
-    await expect.poll(async () => (await toggle.boundingBox())?.x).toBe(252)
+    await expect.poll(async () => (await toggle.boundingBox())?.x).toBe(212)
     await expect(toggle).toHaveAccessibleName('收起侧栏')
   }
 })

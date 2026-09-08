@@ -180,6 +180,15 @@
     "renameHint": "Enter 保存，Esc 取消；点击其他位置保存。空名称会保留原名称。",
     "titleLabel": "研究名称",
     "deleteTitle": "删除研究？",
-    "deleteDescription": "确定删除「{title}」吗？此操作无法撤销。"
+    "deleteDescription": "确定删除「{title}」吗？此操作无法撤销。",
+    "loading": "正在加载…",
+    "loadMore": "加载更多",
+    "retry": "重试",
+    "requestFailed": "加载或保存失败，请稍后重试。",
+    "notFound": "这条研究已不存在，请刷新列表。",
+    "invalidTitle": "研究名称需要为 1–200 个字符。",
+    "deleting": "正在删除…",
+    "offline": "离线预览暂不加载研究记录。",
+    "refresh": "刷新列表"
   }
 }
