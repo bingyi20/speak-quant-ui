@@ -12,9 +12,9 @@ const open = computed({
 <template>
   <UModal
     v-model:open="open"
-    :title="$t('settings.title')"
+    :title="$t('settings.dialogTitle')"
     :description="$t('settings.description')"
     :ui="{ content: 'settings-modal' }"
-    ><template #body><AccountSettings /></template
+    ><template #content><AccountSettings /></template
   ></UModal>
 </template>

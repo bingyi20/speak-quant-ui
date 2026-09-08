@@ -128,6 +128,7 @@
     }
   },
   "settings": {
+    "freePlan": "Free",
     "title": "Profile & preferences",
     "description": "Make the workspace fit the way you research.",
     "profile": "Profile",
@@ -142,7 +143,24 @@
     "language": "Interface language",
     "languageHint": "Preferences are saved in this browser.",
     "account": "Account",
-    "billing": "Top-ups and plans will be available in a later release."
+    "billing": "Top-ups and plans will be available in a later release.",
+    "dialogTitle": "Account settings",
+    "accountTab": "Account & preferences",
+    "subscriptionTab": "Plan & credits",
+    "usageTab": "Usage history",
+    "planPreview": "Plan preview",
+    "viewPlans": "Upgrade plan",
+    "planLabel": "Subscription plan",
+    "preview": "Coming soon",
+    "subscriptionHint": "Subscriptions are coming soon. This is a preview of the plan display.",
+    "upgradeSoon": "Upgrade plan · Coming soon",
+    "creditBalance": "Credit balance",
+    "creditsHint": "Your balance and reset date will appear here when credits become available.",
+    "notAvailable": "Not available yet",
+    "viewUsage": "View usage history",
+    "usageDescription": "Review credit usage and returns for each research.",
+    "usageSoon": "Usage history is coming soon",
+    "usageHint": "Once available, the date, credits used, and details of each research will appear here."
   },
   "errors": {
     "generic": "Unable to load. Please try again.",
