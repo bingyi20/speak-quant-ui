@@ -43,3 +43,22 @@ export function formatDate(value: string, locale = 'zh-CN', timeZone = 'UTC'): s
     return '—'
   }
 }
+
+/** Compact message timestamp in the reader's local timezone. */
+export function formatMessageTime(value: string, locale = 'zh-CN', now = new Date()): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  const time = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date)
+  const today =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  if (today) return time
+  if (locale.startsWith('zh')) return `${date.getMonth() + 1}月${date.getDate()}日 ${time}`
+  const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+  return `${day}, ${time}`
+}

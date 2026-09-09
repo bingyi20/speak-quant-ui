@@ -84,7 +84,7 @@ export function clarificationData(card: MessageCard): ClarificationData | null {
     return null
   return v as unknown as ClarificationData
 }
-export type AgentEvent =
+export type AgentEvent = { occurred_at?: string } & (
   | {
       type: 'run.snapshot'
       payload: {
@@ -100,6 +100,7 @@ export type AgentEvent =
   | { type: 'card.upsert'; payload: { message_id: string; card: MessageCard } }
   | { type: 'tool.status'; payload: ToolStatus }
   | { type: 'run.finished'; payload: { status: RunStatus } }
+)
 export function protocolError(): never {
   throw new ApiError('Invalid conversation event', { kind: 'protocol' })
 }
@@ -164,5 +165,5 @@ export function parseAgentEvent(
     case 'run.finished':
       if (!isRunStatus(p.status) || !isTerminal(p.status)) return protocolError()
   }
-  return { type: frame.event, payload: p } as AgentEvent
+  return { type: frame.event, payload: p, occurred_at: value.occurred_at } as AgentEvent
 }

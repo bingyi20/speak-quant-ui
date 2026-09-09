@@ -45,7 +45,16 @@ export function applyAgentEvent(
 ) {
   if (event.type === 'run.snapshot') {
     state.messages = new Map(
-      event.payload.messages.map((m) => [m.id, { ...m, cards: [...m.cards], fromSnapshot: true }]),
+      event.payload.messages.map((m) => [
+        m.id,
+        {
+          ...m,
+          cards: [...m.cards],
+          fromSnapshot: true,
+          created_at:
+            history.find((h) => h.id === m.id)?.created_at ?? state.messages.get(m.id)?.created_at,
+        },
+      ]),
     )
     state.lengths = new Map(event.payload.messages.map((m) => [m.id, Array.from(m.content).length]))
     state.tools = new Map(
@@ -65,6 +74,7 @@ export function applyAgentEvent(
   if (isTerminal(state.status)) return
   const p = event.payload
   const message = ensureMessage(state, p.message_id, history)
+  message.created_at ??= event.occurred_at
   switch (event.type) {
     case 'message.delta': {
       const { start_offset, end_offset, delta } = event.payload
@@ -94,7 +104,10 @@ export function projectMessages(
 ): DisplayMessage[] {
   const ordered = [...history].sort((a, b) => a.sequence - b.sequence)
   const seen = new Set(ordered.map((m) => m.id))
-  const result: DisplayMessage[] = ordered.map((m) => run.messages.get(m.id) ?? m)
+  const result: DisplayMessage[] = ordered.map((m) => {
+    const live = run.messages.get(m.id)
+    return live ? { ...live, created_at: m.created_at } : m
+  })
   if (pending && !seen.has(pending.id)) result.push(pending)
   for (const message of run.messages.values()) if (!seen.has(message.id)) result.push(message)
   return result

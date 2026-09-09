@@ -238,9 +238,16 @@ p {
   border-radius: var(--radius-composer);
   padding: 20px;
   box-shadow: var(--shadow-composer);
+  transition: box-shadow var(--motion-fast) ease;
 }
+.research-composer:hover,
 .research-composer:focus-within {
-  border-color: var(--color-border-focus);
+  box-shadow: var(--shadow-composer-active);
+}
+@media (prefers-reduced-motion: reduce) {
+  .research-composer {
+    transition: none;
+  }
 }
 .research-composer textarea {
   width: 100%;

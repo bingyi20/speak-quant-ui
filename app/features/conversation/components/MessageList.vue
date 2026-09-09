@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTemplateRef, watch, nextTick, computed } from 'vue'
+import { useTemplateRef, watch, nextTick, computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { pendingClarification } from '../clarification'
 import UserMessage from './UserMessage.vue'
 import AssistantMessage from './AssistantMessage.vue'
@@ -18,6 +18,24 @@ const props = defineProps<{
   loadMore: () => Promise<void>
 }>()
 defineEmits<{ open: [messageId: string, card: MessageCard]; retry: [] }>()
+const latestAssistantId = computed(() => props.messages.findLast((m) => m.role === 'assistant')?.id)
+const today = ref(new Date())
+let dateTimer: ReturnType<typeof setTimeout> | undefined
+function refreshDate() {
+  clearTimeout(dateTimer)
+  today.value = new Date()
+  const midnight = new Date(today.value)
+  midnight.setHours(24, 0, 0, 50)
+  dateTimer = setTimeout(refreshDate, midnight.getTime() - today.value.getTime())
+}
+onMounted(() => {
+  refreshDate()
+  document.addEventListener('visibilitychange', refreshDate)
+})
+onBeforeUnmount(() => {
+  clearTimeout(dateTimer)
+  document.removeEventListener('visibilitychange', refreshDate)
+})
 const activeQuestionMessageId = computed(() => pendingClarification(props.messages)?.messageId)
 const viewport = useTemplateRef<HTMLElement>('viewport')
 const content = useTemplateRef<HTMLElement>('content')
@@ -89,6 +107,8 @@ defineExpose({ bottom })
           <AssistantMessage
             v-else-if="message.role === 'assistant'"
             :message="message"
+            :latest="message.id === latestAssistantId"
+            :today="today"
             :tools="tools.filter((t) => t.message_id === message.id)"
             :selected-card-id="selectedCardId"
             :active-question-message-id="activeQuestionMessageId"

@@ -25,23 +25,32 @@ const failed = computed(() => ['failed', 'cancelled'].includes(props.card.status
             ? 'i-lucide-loader-circle'
             : card.type === 'replay_card'
               ? 'i-lucide-chart-no-axes-combined'
-              : 'i-lucide-file-text'
+              : 'i-lucide-file'
         "
         :class="{ 'chat-spinner': busy }"
     /></span>
-    <span class="message-card-copy"
-      ><strong>{{ card.title }}</strong
-      ><small v-if="card.summary">{{ card.summary }}</small
-      ><small v-else-if="busy">{{ $t('chat.generating') }}</small
-      ><small
-        v-if="failed"
-        class="chat-error"
-        >{{ $t(card.status === 'cancelled' ? 'chat.cancelled' : 'chat.assetFailed') }}</small
-      ><small v-if="!known">{{ $t('chat.unsupportedCard') }}</small></span
-    >
+    <span class="message-card-copy">
+      <strong :title="card.title">{{ card.title }}</strong>
+      <small :class="{ 'is-error': failed }">
+        {{
+          $t(
+            card.type === 'strategy_card'
+              ? 'chat.strategyCardType'
+              : card.type === 'replay_card'
+                ? 'chat.replayCardType'
+                : 'chat.genericCardType',
+          )
+        }}
+        <template v-if="failed">
+          · {{ $t(card.status === 'cancelled' ? 'chat.cancelled' : 'chat.assetFailed') }}</template
+        >
+        <template v-else-if="busy"> · {{ $t('chat.generating') }}</template>
+        <template v-else-if="!known"> · {{ $t('chat.unsupportedCard') }}</template>
+      </small>
+    </span>
     <UIcon
       v-if="openable"
-      name="i-lucide-arrow-up-right"
+      name="i-lucide-chevron-right"
       class="card-open-arrow"
     />
   </component>

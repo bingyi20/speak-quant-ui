@@ -139,37 +139,60 @@
 .message-cards {
   display: grid;
   gap: 10px;
-  margin-top: 20px;
-  max-width: 440px;
+  margin-top: 12px;
+  max-width: 520px;
 }
 .message-card {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 16px;
+  gap: 16px;
+  padding: 12px 16px;
+  min-height: 74px;
+  overflow: hidden;
   border: 1px solid var(--color-border-default);
   border-radius: 12px;
   text-align: left;
-  background: transparent;
+  background: var(--color-bg-surface);
   color: var(--color-text-primary);
 }
-button.message-card:hover,
-.message-card.is-selected {
-  background: var(--color-bg-surface);
-  border-color: var(--color-border-focus);
+button.message-card {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+@media (hover: hover) {
+  button.message-card:hover {
+    border-color: var(--color-border-card-hover);
+    box-shadow: var(--shadow-card-hover);
+  }
+  button.message-card:hover .card-open-arrow {
+    color: var(--color-text-primary);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button.message-card {
+    transition: none;
+  }
 }
 .message-card-icon {
-  width: 32px;
-  height: 36px;
+  width: 56px;
+  height: 56px;
+  align-self: flex-end;
+  margin-bottom: -13px;
+  border: 1px solid var(--color-border-document);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--color-bg-document);
+  box-shadow: var(--shadow-composer);
   display: grid;
   place-items: center;
   color: var(--color-brand);
   flex-shrink: 0;
 }
 .message-card-icon .iconify {
-  width: 23px;
-  height: 23px;
+  width: 20px;
+  height: 20px;
 }
 .message-card-copy {
   min-width: 0;
@@ -179,16 +202,25 @@ button.message-card:hover,
   display: block;
   font-size: 14px;
   font-weight: 500;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .message-card-copy small {
   display: block;
   font-size: 12px;
-  margin-top: 5px;
+  margin-top: 3px;
   color: var(--color-text-secondary);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.message-card-copy small.is-error {
+  color: var(--color-danger);
 }
 .card-open-arrow {
+  width: 16px;
+  height: 16px;
   color: var(--color-text-muted);
   flex-shrink: 0;
 }
@@ -748,9 +780,6 @@ button.message-card:hover,
   .question-icon-button {
     width: 44px;
   }
-  .message-card {
-    padding: 13px;
-  }
   .agent-workspace .chat-asset-panel {
     width: auto;
     border-radius: 12px;
@@ -759,5 +788,56 @@ button.message-card:hover,
 @media (prefers-reduced-motion: reduce) {
   .chat-spinner {
     animation-duration: 3s;
+  }
+}
+
+.assistant-message-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 120ms ease 180ms,
+    visibility 0s linear 300ms;
+}
+.assistant-message:hover .assistant-message-footer,
+.assistant-message:focus-visible .assistant-message-footer,
+.assistant-message:has(:focus-visible) .assistant-message-footer,
+.assistant-message-footer.is-latest {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 100ms, 0s;
+}
+.message-copy {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.message-copy .iconify {
+  width: 16px;
+  height: 16px;
+}
+.message-copy:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+.message-copy:disabled {
+  cursor: default;
+}
+.message-copy-feedback {
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-message-footer {
+    transition: none;
   }
 }

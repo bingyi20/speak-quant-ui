@@ -130,6 +130,7 @@ export interface ConversationAssets {
   replays: import('#shared/types/http').Page<ReplaySummary>
 }
 export interface DisplayMessage extends SnapshotMessage {
+  created_at?: string
   fromSnapshot?: boolean
   localFailure?: boolean
   localPending?: boolean

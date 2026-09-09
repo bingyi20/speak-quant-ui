@@ -23,6 +23,7 @@
   --color-chart-grid: #eeede7;
   --color-overlay: rgb(35 35 30 / 30%);
   --shadow-composer: 0 4px 20px rgb(48 49 46 / 3%);
+  --shadow-composer-active: 0 4px 22px rgb(48 49 46 / 7%);
   --shadow-panel: 0 6px 30px rgb(48 49 46 / 5%);
   /* Theme-dependent derived values stay here, never in business styles. */
   --color-bg-control-hover: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
@@ -47,4 +48,12 @@
   --color-text-placeholder: color-mix(in srgb, var(--color-text-muted) 80%, transparent);
   --color-scrollbar-thumb: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
   --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-muted) 50%, transparent);
+  --color-border-card-hover: color-mix(
+    in srgb,
+    var(--color-border-default) 80%,
+    var(--color-text-muted)
+  );
+  --shadow-card-hover: 0 3px 14px rgb(48 49 46 / 5%);
+  --color-bg-document: color-mix(in srgb, var(--color-brand) 5%, var(--color-bg-surface));
+  --color-border-document: color-mix(in srgb, var(--color-brand) 30%, var(--color-border-default));
 }

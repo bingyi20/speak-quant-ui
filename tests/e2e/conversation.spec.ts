@@ -197,7 +197,10 @@ test('new research streams, locks only send, submits multiple answers and restor
   await expect
     .poll(async () => (await page.locator('.chat-input').boundingBox())!.height)
     .toBeLessThan(heightWithQuestions)
-  await expect(page.getByText('已回答 2 个问题', { exact: true })).toBeVisible()
+  await expect(page.locator('.assistant-message .answered-questions')).toHaveCount(0)
+  await expect(page.locator('.user-message').filter({ hasText: '选择交易市场' })).toContainText(
+    '15m',
+  )
   expect(calls.filter((c) => c.method === 'send').at(-1)?.body).toEqual({
     reply_to_message_id: 'assistant-1',
     structured_answers: [
@@ -221,7 +224,10 @@ test('new research streams, locks only send, submits multiple answers and restor
   await page.reload()
   await expect(page.locator('.user-message')).toHaveCount(2)
   await expect(page.locator('.assistant-message')).toHaveCount(2)
-  await expect(page.getByText('已回答 2 个问题', { exact: true })).toBeVisible()
+  await expect(page.locator('.assistant-message .answered-questions')).toHaveCount(0)
+  await expect(page.locator('.user-message').filter({ hasText: '选择交易市场' })).toContainText(
+    '15m',
+  )
   await expect(input).toHaveValue('保留给下一轮的草稿')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
   expect(errors).toEqual([])
