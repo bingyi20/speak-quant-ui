@@ -244,6 +244,7 @@ features 的公开入口
 | 新研究输入与草稿                  | `app/features/conversation/components/ResearchEntry.vue`、`composables/useResearchEntry.ts`、`useResearchDraft.ts`                                                                |
 | 对话与流式状态                    | `app/features/conversation/composables/useConversation.ts`、`useAgentRun.ts`、`useStreamingText.ts`、`useConversationScroll.ts`、`message-state.ts`、`agent-events.ts`                                                               |
 | 快捷问答与未决提交                | `app/features/conversation/clarification.ts`、`composables/useClarification.ts`、`submission.ts`                                                                                  |
+| 问答交互预览（仅本地测试） | `tests/preview/playwright.config.ts`、`tests/preview/questions.spec.ts`；`pnpm preview:questions` 复用测试夹具、独立浏览器上下文拦截 API，不增加生产路由 |
 | 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationAssetPanel.vue`；样式 `app/assets/css/conversation.css` |
 | 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
 | 全局偏好、主题及语言恢复          | `app/stores/preferences.ts`、`app/plugins/01.preferences.ts`、`app/composables/useTheme.ts`、`public/theme-init.js`                                                               |
@@ -435,7 +436,7 @@ Nuxt UI 已能满足的组件直接使用；需要统一产品语义、默认行
 
 组件使用 `var(--color-bg-surface)` 等语义值，不在页面写死色值，不以 `white`、`gray-100` 这类具体颜色命名组件职责。品牌、成功失败、涨跌盈亏分别定义，赭金不代表盈利。
 
-浅色文件建立完整 token 清单；深色文件使用相同键名补齐。Nuxt UI 的变量及暗色选择器集中映射到同一主题控制器，避免 UI 库与自定义 `data-theme` 各自维护一套模式。
+浅色文件 `app/assets/css/themes/light.css` 建立完整 token 清单；深色文件 `app/assets/css/themes/dark.css` 使用相同键名补齐，后续深色设计统一在该文件调整。主题相关的派生混色、占位文字颜色、滚动条颜色和阴影也在这两个文件定义；业务 CSS 不写 `color-mix` 配色公式、具体色值或深浅色分支。`tokens.css` 只保存主题无关的字体、尺寸、圆角、动效等基础变量。深色文件当前仍为工程验证占位，变量完整不代表设计验收完成。Nuxt UI 的变量及暗色选择器集中映射到同一主题控制器，避免 UI 库与自定义 `data-theme` 各自维护一套模式。
 
 ### 10.2 切换与 SSR
 

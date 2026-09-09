@@ -5,6 +5,15 @@ export function useConversationScroll(
   content: Ref<HTMLElement | null>,
 ) {
   const following = ref(true)
+  const showLatest = ref(false)
+  function updateLatest() {
+    const el = viewport.value
+    if (!el) return
+    const distance = Math.max(0, el.scrollHeight - el.clientHeight - el.scrollTop)
+    // Separate visibility from following; two thresholds avoid flicker around the boundary.
+    if (distance > 60) showLatest.value = true
+    else if (distance < 10) showLatest.value = false
+  }
   let observer: ResizeObserver | undefined
   let preserving = false
   let lastTop = 0
@@ -14,10 +23,12 @@ export function useConversationScroll(
     if (!el) return
     el.scrollTop = top
     writtenTop = lastTop = el.scrollTop
+    updateLatest()
   }
   function followGrowth() {
     const el = viewport.value
-    if (!el || !following.value || preserving) return
+    if (!el || preserving) return
+    if (!following.value) return updateLatest()
     // ResizeObserver runs after layout: follow the revealed text without a second animation.
     write(el.scrollHeight)
   }
@@ -40,6 +51,7 @@ export function useConversationScroll(
   }
   function onScroll() {
     if (preserving) return
+    updateLatest()
     const el = viewport.value
     if (!el || (writtenTop !== null && Math.abs(el.scrollTop - writtenTop) < 1)) return
     const max = el.scrollHeight - el.clientHeight
@@ -86,5 +98,5 @@ export function useConversationScroll(
     viewport.value?.removeEventListener('keydown', onKeydown)
     viewport.value?.removeEventListener('pointerdown', onPointerDown)
   })
-  return { following, bottom, onScroll, prepend }
+  return { following, showLatest, bottom, onScroll, prepend }
 }

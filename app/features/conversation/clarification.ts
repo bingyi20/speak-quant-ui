@@ -1,5 +1,11 @@
 import { clarificationData } from './agent-events'
-import type { ClarificationData, DisplayMessage, MessageCard, StructuredAnswer } from './types'
+import type {
+  ClarificationData,
+  ClarificationQuestion,
+  DisplayMessage,
+  MessageCard,
+  StructuredAnswer,
+} from './types'
 
 export interface ClarificationGroup {
   messageId: string
@@ -19,6 +25,17 @@ export function pendingClarification(messages: DisplayMessage[]): ClarificationG
   return null
 }
 export type AnswerDrafts = Record<string, { mode: 'option' | 'custom'; text: string }>
+export function validClarificationAnswer(
+  question: ClarificationQuestion,
+  draft?: AnswerDrafts[string],
+) {
+  const value = draft?.text.trim()
+  return (
+    !!value &&
+    Array.from(value).length <= 2000 &&
+    (draft!.mode === 'custom' ? question.allow_custom : question.options.includes(value))
+  )
+}
 export function clarificationSubmission(group: ClarificationGroup, drafts: AnswerDrafts) {
   const answers: StructuredAnswer[] = []
   const lines: string[] = []
@@ -26,15 +43,8 @@ export function clarificationSubmission(group: ClarificationGroup, drafts: Answe
     for (const question of data.questions) {
       const draft = drafts[question.id]
       const value = draft?.text.trim()
-      if (!value) {
-        if (question.required) return null
-        continue
-      }
-      if (
-        Array.from(value).length > 2000 ||
-        (draft!.mode === 'custom' ? !question.allow_custom : !question.options.includes(value))
-      )
-        return null
+      if (!value) continue
+      if (!validClarificationAnswer(question, draft)) continue
       answers.push(
         draft!.mode === 'custom'
           ? { question_id: question.id, custom_text: value }
@@ -42,8 +52,7 @@ export function clarificationSubmission(group: ClarificationGroup, drafts: Answe
       )
       lines.push(`${question.question}\n${value}`)
     }
-  if (!answers.length || new Set(answers.map((a) => a.question_id)).size !== answers.length)
-    return null
+  if (new Set(answers.map((a) => a.question_id)).size !== answers.length) return null
   return {
     body: { reply_to_message_id: group.messageId, structured_answers: answers },
     display: lines.join('\n\n'),

@@ -166,12 +166,16 @@ test('new research streams, locks only send, submits multiple answers and restor
   await input.press('Enter')
   expect(calls.filter((c) => c.method === 'send')).toHaveLength(0)
   await expect(page.locator('.assistant-message table')).toBeVisible()
-  await expect(page.getByRole('button', { name: '发送研究想法' })).toBeEnabled()
   expect(await page.locator('.assistant-message script').count()).toBe(0)
   expect(calls.filter((c) => c.method === 'create')).toHaveLength(1)
-  await expect(input).toHaveValue('保留给下一轮的草稿')
+  await expect(page.locator('.chat-input .research-composer textarea')).toHaveValue(
+    '保留给下一轮的草稿',
+  )
   const questions = page.getByRole('form', { name: '补充研究信息' })
   await expect(questions).toBeVisible()
+  await expect(input).toBeVisible()
+  await expect(questions.locator('.question-progress')).toHaveText('1 / 2')
+  await expect(questions.getByRole('heading', { name: '选择执行周期' })).toHaveCount(0)
   const heightWithQuestions = (await page.locator('.chat-input').boundingBox())!.height
   await expect
     .poll(() =>
@@ -183,10 +187,12 @@ test('new research streams, locks only send, submits multiple answers and restor
     )
     .toBe(true)
   await page.getByRole('button', { name: '现货', exact: true }).click()
-  await expect(page.getByRole('button', { name: '提交回答' })).toBeDisabled()
+  await expect(questions.locator('.question-progress')).toHaveText('2 / 2')
+  expect(calls.filter((c) => c.method === 'send')).toHaveLength(0)
+  await expect(page.getByRole('button', { name: '跳过', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: '自定义', exact: true }).click()
   await page.getByRole('textbox', { name: '选择执行周期' }).fill('15m')
-  await page.getByRole('button', { name: '提交回答' }).click()
+  await page.getByRole('textbox', { name: '选择执行周期' }).press('Enter')
   await expect(questions).toBeHidden()
   await expect
     .poll(async () => (await page.locator('.chat-input').boundingBox())!.height)
@@ -232,6 +238,7 @@ test('a failed send retries the frozen body with one key and no duplicate user b
   await expect(page.getByRole('button', { name: '重新发送这条消息' })).toBeVisible()
   await input.fill('新的草稿')
   await page.getByRole('button', { name: '重新发送这条消息' }).click()
+  await page.getByRole('button', { name: '收起问题，改用文字回复' }).click()
   await expect(page.getByRole('button', { name: '发送研究想法' })).toBeEnabled()
   expect(calls.filter((c) => c.method === 'send')).toHaveLength(2)
   expect(calls[0]!.key).toBe(calls[1]!.key)
@@ -247,6 +254,7 @@ test('EOF reconnects the original Run without resending a message', async ({ pag
   await page.getByRole('button', { name: '发送研究想法' }).click()
   await expect(page.getByText('正在恢复连接…', { exact: true })).toBeVisible()
   await page.getByRole('textbox', { name: '交易想法' }).fill('下一轮')
+  await page.getByRole('button', { name: '收起问题，改用文字回复' }).click()
   await expect(page.getByRole('button', { name: '发送研究想法' })).toBeEnabled()
   await expect(page.locator('.assistant-message')).toHaveCount(1)
   expect(calls).toHaveLength(1)
@@ -312,6 +320,24 @@ test('floating composer leaves messages readable and stays aligned through resiz
   await expectAligned()
   await expectFloating()
   const viewport = page.locator('.message-scroll')
+  const jump = page.getByRole('button', { name: '回到最新消息', exact: true })
+  async function distanceFromBottom(distance: number) {
+    await viewport.evaluate((el, gap) => {
+      el.scrollTop = el.scrollHeight - el.clientHeight - gap
+      el.dispatchEvent(new Event('scroll'))
+    }, distance)
+  }
+  await distanceFromBottom(20)
+  await expect(jump).toBeHidden()
+  await distanceFromBottom(50)
+  await expect(jump).toBeHidden()
+  await distanceFromBottom(70)
+  await expect(jump).toBeVisible()
+  await distanceFromBottom(30)
+  await expect(jump).toBeVisible()
+  await distanceFromBottom(5)
+  await expect(jump).toBeHidden()
+  await distanceFromBottom(0)
   const scrollTop = await viewport.evaluate((el) => el.scrollTop)
   const dock = (await page.locator('.chat-input').boundingBox())!
   await page.mouse.move(dock.x + dock.width / 2, dock.y + 8)
@@ -509,12 +535,18 @@ test('question drafts restore on reload and older questions do not reappear in a
   await page.getByRole('button', { name: '现货', exact: true }).click()
   await page.getByRole('button', { name: '自定义', exact: true }).click()
   await page.getByRole('textbox', { name: '选择执行周期' }).fill('15m')
-  await expect(page.getByRole('button', { name: '提交回答' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '跳过', exact: true })).toBeEnabled()
   await page.reload()
+  await expect(page.getByRole('textbox', { name: '选择执行周期' })).toHaveValue('15m')
+  await page.getByRole('button', { name: '上一题', exact: true }).click()
   await expect(page.getByRole('button', { name: '现货', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
+  await page
+    .locator('.question-navigation')
+    .getByRole('button', { name: '下一题', exact: true })
+    .click()
   await expect(page.getByRole('textbox', { name: '选择执行周期' })).toHaveValue('15m')
   await page.getByRole('textbox', { name: '交易想法' }).fill('改为用文字直接继续研究')
   await page.getByRole('button', { name: '发送研究想法' }).click()

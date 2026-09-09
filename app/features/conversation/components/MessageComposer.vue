@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { ref, useId, useTemplateRef, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 const props = withDefaults(
-  defineProps<{ blocked?: boolean; compact?: boolean; showHint?: boolean; placeholder?: string }>(),
+  defineProps<{
+    blocked?: boolean
+    compact?: boolean
+    showHint?: boolean
+    placeholder?: string
+    maxRows?: number
+  }>(),
   {
     blocked: false,
     compact: false,
     showHint: false,
     placeholder: undefined,
+    maxRows: 16,
   },
 )
 const draft = defineModel<string>({ required: true })
@@ -24,9 +31,9 @@ function resize() {
   el.style.height = 'auto'
   // With zero padding/border, scrollHeight measures rendered lines, including soft wraps.
   const rows = Math.max(props.compact ? 2 : 3, Math.round(el.scrollHeight / lineHeight))
-  el.style.height = `${Math.min(16, rows) * lineHeight}px`
-  el.style.overflowY = rows > 16 ? 'auto' : 'hidden'
-  el.scrollTop = rows > 16 ? scrollTop : 0
+  el.style.height = `${Math.min(props.maxRows, rows) * lineHeight}px`
+  el.style.overflowY = rows > props.maxRows ? 'auto' : 'hidden'
+  el.scrollTop = rows > props.maxRows ? scrollTop : 0
 }
 function scheduleResize() {
   if (frame) return
@@ -35,7 +42,7 @@ function scheduleResize() {
     resize()
   })
 }
-watch([draft, () => props.compact], scheduleResize, { flush: 'post' })
+watch([draft, () => props.compact, () => props.maxRows], scheduleResize, { flush: 'post' })
 onMounted(() => {
   resize()
   let width = input.value?.getBoundingClientRect().width
@@ -97,6 +104,7 @@ defineExpose({ focus })
     />
     <div class="composer-bottom">
       <span v-if="showHint">{{ $t('research.hint') }}</span>
+      <slot name="before-send" />
       <button
         type="submit"
         class="send-button"

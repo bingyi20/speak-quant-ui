@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import SplitPane from '~/components/common/SplitPane.vue'
 import { useConversation } from '../composables/useConversation'
 import { pendingClarification } from '../clarification'
@@ -37,6 +37,79 @@ const {
 } = useConversation(props.conversationId)
 const { active, reconnecting, error: runError, state } = run
 const questions = computed(() => pendingClarification(messages.value))
+const questionCount = computed(
+  () => questions.value?.cards.reduce((total, card) => total + card.data.questions.length, 0) ?? 0,
+)
+const questionsExpanded = ref(true)
+const composer = useTemplateRef<InstanceType<typeof MessageComposer>>('composer')
+const resumeButton = useTemplateRef<HTMLButtonElement>('resumeButton')
+let cancelCollapse: (() => void) | undefined
+async function collapseQuestions(element: Element, done: () => void) {
+  cancelCollapse?.()
+  if (questionsExpanded.value || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    done()
+    return
+  }
+  const card = element as HTMLElement
+  const from = card.getBoundingClientRect()
+  let cancelled = false
+  let animation: Animation | undefined
+  const cleanup = () => {
+    cancelled = true
+    animation?.cancel()
+    done()
+  }
+  cancelCollapse = cleanup
+  // Keep the departing card out of layout while the composer reveals the actual destination.
+  Object.assign(card.style, {
+    position: 'fixed',
+    left: `${from.left}px`,
+    top: `${from.top}px`,
+    width: `${from.width}px`,
+    height: `${from.height}px`,
+    margin: '0',
+    pointerEvents: 'none',
+    zIndex: '50',
+    transformOrigin: 'center',
+  })
+  card.inert = true
+  card.setAttribute('aria-hidden', 'true')
+  await nextTick()
+  if (cancelled) return
+  const destination = resumeButton.value
+  if (!destination) {
+    cleanup()
+    return
+  }
+  const to = destination.getBoundingClientRect()
+  const x = to.left + to.width / 2 - from.left - from.width / 2
+  const y = to.top + to.height / 2 - from.top - from.height / 2
+  try {
+    animation = card.animate(
+      [
+        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+        { transform: `translate(${x}px, ${y}px) scale(0.08)`, opacity: 0 },
+      ],
+      { duration: 240, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' },
+    )
+    await animation.finished
+  } catch {
+    // Reopening, navigation or unmount can interrupt the visual transition.
+  } finally {
+    cleanup()
+    if (cancelCollapse === cleanup) cancelCollapse = undefined
+  }
+}
+watch(questionsExpanded, (expanded) => {
+  if (expanded) cancelCollapse?.()
+})
+onBeforeUnmount(() => cancelCollapse?.())
+watch(
+  () => questions.value?.messageId,
+  () => {
+    questionsExpanded.value = true
+  },
+)
 const tools = computed(() => [...state.tools.values()])
 const open = ref(false)
 const fullscreen = ref(false)
@@ -224,6 +297,7 @@ onBeforeUnmount(() => {
           <div
             ref="inputDock"
             class="conversation-input chat-input"
+            :class="{ 'has-questions': questions && questionsExpanded }"
           >
             <div
               v-if="reconnecting"
@@ -284,18 +358,41 @@ onBeforeUnmount(() => {
             <ClarificationQuestions
               v-if="questions"
               :key="questions.messageId"
+              v-model:expanded="questionsExpanded"
               :group="questions"
               :conversation-id="conversationId"
               :blocked="blocked"
               @submit="send"
+              @close="composer?.focus()"
+              @collapse="collapseQuestions"
             />
             <MessageComposer
+              ref="composer"
               v-model="draft"
               compact
+              :max-rows="questions && questionsExpanded ? 4 : 16"
               :blocked="blocked"
               :placeholder="$t('chat.placeholder')"
               @submit="send()"
-            />
+            >
+              <template #before-send>
+                <button
+                  v-if="questions && !questionsExpanded"
+                  ref="resumeButton"
+                  type="button"
+                  class="question-resume"
+                  :aria-label="$t('chat.resumeQuestions', { count: questionCount })"
+                  :title="$t('chat.resumeQuestions', { count: questionCount })"
+                  @click="questionsExpanded = true"
+                >
+                  <UIcon
+                    name="i-lucide-list-checks"
+                    aria-hidden="true"
+                  />
+                  <span aria-hidden="true">{{ questionCount }}</span>
+                </button>
+              </template>
+            </MessageComposer>
           </div>
         </section>
       </template>

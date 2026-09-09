@@ -222,6 +222,14 @@
     "optional": "选答",
     "customAnswer": "自定义",
     "answerPlaceholder": "填写你的答案…",
+    "previousQuestion": "上一题",
+    "nextQuestion": "下一题",
+    "questionProgress": "第 {current} 题，共 {total} 题",
+    "closeQuestions": "收起问题，改用文字回复",
+    "resumeQuestions": "继续回答 · {count} 个问题",
+    "continueQuestions": "继续作答",
+    "skipQuestion": "跳过",
+    "answerTooLong": "回答最多 2000 个字符，请缩短后继续。",
     "submitAnswers": "提交回答",
     "answered": "已回答 {count} 个问题",
     "generating": "正在准备…",
@@ -237,6 +245,8 @@
     "openOriginal": "返回原页面",
     "openConversation": "打开对话",
     "assetFailed": "生成失败",
-    "previousQuestions": "问题记录 · {count} 题未提交"
+    "previousQuestions": "问题记录 · {count} 题未提交",
+    "customAnswerPlaceholder": "输入其他回答，按回车确认",
+    "skippedQuestions": "已跳过所有问题"
   }
 }

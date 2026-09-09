@@ -76,7 +76,9 @@ test('large SSE chunks reveal continuously and retain existing Markdown nodes', 
   await code.evaluate((el) => {
     el.scrollLeft = 80
   })
-  await expect(page.getByRole('button', { name: '发送研究想法' })).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: '发送研究想法', includeHidden: true }),
+  ).toBeEnabled()
   await expect(markdown).toContainText(tails[2]!.trim())
   const samples = await page.evaluate(
     () => (window as typeof window & { streamSamples: Sample[] }).streamSamples,
@@ -120,7 +122,9 @@ test('scrolling up interrupts following while queued text continues rendering', 
   await page.mouse.wheel(0, -400)
   await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBeLessThan(before - 200)
   const reading = await viewport.evaluate((el) => el.scrollTop)
-  await expect(page.getByRole('button', { name: '发送研究想法' })).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: '发送研究想法', includeHidden: true }),
+  ).toBeEnabled()
   await expect(markdown).toContainText(tails[2]!.trim())
   expect(await viewport.evaluate((el) => el.scrollTop)).toBe(reading)
   await expect(page.locator('[data-message-id]').first()).toHaveAttribute(
@@ -144,7 +148,9 @@ test('a large final chunk appears a few characters per frame even after the Run 
   await input.fill('检查大块文本')
   await input.press('Enter')
   await input.fill('下一轮草稿')
-  await expect(page.getByRole('button', { name: '发送研究想法' })).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: '发送研究想法', includeHidden: true }),
+  ).toBeEnabled()
   const markdown = page.locator('[data-message-id="assistant-1"] .markdown-content')
   expect((await markdown.textContent())!.trim().length).toBeLessThan(text.length)
   await expect(markdown).toHaveText(text)

@@ -69,12 +69,15 @@ export const message = (
 export async function stubConversation(
   page: Page,
   options: {
+    questionsCard?: MessageCard
+    immediateStream?: boolean
     failSendOnce?: boolean
     manyMessages?: boolean
     disconnectOnce?: boolean
     replyChunks?: string[]
   } = {},
 ) {
+  const clarificationCard = options.questionsCard ?? questionsCard
   await stubHistory(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({ json: envelope(authResponse) }),
@@ -91,35 +94,41 @@ export async function stubConversation(
   let round = 0
   const accepted = new Map<string, unknown>()
   // Test-only ReadableStream transport creates real incremental browser reads.
-  await page.addInitScript(() => {
-    const original = window.fetch.bind(window)
-    window.fetch = async (...args) => {
-      const response = await original(...args)
-      const input = args[0]
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      if (!url.includes('/agent-runs/') || !url.includes('/events') || !response.ok) return response
-      const chunks = (await response.text()).split('\n\n').filter(Boolean)
-      const signal = args[1]?.signal
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            for (const chunk of chunks) {
-              await new Promise((resolve) => setTimeout(resolve, 180))
-              if (signal?.aborted) {
-                controller.close()
-                return
+  if (!options.immediateStream)
+    await page.addInitScript(() => {
+      const original = window.fetch.bind(window)
+      window.fetch = async (...args) => {
+        const response = await original(...args)
+        const input = args[0]
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (!url.includes('/agent-runs/') || !url.includes('/events') || !response.ok)
+          return response
+        const chunks = (await response.text()).split('\n\n').filter(Boolean)
+        const signal = args[1]?.signal
+        const stream = new ReadableStream({
+          async start(controller) {
+            try {
+              for (const chunk of chunks) {
+                await new Promise((resolve) => setTimeout(resolve, 180))
+                if (signal?.aborted) {
+                  controller.close()
+                  return
+                }
+                controller.enqueue(new TextEncoder().encode(`${chunk}\n\n`))
               }
-              controller.enqueue(new TextEncoder().encode(`${chunk}\n\n`))
+              controller.close()
+            } catch {
+              /* cancelled reader */
             }
-            controller.close()
-          } catch {
-            /* cancelled reader */
-          }
-        },
-      })
-      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })
-    }
-  })
+          },
+        })
+        return new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        })
+      }
+    })
   function makeRun() {
     round++
     active = {
@@ -175,9 +184,13 @@ export async function stubConversation(
               strategyCard,
               replayCard,
               {
-                ...questionsCard,
+                ...clarificationCard,
                 status: 'completed',
-                data: { ...questionsCard.data, answered: true, answers: body.structured_answers },
+                data: {
+                  ...clarificationCard.data,
+                  answered: true,
+                  answers: body.structured_answers,
+                },
               },
             ],
           }
@@ -230,7 +243,7 @@ export async function stubConversation(
       seq,
       'assistant',
       chunks.join(''),
-      round === 1 ? [strategyCard, replayCard, questionsCard] : [strategyCard, replayCard],
+      round === 1 ? [strategyCard, replayCard, clarificationCard] : [strategyCard, replayCard],
     )
     const events: [string, unknown][] = [
       ['run.snapshot', { run: { id: runId, status: 'running' }, messages: [], active_tools: [] }],

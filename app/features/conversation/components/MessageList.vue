@@ -21,7 +21,10 @@ defineEmits<{ open: [messageId: string, card: MessageCard]; retry: [] }>()
 const activeQuestionMessageId = computed(() => pendingClarification(props.messages)?.messageId)
 const viewport = useTemplateRef<HTMLElement>('viewport')
 const content = useTemplateRef<HTMLElement>('content')
-const { following, bottom, onScroll, prepend } = useConversationScroll(viewport, content)
+const { following, showLatest, bottom, onScroll, prepend } = useConversationScroll(
+  viewport,
+  content,
+)
 watch(
   () => props.loading,
   async (loading) => {
@@ -111,7 +114,7 @@ defineExpose({ bottom })
       </div>
     </div>
     <button
-      v-if="!following && messages.length"
+      v-if="showLatest && messages.length"
       type="button"
       class="jump-latest"
       :aria-label="$t('chat.latest')"

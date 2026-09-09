@@ -533,7 +533,7 @@ p {
   pointer-events: auto;
 }
 .history-more.icon-button:hover {
-  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  background: var(--color-bg-control-hover);
 }
 @media (hover: none) {
   .history-more.icon-button {
@@ -572,7 +572,7 @@ p {
   border: 1px solid var(--color-border-default);
   border-radius: 9px;
   background: var(--color-bg-surface);
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  box-shadow: var(--shadow-menu);
   animation: none;
   z-index: 60;
 }
@@ -743,7 +743,7 @@ p {
 }
 .new-task-inner .quick-examples button:hover {
   background: var(--color-bg-selected);
-  border-color: color-mix(in srgb, var(--color-brand) 35%, var(--color-border-default));
+  border-color: var(--color-border-selected-hover);
 }
 .new-task-inner .quick-examples svg {
   color: var(--color-brand);
@@ -1248,7 +1248,7 @@ p {
   border: 1px solid var(--color-border-default);
   border-radius: 14px;
   background: var(--color-bg-surface);
-  box-shadow: 0 4px 18px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  box-shadow: var(--shadow-preference-menu);
   z-index: 70;
 }
 .preference-menu .preference-menu-item {
@@ -1429,12 +1429,12 @@ p {
   color: var(--color-text-muted);
 }
 .login-entry input:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--color-border-default) 65%, var(--color-text-muted));
+  border-color: var(--color-border-input-hover);
 }
 .login-entry input:focus {
   outline: none;
   box-shadow: none;
-  border-color: color-mix(in srgb, var(--color-border-default) 40%, var(--color-text-muted));
+  border-color: var(--color-border-input-focus);
 }
 .login-card input[aria-invalid='true'] {
   border-color: var(--color-danger);

@@ -222,6 +222,14 @@
     "optional": "Optional",
     "customAnswer": "Custom",
     "answerPlaceholder": "Your answer…",
+    "previousQuestion": "Previous question",
+    "nextQuestion": "Next question",
+    "questionProgress": "Question {current} of {total}",
+    "closeQuestions": "Dismiss questions and type a reply",
+    "resumeQuestions": "Continue answering · {count} questions",
+    "continueQuestions": "Complete missing answers",
+    "skipQuestion": "Skip",
+    "answerTooLong": "Keep your answer within 2,000 characters.",
     "submitAnswers": "Submit answers",
     "answered": "Answered {count} questions",
     "generating": "Preparing…",
@@ -237,6 +245,8 @@
     "openOriginal": "Return to original page",
     "openConversation": "Open conversation",
     "assetFailed": "Generation failed",
-    "previousQuestions": "Question history · {count} not submitted"
+    "previousQuestions": "Question history · {count} not submitted",
+    "customAnswerPlaceholder": "Type another answer, press Enter to confirm",
+    "skippedQuestions": "Skipped all questions"
   }
 }

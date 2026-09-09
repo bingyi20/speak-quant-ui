@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "preview:questions": "playwright test --config tests/preview/playwright.config.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write app shared i18n tests *.ts *.mjs *.json README.md AGENTS.md .github",
     "format:check": "prettier --check app shared i18n tests *.ts *.mjs *.json README.md AGENTS.md .github"

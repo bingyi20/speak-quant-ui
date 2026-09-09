@@ -39,7 +39,6 @@ export function readSubmission(owner: string) {
         typeof v.body.content === 'string' ||
         (typeof v.body.reply_to_message_id === 'string' &&
           Array.isArray(v.body.structured_answers) &&
-          v.body.structured_answers.length > 0 &&
           v.body.structured_answers.every(
             (a) =>
               isRecord(a) &&

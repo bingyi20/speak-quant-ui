@@ -170,9 +170,16 @@ describe('batch clarification', () => {
       answers: [],
     },
   }
-  it('submits every required answer once using IDs and exact option values', () => {
+  it('submits valid filled answers and allows partial or all-skipped groups', () => {
     const group = pendingClarification([{ ...row('source', 1), cards: [clarification] }])!
-    expect(clarificationSubmission(group, { q1: { mode: 'option', text: 'Spot' } })).toBeNull()
+    expect(
+      clarificationSubmission(group, { q1: { mode: 'option', text: 'Spot' } })?.body
+        .structured_answers,
+    ).toEqual([{ question_id: 'q1', value: 'Spot' }])
+    expect(clarificationSubmission(group, {})?.body).toEqual({
+      reply_to_message_id: 'source',
+      structured_answers: [],
+    })
     const result = clarificationSubmission(group, {
       q1: { mode: 'option', text: 'Spot' },
       q2: { mode: 'custom', text: ' 15m ' },
@@ -189,8 +196,8 @@ describe('batch clarification', () => {
       clarificationSubmission(group, {
         q1: { mode: 'custom', text: 'Not allowed' },
         q2: { mode: 'option', text: '1h' },
-      }),
-    ).toBeNull()
+      })?.body.structured_answers,
+    ).toEqual([{ question_id: 'q2', value: '1h' }])
   })
   it('restores completed questions as read only and safely rejects malformed data', () => {
     const completed = {

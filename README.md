@@ -96,6 +96,14 @@ SSE 使用 `openEventStream(http, streamUrl, { signal, onEvent, isTerminal })`�
 
 如未来接入 CSP，需要为当前的同源 `theme-init.js` 配置允许策略。图表接入时实现 `ChartAdapter.applyTheme`，不要在页面直接依赖 SDK。
 
+## 快速预览 Agent 问答
+
+运行 `pnpm preview:questions`，会打开独立的 Chromium 窗口，自动进入五题问答，无需登录或触发真实 Agent。直接测试选择、切题、自定义回答、关闭重开和提交；顶部明确标注“模拟数据”，点击“重新开始”可重置。窗口可调整大小检查响应式效果，关闭窗口或在终端按 Ctrl+C 结束。
+
+预览复用 `tests/e2e` 的接口夹具，所有业务 API 均在该浏览器上下文中拦截，未模拟的接口返回预览错误，不向真实后端发送业务请求。Mock 与预览工具只存在于 `tests/preview/`，不增加生产路由；复制预览 URL 到普通浏览器不会携带 Mock。开发服务未启动时会自动启动，已启动时复用。首次缺少浏览器时运行 `pnpm exec playwright install chromium`。
+
+`QUESTIONS_PREVIEW_CHECK=1 pnpm preview:questions` 以无界面模式检查进入和重置后退出；日常 `pnpm test:e2e` 不会启动交互预览。
+
 ## 检查与构建
 
 ```bash

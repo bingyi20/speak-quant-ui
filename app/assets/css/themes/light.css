@@ -24,4 +24,27 @@
   --color-overlay: rgb(35 35 30 / 30%);
   --shadow-composer: 0 4px 20px rgb(48 49 46 / 3%);
   --shadow-panel: 0 6px 30px rgb(48 49 46 / 5%);
+  /* Theme-dependent derived values stay here, never in business styles. */
+  --color-bg-control-hover: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  --shadow-menu: 0 3px 10px color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  --color-border-selected-hover: color-mix(
+    in srgb,
+    var(--color-brand) 35%,
+    var(--color-border-default)
+  );
+  --shadow-preference-menu: 0 4px 18px
+    color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  --color-border-input-hover: color-mix(
+    in srgb,
+    var(--color-border-default) 65%,
+    var(--color-text-muted)
+  );
+  --color-border-input-focus: color-mix(
+    in srgb,
+    var(--color-border-default) 40%,
+    var(--color-text-muted)
+  );
+  --color-text-placeholder: color-mix(in srgb, var(--color-text-muted) 80%, transparent);
+  --color-scrollbar-thumb: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
+  --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-muted) 50%, transparent);
 }
