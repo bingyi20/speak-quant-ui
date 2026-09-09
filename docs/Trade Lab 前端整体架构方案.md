@@ -1,7 +1,7 @@
 # Trade Lab 前端整体架构方案
 
 > 日期：2026-09-05  
-> 状态：建议稿，供架构审阅  
+> 状态：工程架构已落地；本文维护跨模块约定与代码索引，业务完成度见 [项目入口](../AGENTS.md)。
 > 范围：Nuxt 工程、模块分层、请求封装、状态管理、组件体系、主题与 SSR 边界；不展开业务算法、具体交互状态机或接口实现。
 
 ## 1. 推荐结论
@@ -51,9 +51,7 @@
 | 图表 | 独立 Chart Adapter，库在专项验证后确定 | 避免页面和播放控制依赖具体图表 SDK |
 | 工程 | pnpm、ESLint、类型检查、Vitest、Playwright | 锁定依赖并验证关键基础能力 |
 
-Nuxt 采用 4.x 架构约定；具体补丁版本及 UI、i18n、Pinia 等模块的兼容版本在初始化时统一验证并写入锁文件。Node 使用 Nuxt 与部署环境共同支持的 LTS 版本，开发、CI、生产统一。
-
-以上是本项目建议选型，不表示已经安装或完成兼容性验证。第一期只引入实际使用的依赖。
+当前使用 Nuxt 4、Vue 3、Nuxt UI 4、Tailwind CSS 4、Pinia 与 Nuxt i18n；具体版本以 `package.json` 和锁文件为准。Node 22（`>=22.13.0 <23`）与 pnpm 10 为统一开发基线。图表 adapter 已有工程接口，具体图表引擎和完整业务仍待接入。
 
 ## 4. 运行架构与渲染边界
 
@@ -72,12 +70,12 @@ flowchart LR
 
 | 环境 | 浏览器 API Base URL |
 | --- | --- |
-| 本地 | `http://127.0.0.1:6001/api` |
+| 本地 | `http://localhost:6001/api` |
 | 生产 | `/api` |
 
 本地只需要：
 
-- 前端统一通过 `http://127.0.0.1:6002` 访问，后端使用 `127.0.0.1:6001`，避免混用 localhost 与 127.0.0.1 导致 Cookie 行为不同。
+- 前端统一通过 `http://localhost:6002` 访问，后端使用 `localhost:6001`，避免混用 localhost 与 127.0.0.1 导致 Cookie 行为不同。
 - 后端开发配置允许该前端 Origin 的 CORS 请求及凭据，放行实际使用的方法和 Header，包括 Authorization、Idempotency-Key、X-Request-ID；需要读取文件名时暴露 Content-Disposition。
 - 统一客户端设置 `credentials: 'include'`，开发环境认证 Cookie 关闭 Secure；Google 登录的允许 Origin 同步配置为实际前端地址。
 
@@ -93,7 +91,7 @@ SSR 请求后端时使用服务端配置的绝对 API 地址；该配置与浏�
 | --- | --- | --- | --- |
 | `/` | 产品落地页；public 布局，品牌导航、产品介绍、研究输入框与示例 | SSR 公共内容；客户端增强输入与认证入口 | 公共内容可索引 |
 | `/new-task` | 工作台新研究页；workspace 布局，左侧历史、中间输入区 | 路由级 CSR | noindex、禁止共享缓存 |
-| `/login` | 登录及登录返回入口；auth 布局 | SSR 页面壳，客户端认证 | noindex |
+| `/login` | 登录及登录返回入口；auth 布局 | SSR 页面壳，客户端认证 | noindex、no-store |
 | `/conversations/:id` | 已创建的研究；workspace 布局，对话与资产面板 | 路由级 CSR | noindex、禁止共享缓存 |
 | 后续公开内容路由 | SEO 文章、公开说明等；public 布局 | SSR 或预渲染，按内容选择 | 明确开放后加入 sitemap |
 
@@ -113,9 +111,9 @@ Nuxt 全局保持 SSR 开启，为 `/new-task` 和 `/conversations/**` 配置 `r
 - 输入与待提交意图保存在当前浏览器标签页的临时状态中，按需使用 sessionStorage 跨登录跳转恢复，不放入 URL。成功后消费并清除待提交意图；取消或失败保留可编辑草稿，同一次提交重试复用幂等 key。
 - 登录返回只接受站内允许路径。登录取消、认证恢复和创建中的状态统一由共享 controller 处理，两个页面只展示结果。
 
-这里的拆分是两种页面布局与一个共享研究入口，不新增后端业务接口。
+共享入口为 conversation 模块公开导出的 `ResearchEntry`，嵌入方式见 [Agent 对话模块技术方案 §4.4](./Agent%20对话模块技术方案.md#44-落地页与-seo-页快速嵌入)。新增公开页面声明 `layout: 'public'` 并调用 `usePageSeo`。账户与套餐入口使用全局 overlay，不另建工作台业务路由。
 
-后续 SEO 增加统一 `useSeoMeta` 封装、canonical、语言链接、sitemap 和 robots。私有资源不能因为“做 SEO”开放读取。`noindex` 只控制搜索索引，资源权限仍由后端校验。
+`usePageSeo` 已提供公共 SEO 封装；完整公开内容和 sitemap 仍待补齐。私有资源不能因为“做 SEO”开放读取。`noindex` 只控制搜索索引，资源权限仍由后端校验。
 
 ### 4.3 私有数据 SSR 的后续边界
 
@@ -126,6 +124,8 @@ Nuxt 全局保持 SSR 开启，为 `/new-task` 和 `/conversations/**` 配置 `r
 公开 SEO 页面不依赖这项改造。
 
 ## 5. 代码目录与分层
+
+下面的目录树表达分层，包含后续业务模块的规划；实际代码入口以 §5.3 为准，不以目录示意推断交付状态。
 
 ```text
 trade-ui/
@@ -217,7 +217,7 @@ features 的公开入口
 第三方库与现有 API
 ```
 
-- `pages` 不直接调用 fetch、不解析 SSE、不处理 Token 刷新。
+- 页面和组件不直接调用 fetch、不嵌入业务 endpoint、不解析 SSE 或处理 Token 刷新；接口路径与 DTO 由模块 `api.ts` / `types.ts` 管理，composable/store 编排查询及交互。
 - 功能模块可以使用公共能力；公共能力不能反向导入业务模块。
 - `lib/http` 通过注入的 Token 访问器和认证失效回调工作，不直接导入 auth store 或弹登录框。
 - 模块互相协作时传递 ID、明确的数据对象或事件，由上层工作台协调；不读取另一个模块内部 store。
@@ -225,6 +225,37 @@ features 的公开入口
 - `shared/` 中不能引用 Vue、浏览器对象或服务端私密配置；`app/` 不能导入 `server/`。
 
 可用 ESLint 的 import 限制逐步固化上述边界。
+
+### 5.3 代码索引地图
+
+先定位任务对应入口，再沿调用链读取；不必每次读完全部文件。
+
+| 要处理的内容                      | 优先查看                                                                                                                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 启动、模块、环境变量、SSR 规则    | `package.json`、`nuxt.config.ts`、`.env.example`                                                                                                                                  |
+| 路由与布局                        | `app/pages/`、`app/layouts/`、`app/middleware/auth.ts`                                                                                                                            |
+| 全局依赖与认证恢复                | `app/plugins/02.api.ts`                                                                                                                                                           |
+| JSON 请求、错误、认证协调         | `app/lib/http/client.ts`、`session.ts`、`error.ts`；通用类型在 `shared/types/http.ts`                                                                                             |
+| 邮箱/Google 登录与用户展示状态    | `app/features/auth/api.ts`、`google.ts`、`composables/useLogin.ts`、`stores/auth.ts`                                                                                              |
+| 研究列表 API 与字段               | `app/features/conversation/api.ts`、`types.ts`                                                                                                                                    |
+| 历史分页、写入和并发处理          | `app/features/conversation/history-state.ts`；用户生命周期在 `history-store.ts`                                                                                                   |
+| 历史菜单、重命名与删除交互        | `app/features/conversation/components/ResearchHistory.vue`、`HistoryRenameInput.vue`                                                                                              |
+| 工作台侧栏、Hover、折叠与 H5 抽屉 | `app/layouts/workspace.vue`、`app/components/common/WorkspaceNavigation.vue`                                                                                                      |
+| 新研究输入与草稿                  | `app/features/conversation/components/ResearchEntry.vue`、`composables/useResearchEntry.ts`、`useResearchDraft.ts`                                                                |
+| 对话与流式状态                    | `app/features/conversation/composables/useConversation.ts`、`useAgentRun.ts`、`useStreamingText.ts`、`useConversationScroll.ts`、`message-state.ts`、`agent-events.ts`                                                               |
+| 快捷问答与未决提交                | `app/features/conversation/clarification.ts`、`composables/useClarification.ts`、`submission.ts`                                                                                  |
+| 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationAssetPanel.vue`；样式 `app/assets/css/conversation.css` |
+| 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
+| 全局偏好、主题及语言恢复          | `app/stores/preferences.ts`、`app/plugins/01.preferences.ts`、`app/composables/useTheme.ts`、`public/theme-init.js`                                                               |
+| 尺寸、字体、配色与页面样式        | `app/assets/css/tokens.css`、`themes/light.css`、`themes/dark.css`、`main.css`；Nuxt UI 配置在 `app/app.config.ts`                                                                |
+| 品牌、头像与公共控件              | `public/logo.svg`、`public/favicon.svg`、`public/avatar-default.svg`、`app/components/common/`、`app/components/ui/`                                                              |
+| 界面文案与国际化                  | `i18n/locales/zh-CN.json`、`en-US.json`、`i18n/i18n.config.ts`                                                                                                                    |
+| SSE、文件下载                     | `app/lib/sse/`、`app/lib/download/client.ts`                                                                                                                                      |
+| 图表、精度、Markdown、存储与遥测  | `app/lib/chart/`、`format/`、`storage/`、`telemetry/`                                                                                                                             |
+| SEO 与公共生命周期工具            | `app/composables/usePageSeo.ts`、`useDisposableScope.ts`、`useChart.ts`                                                                                                           |
+| 测试与 HTTP Mock                  | `tests/unit/`、`tests/e2e/`、`tests/e2e/auth-fixtures.ts`、`history-data.ts`                                                                                                      |
+
+新增、移动或删除入口时更新本表；模块内部流程由专项方案维护，顶层 AGENTS.md 只链接本文。
 
 ## 6. 统一 API 请求体系
 
@@ -263,7 +294,7 @@ JSON 客户端的通用职责：
 
 ### 6.3 认证恢复
 
-Access Token 仅存在客户端请求实例的内存中，不写 localStorage，也不进入 SSR payload；Refresh Token 由后端 HttpOnly Cookie 管理。auth store 保存用户资料和 `unknown / restoring / authenticated / anonymous` 等界面状态。
+Access Token 仅存在客户端请求实例的内存中，不写 localStorage，也不进入 SSR payload；Refresh Token 由后端 HttpOnly Cookie 管理。auth store 只保存用户资料与认证展示状态，不保存 Token；Token 也不放 sessionStorage 或 Pinia。
 
 1. 浏览器启动后通过 `/api/auth/refresh` 恢复认证，产品落地页不等待它才能展示。
 2. 受保护查询等待同一个认证初始化 Promise，避免未恢复就并发报 401。
@@ -274,9 +305,11 @@ Access Token 仅存在客户端请求实例的内存中，不写 localStorage，
 
 Nuxt plugin 负责注入依赖与组装请求实例；SSR 实例按请求隔离。不能把用户 Token、刷新 Promise 或用户数据放在 Node 进程级单例中。退出和切换账号时同步清理查询缓存、工作台状态与未完成请求；草稿按匿名/用户划分，避免跨账号显示。
 
+登录响应交给 `$acceptAuth()`，恢复使用 `$restoreAuth()`，退出使用 `$logout()`；服务端撤销成功后才清理本地会话。站内导航复用内存 Token，整页刷新或新标签页通过 Refresh Cookie 恢复。迟到响应不得写回已失效的用户作用域。
+
 ### 6.4 幂等与重试
 
-创建 Conversation、发送消息、创建/重试 Replay、恢复 Strategy 等操作，按接口要求携带 `Idempotency-Key`。模块 API 声明哪些操作需要幂等，公共请求层生成 key。
+创建 Conversation、发送消息、创建/重试 Replay、恢复 Strategy 等操作，按接口要求携带 `Idempotency-Key`。模块 API 声明哪些操作需要幂等，公共请求层通过 `http.operation()` 提供操作句柄；重试保留同一句柄、请求体与 key，普通写请求不自动网络重试。
 
 key 对应“一次用户意图”，而不是“一次 HTTP 尝试”。同一次操作的网络恢复、认证刷新重发和用户点击继续重试复用原 key 与原请求体；用户修改内容后重新提交才生成新 key。请求封装提供操作句柄保存这些信息，页面不自行拼 Header。
 
@@ -295,7 +328,7 @@ key 对应“一次用户意图”，而不是“一次 HTTP 尝试”。同一�
 
 | 状态 | 推荐归属 | 例子 |
 | --- | --- | --- |
-| 远程资源 | 模块查询 composable + Nuxt 异步数据 | 详情、列表、用户资料请求结果 |
+| 远程资源 | 模块 controller/composable；需 SSR 的查询按需使用 Nuxt 异步数据 | 详情、列表、消息 |
 | 全局会话展示 | auth 模块 store | 用户、认证恢复状态 |
 | 全局偏好 | preferences store + 非敏感 Cookie | 主题、界面语言 |
 | 工作台交互 | 工作台作用域 composable/provider | 面板、当前资产、分栏尺寸、滚动位置 |
@@ -303,7 +336,9 @@ key 对应“一次用户意图”，而不是“一次 HTTP 尝试”。同一�
 | 大体量数据 | 模块级有界缓存、shallowRef | K 线分段、图表数据 |
 | SDK 实例与连接 | 作用域内部非序列化对象 | Chart、AbortController、SSE reader |
 
-查询 key 必须包含资源 ID、分页参数及影响响应的语言；私有数据还要按当前会话隔离。退出清空所有私有 key，写操作成功后只刷新受影响资源。
+使用 Nuxt 异步数据时，私有查询 key 以 `private:` 开头，包含用户、资源 ID、分页参数及影响响应的语言。研究历史已有独立状态控制器，不再叠加另一份 Nuxt 远程缓存。退出清空所有私有 key，写操作成功后只刷新受影响资源。
+
+主题与语言偏好存非敏感 Cookie，侧栏折叠偏好存 localStorage，研究草稿存按用户隔离的 sessionStorage；不持久化整个业务 store。
 
 同一份资源不要同时存入 `useAsyncData`、Pinia 和组件三处。SSE 期间允许模块维护“持久历史 + 当前 Run 临时覆盖层”，但应由同一个 controller 合并对外输出，终态后与 HTTP 历史按 ID 对齐并释放临时层。
 
@@ -466,7 +501,7 @@ Nuxt UI 已能满足的组件直接使用；需要统一产品语义、默认行
 
 这些调整基于所读取的 `nuxt.config.ts`、`app/utils/request.ts`、`app/stores/auth.ts`、`app/composables/useSSE.ts` 和目录结构，不代表对旧项目作完整质量审计。
 
-## 13. 建议落地顺序
+## 13. 初始落地顺序（历史规划）
 
 1. **建立工程骨架**：Nuxt、TypeScript、public/workspace/auth 布局、已确认路由、目录约定、pnpm 与基础检查。
 2. **建立公共底座**：环境 API 地址配置、JSON 客户端、错误类型、认证恢复、国际化、主题 token。
@@ -475,4 +510,4 @@ Nuxt UI 已能满足的组件直接使用；需要统一产品语义、默认行
 5. **按模块接入业务**：先贯通落地页与工作台共用的创建、登录返回流程，再逐步接入现有 API；页面不扩展成新的基础设施层。
 6. **完善落地页与公开 SEO 内容**：为 `/` 补齐产品内容和元信息，再根据实际内容规划扩展公开路由及索引策略。
 
-本轮最值得审阅的四个架构选择是：**功能模块内聚、统一 API 客户端、公开 SSR 与私有 CSR 分开、语义 token 驱动主题**。基础路由按本轮确认落地，图表库和深色数值可以后定，不影响这套基础结构。
+本节记录初始实施顺序，不作为当前待办清单；当前进度见 [AGENTS.md](../AGENTS.md)，模块验证见专项联调记录。四个架构选择是：**功能模块内聚、统一 API 客户端、公开 SSR 与私有 CSR 分开、语义 token 驱动主题**。基础路由按本轮确认落地，图表库和深色数值可以后定，不影响这套基础结构。
