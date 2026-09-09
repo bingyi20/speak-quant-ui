@@ -12,16 +12,21 @@ function setNavigationBusy(value: boolean) {
   if (value) cancelClose()
   else closePreview()
 }
-let settingsAfterClose = false
-function afterDrawerClose() {
-  if (!settingsAfterClose) return
-  settingsAfterClose = false
-  expand.value?.focus()
-  overlays.openSettings()
+let overlayAfterClose: 'settings' | 'pricing' | null = null
+function openOverlay(target: 'settings' | 'pricing') {
+  if (target === 'pricing') overlays.openPricing('plans')
+  else overlays.openSettings()
 }
-function openSettings() {
+function afterDrawerClose() {
+  if (!overlayAfterClose) return
+  const target = overlayAfterClose
+  overlayAfterClose = null
+  expand.value?.focus()
+  openOverlay(target)
+}
+function openFromNavigation(target: 'settings' | 'pricing') {
   if (mobileOpen.value) {
-    settingsAfterClose = true
+    overlayAfterClose = target
     mobileOpen.value = false
     return
   }
@@ -29,9 +34,9 @@ function openSettings() {
     previewOpen.value = false
     nextTick(() => {
       expand.value?.focus()
-      overlays.openSettings()
+      openOverlay(target)
     })
-  } else overlays.openSettings()
+  } else openOverlay(target)
 }
 const mobileOpen = ref(false)
 const isMobile = ref(false)
@@ -189,7 +194,8 @@ onBeforeUnmount(() => {
     >
       <WorkspaceNavigation
         :collapsed="previewOpen"
-        @settings="openSettings"
+        @settings="openFromNavigation('settings')"
+        @pricing="openFromNavigation('pricing')"
         @interaction="setNavigationBusy"
       />
     </aside>
@@ -232,7 +238,8 @@ onBeforeUnmount(() => {
         ><div class="mobile-navigation">
           <WorkspaceNavigation
             mobile
-            @settings="openSettings"
+            @settings="openFromNavigation('settings')"
+            @pricing="openFromNavigation('pricing')"
             @navigate="mobileOpen = false"
             @toggle="mobileOpen = false"
           /></div

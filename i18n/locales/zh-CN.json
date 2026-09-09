@@ -142,7 +142,6 @@
     "system": "跟随系统",
     "darkHint": "深色主题将在设计完成后开放。",
     "language": "界面语言",
-    "languageHint": "设置会保存在当前浏览器。",
     "account": "账户",
     "billing": "充值与套餐将在后续版本开放。",
     "dialogTitle": "账户设置",
@@ -152,13 +151,10 @@
     "planPreview": "套餐预览",
     "viewPlans": "升级套餐",
     "planLabel": "订阅套餐",
-    "preview": "即将开放",
-    "subscriptionHint": "订阅功能即将开放，当前展示为套餐预览。",
-    "upgradeSoon": "升级套餐 · 即将开放",
+    "subscriptionHint": "当前为 Free 套餐预览，可查看会员方案或按需加购积分。",
     "creditBalance": "积分余额",
     "creditsHint": "积分功能开放后，将在这里显示余额与重置时间。",
     "notAvailable": "暂未开放",
-    "viewUsage": "查看消耗记录",
     "usageDescription": "按研究查看积分消耗与返还记录。",
     "usageSoon": "消耗记录即将开放",
     "usageHint": "功能开放后，每次研究的时间、积分消耗和明细都会展示在这里。"
@@ -252,5 +248,56 @@
     "previousQuestions": "问题记录 · {count} 题未提交",
     "customAnswerPlaceholder": "输入其他回答，按回车确认",
     "skippedQuestions": "已跳过所有问题"
+  },
+  "billing": {
+    "title": "选择适合你的套餐",
+    "plansTab": "会员套餐",
+    "creditsTab": "积分加购",
+    "recommended": "推荐",
+    "perMonth": "/ 月",
+    "everyMonth": "/ 月",
+    "creditCount": "{count} 积分",
+    "freeCredits": "每月免费额度",
+    "unitPrice": "${price} / 100 积分",
+    "topUpRate": "加购 ${price} / 100 积分",
+    "currentPlan": "当前套餐",
+    "freePlan": "免费套餐",
+    "choosePlan": "选择 {plan}",
+    "previewNote": "套餐、价格与当前会员均为预览，支付即将开放。",
+    "plans": {
+      "free": {
+        "description": "从第一个交易想法开始",
+        "includes": "开始你的研究"
+      },
+      "pro": {
+        "description": "为持续探索与策略迭代而设",
+        "includes": "Free 的全部功能，以及"
+      },
+      "max": {
+        "description": "为高频、深入的研究留足余量",
+        "includes": "Pro 的全部功能，以及"
+      }
+    },
+    "features": {
+      "conversation": "与 AI 对话，探索交易想法",
+      "history": "保存与管理研究历史",
+      "iteration": "在对话中持续完善策略思路",
+      "allowance": "每月 {count} 积分研究额度",
+      "flexibility": "按需加购积分，灵活安排研究",
+      "topUp": "更优惠的积分加购单价"
+    },
+    "currentMembership": "当前会员",
+    "topUpAmount": "加购金额",
+    "amountHint": "最低 ${min}",
+    "presetAmounts": "快捷加购金额",
+    "invalidAmount": "请输入 {min}–{max} 之间的整数金额。",
+    "youReceive": "预计获得",
+    "credits": "积分",
+    "roundingNote": "实际到账数量以支付开放后的订单为准。",
+    "continueAmount": "继续 · ${amount}",
+    "enterAmount": "请输入有效金额",
+    "membershipUnavailable": "会员信息暂不可用，请稍后重试。",
+    "paymentSoon": "支付功能待上线",
+    "recharge": "升级"
   }
 }

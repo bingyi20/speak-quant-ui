@@ -49,10 +49,6 @@ const localeOptions: { label: string; value: Locale }[] = [
   { label: '简体中文', value: 'zh-CN' },
   { label: 'English', value: 'en-US' },
 ]
-function openTab(id: string) {
-  activeTab.value = id
-  nextTick(() => document.getElementById(`${instanceId}-panel-${id}`)?.focus())
-}
 function navigateTabs(event: KeyboardEvent) {
   const directions: Record<string, number> = {
     ArrowDown: 1,
@@ -151,9 +147,9 @@ async function logout() {
           <button
             type="button"
             class="settings-secondary-button"
-            @click="openTab('subscription')"
+            @click="overlays.openPricing()"
           >
-            {{ $t('settings.viewPlans') }}<UIcon name="i-lucide-arrow-up-right" />
+            {{ $t('settings.viewPlans') }}
           </button>
         </div>
         <div class="setting-row">
@@ -172,7 +168,6 @@ async function logout() {
             :options="localeOptions"
           />
         </div>
-        <p class="setting-hint settings-preferences-hint">{{ $t('settings.languageHint') }}</p>
         <div class="settings-signout">
           <button
             v-if="auth.isAuthenticated"
@@ -202,18 +197,17 @@ async function logout() {
       <template v-else-if="activeTab === 'subscription'">
         <div class="settings-subscription-card">
           <div class="settings-subscription-heading">
-            <span>{{ $t('settings.planLabel') }}</span
-            ><span class="settings-coming-soon">{{ $t('settings.preview') }}</span>
+            <span>{{ $t('settings.planLabel') }}</span>
+            <button
+              type="button"
+              class="settings-secondary-button"
+              @click="overlays.openPricing()"
+            >
+              {{ $t('settings.viewPlans') }}
+            </button>
           </div>
           <strong class="settings-plan-name">{{ $t('settings.freePlan') }}</strong>
           <p class="setting-hint">{{ $t('settings.subscriptionHint') }}</p>
-          <button
-            type="button"
-            class="settings-secondary-button"
-            disabled
-          >
-            {{ $t('settings.upgradeSoon') }}
-          </button>
         </div>
         <div class="setting-row settings-credit-row">
           <div>
@@ -223,13 +217,6 @@ async function logout() {
           <strong aria-hidden="true">—</strong
           ><span class="sr-only">{{ $t('settings.notAvailable') }}</span>
         </div>
-        <button
-          type="button"
-          class="settings-usage-link"
-          @click="openTab('usage')"
-        >
-          {{ $t('settings.viewUsage') }}<UIcon name="i-lucide-arrow-right" />
-        </button>
       </template>
       <template v-else>
         <p class="setting-hint">{{ $t('settings.usageDescription') }}</p>

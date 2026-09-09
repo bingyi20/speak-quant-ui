@@ -3,7 +3,7 @@ import AccountTrigger from '~/features/account/components/AccountTrigger.vue'
 import ResearchHistory from '~/features/conversation/components/ResearchHistory.vue'
 defineProps<{ collapsed?: boolean; mobile?: boolean }>()
 defineEmits<{
-  (event: 'toggle' | 'navigate' | 'settings'): void
+  (event: 'toggle' | 'navigate' | 'settings' | 'pricing'): void
   (event: 'interaction', active: boolean): void
 }>()
 </script>
@@ -36,5 +36,8 @@ defineEmits<{
     @navigate="$emit('navigate')"
     @interaction="$emit('interaction', $event)"
   />
-  <AccountTrigger @open="$emit('settings')" />
+  <AccountTrigger
+    @open="$emit('settings')"
+    @topup="$emit('pricing')"
+  />
 </template>

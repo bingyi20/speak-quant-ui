@@ -142,7 +142,6 @@
     "system": "System",
     "darkHint": "Dark mode will be available once its design is complete.",
     "language": "Interface language",
-    "languageHint": "Preferences are saved in this browser.",
     "account": "Account",
     "billing": "Top-ups and plans will be available in a later release.",
     "dialogTitle": "Account settings",
@@ -152,13 +151,10 @@
     "planPreview": "Plan preview",
     "viewPlans": "Upgrade plan",
     "planLabel": "Subscription plan",
-    "preview": "Coming soon",
-    "subscriptionHint": "Subscriptions are coming soon. This is a preview of the plan display.",
-    "upgradeSoon": "Upgrade plan · Coming soon",
+    "subscriptionHint": "Previewing the Free plan. Explore membership options or additional credits.",
     "creditBalance": "Credit balance",
     "creditsHint": "Your balance and reset date will appear here when credits become available.",
     "notAvailable": "Not available yet",
-    "viewUsage": "View usage history",
     "usageDescription": "Review credit usage and returns for each research.",
     "usageSoon": "Usage history is coming soon",
     "usageHint": "Once available, the date, credits used, and details of each research will appear here."
@@ -252,5 +248,56 @@
     "previousQuestions": "Question history · {count} not submitted",
     "customAnswerPlaceholder": "Type another answer, press Enter to confirm",
     "skippedQuestions": "Skipped all questions"
+  },
+  "billing": {
+    "title": "Choose the right plan for you",
+    "plansTab": "Membership plans",
+    "creditsTab": "Credit top-ups",
+    "recommended": "Recommended",
+    "perMonth": "/ month",
+    "everyMonth": "/ month",
+    "creditCount": "{count} credits",
+    "freeCredits": "Free monthly allowance",
+    "unitPrice": "${price} / 100 credits",
+    "topUpRate": "Top-ups: ${price} / 100 credits",
+    "currentPlan": "Current plan",
+    "freePlan": "Free plan",
+    "choosePlan": "Choose {plan}",
+    "previewNote": "Plans, prices and current membership are previews. Payments are coming soon.",
+    "plans": {
+      "free": {
+        "description": "Start with your first trading idea",
+        "includes": "Your research essentials"
+      },
+      "pro": {
+        "description": "For ongoing exploration and iteration",
+        "includes": "Everything in Free, plus"
+      },
+      "max": {
+        "description": "More capacity for intensive research",
+        "includes": "Everything in Pro, plus"
+      }
+    },
+    "features": {
+      "conversation": "Explore trading ideas with AI",
+      "history": "Save and organize research history",
+      "iteration": "Refine your strategy through conversation",
+      "allowance": "{count} research credits each month",
+      "flexibility": "Top up credits whenever you need more",
+      "topUp": "Lower rates on additional credits"
+    },
+    "currentMembership": "Current membership",
+    "topUpAmount": "Top-up amount",
+    "amountHint": "Minimum ${min}",
+    "presetAmounts": "Quick top-up amounts",
+    "invalidAmount": "Enter a whole amount between {min} and {max}.",
+    "youReceive": "Estimated credits",
+    "credits": "credits",
+    "roundingNote": "Final credit amounts will be confirmed at checkout once payments launch.",
+    "continueAmount": "Continue · ${amount}",
+    "enterAmount": "Enter a valid amount",
+    "membershipUnavailable": "Membership information is unavailable. Please try again later.",
+    "paymentSoon": "Payments coming soon",
+    "recharge": "Upgrade"
   }
 }
