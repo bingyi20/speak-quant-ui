@@ -11,6 +11,8 @@
   --landing-width: 820px;
   --motion-fast: 160ms;
   --motion-panel: 260ms;
+  --motion-asset-list: var(--motion-panel);
+  --motion-asset-detail: var(--motion-panel);
   --z-header: 10;
   --z-panel: 20;
 }

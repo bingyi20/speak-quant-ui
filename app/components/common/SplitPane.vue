@@ -1,26 +1,33 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 const props = withDefaults(
-  defineProps<{ min?: number; max?: number; enabled?: boolean; resizable?: boolean }>(),
-  { min: 30, max: 70, enabled: true, resizable: true },
+  defineProps<{
+    min?: number
+    max?: number
+    enabled?: boolean
+    resizable?: boolean
+    rightWidth?: string
+  }>(),
+  { min: 30, max: 70, enabled: true, resizable: true, rightWidth: undefined },
 )
 const ratio = defineModel<number>({ default: 50 })
-const emit = defineEmits<{ closed: [] }>()
 const transitioning = ref(false)
 watch(
-  () => props.enabled,
-  () => {
+  () => [props.enabled, props.rightWidth] as const,
+  async (_, __, onCleanup) => {
+    let cancelled = false
+    onCleanup(() => {
+      cancelled = true
+    })
     transitioning.value = true
+    await nextTick()
+    await Promise.allSettled(
+      root.value?.getAnimations().map((animation) => animation.finished) ?? [],
+    )
+    if (!cancelled) transitioning.value = false
   },
   { flush: 'sync' },
 )
-function entered() {
-  transitioning.value = false
-}
-function left() {
-  transitioning.value = false
-  emit('closed')
-}
 const root = ref<HTMLElement>()
 const dragging = ref(false)
 const hovered = ref(false)
@@ -107,51 +114,43 @@ function keydown(event: KeyboardEvent) {
     class="split-pane"
     :class="{ 'is-dragging': dragging, 'is-transitioning': transitioning }"
     :style="{
-      gridTemplateColumns: enabled
-        ? `minmax(0, ${ratio}fr) minmax(0, ${100 - ratio}fr)`
-        : 'minmax(0, 100fr) minmax(0, 0fr)',
-      '--split-panel-width': `${100 - ratio}cqw`,
+      gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${enabled ? rightWidth || `${100 - ratio}%` : '0px'})`,
     }"
   >
     <div><slot name="left" /></div>
-    <Transition
-      name="split-reveal"
-      @after-enter="entered"
-      @after-leave="left"
-      ><div
-        v-show="enabled"
-        class="split-right"
-        :inert="!enabled || undefined"
-        :aria-hidden="!enabled || undefined"
+    <div
+      class="split-right"
+      :inert="!enabled || undefined"
+      :aria-hidden="!enabled || undefined"
+    >
+      <div
+        v-if="enabled && resizable"
+        role="separator"
+        tabindex="0"
+        aria-orientation="vertical"
+        :aria-label="$t('common.resize')"
+        :aria-describedby="showHint ? tooltipId : undefined"
+        :aria-valuenow="Math.round(ratio)"
+        :aria-valuemin="min"
+        :aria-valuemax="max"
+        class="split-handle"
+        :class="{ 'is-hovered': hovered }"
+        @pointerenter="move"
+        @pointerleave="hovered = false"
+        @pointerdown="start"
+        @pointermove="move"
+        @pointerup="stop"
+        @pointercancel="stop"
+        @lostpointercapture="stop"
+        @keydown="keydown"
       >
-        <div
-          v-if="enabled && resizable"
-          role="separator"
-          tabindex="0"
-          aria-orientation="vertical"
-          :aria-label="$t('common.resize')"
-          :aria-describedby="showHint ? tooltipId : undefined"
-          :aria-valuenow="Math.round(ratio)"
-          :aria-valuemin="min"
-          :aria-valuemax="max"
-          class="split-handle"
-          :class="{ 'is-hovered': hovered }"
-          @pointerenter="move"
-          @pointerleave="hovered = false"
-          @pointerdown="start"
-          @pointermove="move"
-          @pointerup="stop"
-          @pointercancel="stop"
-          @lostpointercapture="stop"
-          @keydown="keydown"
-        >
-          <span
-            class="split-grip"
-            aria-hidden="true"
-          />
-        </div>
-        <slot name="right" /></div
-    ></Transition>
+        <span
+          class="split-grip"
+          aria-hidden="true"
+        />
+      </div>
+      <slot name="right" />
+    </div>
     <Teleport to="body">
       <span
         v-if="showHint"
@@ -175,23 +174,11 @@ function keydown(event: KeyboardEvent) {
   height: 100%;
 }
 .split-pane.is-transitioning:not(.is-dragging) {
-  transition: grid-template-columns var(--motion-panel) cubic-bezier(0.2, 0, 0, 1);
-}
-.split-reveal-enter-active,
-.split-reveal-leave-active {
-  transition: transform var(--motion-panel) cubic-bezier(0.2, 0, 0, 1);
-}
-.split-reveal-enter-from,
-.split-reveal-leave-to {
-  transform: translateX(100%);
-}
-.split-reveal-leave-active {
-  pointer-events: none;
+  transition: grid-template-columns var(--split-motion, var(--motion-panel))
+    cubic-bezier(0.2, 0, 0, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-  .split-pane.is-transitioning,
-  .split-reveal-enter-active,
-  .split-reveal-leave-active {
+  .split-pane.is-transitioning {
     transition: none;
   }
 }
@@ -215,7 +202,7 @@ function keydown(event: KeyboardEvent) {
   left: var(--split-edge-left, 0px);
   width: 10px;
   transform: translateX(-50%);
-  z-index: 26;
+  z-index: 30;
 }
 .split-grip {
   position: absolute;

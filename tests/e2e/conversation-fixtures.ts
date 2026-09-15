@@ -69,6 +69,7 @@ export const message = (
 export async function stubConversation(
   page: Page,
   options: {
+    initialMessages?: ConversationMessage[]
     questionsCard?: MessageCard
     immediateStream?: boolean
     failSendOnce?: boolean
@@ -83,11 +84,13 @@ export async function stubConversation(
     route.fulfill({ json: envelope(authResponse) }),
   )
   const calls: { method: string; body: Record<string, unknown>; key: string }[] = []
-  let rows = options.manyMessages
-    ? Array.from({ length: 80 }, (_, i) =>
-        message(`old-${i}`, i + 1, i % 2 ? 'assistant' : 'user', `历史消息 ${i + 1}`),
-      )
-    : []
+  let rows =
+    options.initialMessages ??
+    (options.manyMessages
+      ? Array.from({ length: 80 }, (_, i) =>
+          message(`old-${i}`, i + 1, i % 2 ? 'assistant' : 'user', `历史消息 ${i + 1}`),
+        )
+      : [])
   let active: { id: string; status: string; stream_url: string } | null = null
   let failedSend = false
   let disconnected = false

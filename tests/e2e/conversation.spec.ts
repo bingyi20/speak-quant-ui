@@ -1,17 +1,23 @@
 import { expect, test, type Locator } from '@playwright/test'
-import { conversationId, stubConversation } from './conversation-fixtures'
+import { conversationId, message, strategyCard, stubConversation } from './conversation-fixtures'
 import { anonymous, authResponse, envelope, stubGoogle } from './auth-fixtures'
 
-test('asset panel aligns its header and resizes directly from its border', async ({
+test('asset detail aligns its header and resizes directly from its border', async ({
   page,
   isMobile,
 }) => {
-  await stubConversation(page)
+  await stubConversation(page, {
+    initialMessages: [message('asset-message', 1, 'assistant', '策略已生成', [strategyCard])],
+  })
   await page.goto(`/conversations/${conversationId}`)
   const input = page.getByRole('textbox', { name: '交易想法' })
   await input.fill('调整面板时保留草稿')
   await page.getByRole('button', { name: '查看资产', exact: true }).click()
-  const panel = page.locator('.chat-asset-panel')
+  const panel = page.locator('.asset-detail-panel')
+  await page
+    .locator('.asset-list-panel')
+    .getByRole('button', { name: /BTC 双均线策略/ })
+    .click()
   await expect(panel).toBeVisible()
   await expect(page.locator('.split-pane')).not.toHaveClass(/is-transitioning/)
   const bounds = (await panel.boundingBox())!
@@ -85,64 +91,96 @@ test('asset panel aligns its header and resizes directly from its border', async
   await expect(input).toHaveValue('调整面板时保留草稿')
 })
 
-test('asset panel slides in from the right and reverses without resizing its content', async ({
-  page,
-}) => {
-  await stubConversation(page)
-  await page.emulateMedia({ reducedMotion: 'no-preference' })
-  await page.goto(`/conversations/${conversationId}`)
-  const input = page.getByRole('textbox', { name: '交易想法' })
-  await input.fill('面板动画期间保留草稿')
-  const originalInput = await input.elementHandle()
-  const panel = page.locator('.chat-asset-panel')
-  async function capture(trigger: Locator) {
-    const recording = trigger.evaluate(
-      (button) =>
-        new Promise<{ x: number; width: number }[]>((resolve) => {
-          button.addEventListener(
-            'click',
-            () => {
-              const frames: { x: number; width: number }[] = []
-              const start = performance.now()
-              function sample() {
-                const panel = document.querySelector('.chat-asset-panel')!
-                const rect = panel.getBoundingClientRect()
-                if (rect.width) frames.push({ x: rect.x, width: rect.width })
-                if (performance.now() - start < 350) requestAnimationFrame(sample)
-                else resolve(frames)
-              }
-              requestAnimationFrame(sample)
-            },
-            { once: true },
-          )
-        }),
+for (const source of ['list', 'detail', 'list-detail']) {
+  test(`asset ${source} slides in from the right and reverses without resizing its content`, async ({
+    page,
+    isMobile,
+  }) => {
+    await stubConversation(page, {
+      initialMessages: [message('asset-message', 1, 'assistant', '策略已生成', [strategyCard])],
+    })
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    await page.goto(`/conversations/${conversationId}`)
+    const input = page.getByRole('textbox', { name: '交易想法' })
+    await input.fill('面板动画期间保留草稿')
+    const originalInput = await input.elementHandle()
+    const panelSelector = source === 'list' ? '.asset-list-panel' : '.asset-detail-panel'
+    const panel = page.locator(panelSelector)
+    if (source === 'list-detail') {
+      await page.getByRole('button', { name: '查看资产', exact: true }).click()
+      await expect(page.locator('.split-pane')).not.toHaveClass(/is-transitioning/)
+    }
+    async function capture(trigger: Locator) {
+      const recording = trigger.evaluate(
+        (button, selector) =>
+          new Promise<{ x: number; width: number; chatWidth: number }[]>((resolve) => {
+            button.addEventListener(
+              'click',
+              () => {
+                const frames: { x: number; width: number; chatWidth: number }[] = []
+                const start = performance.now()
+                function sample() {
+                  const panel = document.querySelector(selector)!
+                  const rect = panel.getBoundingClientRect()
+                  if (rect.width)
+                    frames.push({
+                      x: rect.x,
+                      width: rect.width,
+                      chatWidth: document.querySelector('.chat-column')!.getBoundingClientRect()
+                        .width,
+                    })
+                  if (performance.now() - start < 350) requestAnimationFrame(sample)
+                  else resolve(frames)
+                }
+                requestAnimationFrame(sample)
+              },
+              { once: true },
+            )
+          }),
+        panelSelector,
+      )
+      await trigger.click()
+      return recording
+    }
+    const opening = await capture(
+      source === 'list'
+        ? page.getByRole('button', { name: '查看资产', exact: true })
+        : source === 'list-detail'
+          ? page.locator('.asset-list-panel .message-card').first()
+          : page.locator('.message-list-shell .message-card').first(),
     )
-    await trigger.click()
-    return recording
-  }
-  const opening = await capture(page.getByRole('button', { name: '查看资产', exact: true }))
-  expect(opening[0]!.x - opening.at(-1)!.x).toBeGreaterThan(20)
-  expect(
-    opening.some((frame) => frame.x > opening.at(-1)!.x + 10 && frame.x < opening[0]!.x - 10),
-  ).toBe(true)
-  expect(
-    Math.max(...opening.map((frame) => frame.width)) -
-      Math.min(...opening.map((frame) => frame.width)),
-  ).toBeLessThan(1)
-  const closing = await capture(panel.getByRole('button', { name: '关闭', exact: true }))
-  expect(closing.at(-1)!.x - closing[0]!.x).toBeGreaterThan(20)
-  await expect(panel).toBeHidden()
-  await expect(input).toHaveValue('面板动画期间保留草稿')
-  expect(await input.evaluate((element, original) => element === original, originalInput)).toBe(
-    true,
-  )
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.getByRole('button', { name: '查看资产', exact: true }).click()
-  await expect(page.locator('.split-pane')).not.toHaveClass(/is-transitioning/)
-  await expect(page.locator('.split-right')).toHaveCSS('transform', 'none')
-  await page.keyboard.press('Escape')
-  await expect(panel).toBeHidden()
-})
+    if (!isMobile) {
+      expect(opening[0]!.chatWidth - opening.at(-1)!.chatWidth).toBeGreaterThan(20)
+      for (let i = 1; i < opening.length; i++)
+        expect(opening[i]!.chatWidth).toBeLessThanOrEqual(opening[i - 1]!.chatWidth + 1)
+    }
+    expect(opening[0]!.x - opening.at(-1)!.x).toBeGreaterThan(20)
+    expect(
+      opening.some((frame) => frame.x > opening.at(-1)!.x + 10 && frame.x < opening[0]!.x - 10),
+    ).toBe(true)
+    expect(
+      Math.max(...opening.map((frame) => frame.width)) -
+        Math.min(...opening.map((frame) => frame.width)),
+    ).toBeLessThan(1)
+    const closing = await capture(
+      source === 'list'
+        ? page.getByRole('button', { name: '查看资产', exact: true })
+        : panel.getByRole('button', { name: '关闭', exact: true }),
+    )
+    expect(closing.at(-1)!.x - closing[0]!.x).toBeGreaterThan(20)
+    await expect(panel).toBeHidden()
+    await expect(input).toHaveValue('面板动画期间保留草稿')
+    expect(await input.evaluate((element, original) => element === original, originalInput)).toBe(
+      true,
+    )
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.getByRole('button', { name: '查看资产', exact: true }).click()
+    await expect(page.locator('.split-pane')).not.toHaveClass(/is-transitioning/)
+    await expect(page.locator('.asset-list-panel')).toHaveCSS('transform', 'none')
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+  })
+}
 
 test('new research streams, locks only send, submits multiple answers and restores history', async ({
   page,
@@ -213,7 +251,7 @@ test('new research streams, locks only send, submits multiple answers and restor
   await expect(page.getByText('详情将在后续接入。')).toBeVisible()
   if (!isMobile) await expect(page.getByRole('separator')).toBeVisible()
   await page.getByRole('button', { name: '返回', exact: true }).click()
-  await page.locator('.asset-choice').first().click()
+  await page.locator('.asset-list-panel .message-card').first().click()
   await expect(page.getByText('详情将在后续接入。')).toBeVisible()
   await page.getByRole('button', { name: '全屏', exact: true }).click()
   await page.keyboard.press('Escape')
@@ -287,7 +325,17 @@ test('floating composer leaves messages readable and stays aligned through resiz
   page,
   isMobile,
 }) => {
-  await stubConversation(page, { manyMessages: true })
+  await stubConversation(page, {
+    initialMessages: Array.from({ length: 80 }, (_, i) =>
+      message(
+        `old-${i}`,
+        i + 1,
+        i % 2 ? 'assistant' : 'user',
+        `历史消息 ${i + 1}`,
+        i === 79 ? [strategyCard] : [],
+      ),
+    ),
+  })
   await page.goto(`/conversations/${conversationId}`)
   await expect(page.locator('[data-message-id]')).toHaveCount(50)
   const expectAligned = async () => {
@@ -358,11 +406,15 @@ test('floating composer leaves messages readable and stays aligned through resiz
   await latest.click()
   await expectFloating()
   await page.getByRole('button', { name: '查看资产', exact: true }).click()
-  const panel = page.locator('.chat-asset-panel')
-  await expect(panel).toBeVisible()
+  const panel = page.locator(isMobile ? '.asset-list-panel' : '.asset-detail-panel')
+  await expect(page.locator('.asset-list-panel')).toBeVisible()
   if (!isMobile) {
     await expectAligned()
     await expectFloating()
+    await page
+      .locator('.asset-list-panel')
+      .getByRole('button', { name: /BTC 双均线策略/ })
+      .click()
     const edge = (await page.getByRole('separator').boundingBox())!
     await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2)
     await page.mouse.down()
@@ -374,7 +426,8 @@ test('floating composer leaves messages readable and stays aligned through resiz
     await page.getByRole('button', { name: '收起侧栏', exact: true }).click()
     await expectAligned()
   }
-  await panel.getByRole('button', { name: '关闭', exact: true }).click()
+  if (isMobile) await page.getByRole('button', { name: '查看资产', exact: true }).click()
+  else await panel.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(panel).toBeHidden()
   await expectAligned()
   await expectFloating()
@@ -386,6 +439,7 @@ test('composer grows and shrinks with text, caps at sixteen lines and restores i
   isMobile,
 }) => {
   await stubConversation(page, { manyMessages: true })
+  if (!isMobile) await page.setViewportSize({ width: 1280, height: 1000 })
   await page.goto(`/conversations/${conversationId}`)
   const input = page.getByRole('textbox', { name: '交易想法' })
   await expect(input).toBeVisible()
@@ -487,10 +541,7 @@ test('composer grows and shrinks with text, caps at sixteen lines and restores i
   if (!isMobile) {
     await page.getByRole('button', { name: '查看资产', exact: true }).click()
     await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(wideHeight)
-    await page
-      .locator('.chat-asset-panel')
-      .getByRole('button', { name: '关闭', exact: true })
-      .click()
+    await page.getByRole('button', { name: '查看资产', exact: true }).click()
     await expect.poll(async () => (await input.boundingBox())!.height).toBeCloseTo(wideHeight, 0)
   }
   await page.reload()

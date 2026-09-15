@@ -65,10 +65,9 @@ test('workspace assets show a real empty state and preserve the conversation dra
   await page.goto('/conversations/01K4ABCDE00000000000000001')
   await page.getByRole('textbox', { name: '交易想法' }).fill('保持草稿')
   await page.getByRole('button', { name: '查看资产' }).click()
-  await expect(page.getByText('策略形成后会出现在这里。')).toBeVisible()
-  await expect(page.getByText('还没有完成的 Replay。')).toBeVisible()
-  await page.getByRole('button', { name: '全屏', exact: true }).click()
-  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(page.getByText('暂无资产。')).toBeVisible()
+  await expect(page.getByRole('button', { name: '全屏', exact: true })).toBeHidden()
+  await page.getByRole('button', { name: '查看资产' }).click()
   await expect(page.getByRole('textbox', { name: '交易想法' })).toHaveValue('保持草稿')
 })
 

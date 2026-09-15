@@ -245,7 +245,7 @@ features 的公开入口
 | 对话与流式状态                    | `app/features/conversation/composables/useConversation.ts`、`useAgentRun.ts`、`useStreamingText.ts`、`useConversationScroll.ts`、`message-state.ts`、`agent-events.ts`                                                               |
 | 快捷问答与未决提交                | `app/features/conversation/clarification.ts`、`composables/useClarification.ts`、`submission.ts`                                                                                  |
 | 问答交互预览（仅本地测试） | `tests/preview/playwright.config.ts`、`tests/preview/questions.spec.ts`；`pnpm preview:questions` 复用测试夹具、独立浏览器上下文拦截 API，不增加生产路由 |
-| 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationAssetPanel.vue`；样式 `app/assets/css/conversation.css` |
+| 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationAssetListPanel.vue`、`ConversationAssetDetailPanel.vue` 分别维护列表与详情的布局和过渡；聊天与列表共用 `cards/MessageCard.vue`；`app/components/common/SplitPane.vue` 只处理列表固定宽度及详情比例调宽；样式 `app/assets/css/conversation.css` |
 | 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
 | 订阅套餐、积分加购与支付待上线提示 | `app/features/billing/index.ts`、`catalog.ts`、`components/`、`app/assets/css/billing.css`；复用契约和验证见[订阅与积分模块技术方案](订阅与积分模块技术方案.md) |
 | 全局偏好、主题及语言恢复          | `app/stores/preferences.ts`、`app/plugins/01.preferences.ts`、`app/composables/useTheme.ts`、`public/theme-init.js`                                                               |

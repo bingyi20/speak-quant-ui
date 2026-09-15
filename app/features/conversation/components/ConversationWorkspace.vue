@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  useTemplateRef,
+  watch,
+} from 'vue'
 import SplitPane from '~/components/common/SplitPane.vue'
 import { useConversation } from '../composables/useConversation'
 import { pendingClarification } from '../clarification'
@@ -7,7 +16,8 @@ import type { MessageCard } from '../types'
 import MessageList from './MessageList.vue'
 import MessageComposer from './MessageComposer.vue'
 import ClarificationQuestions from './ClarificationQuestions.vue'
-import ConversationAssetPanel from './ConversationAssetPanel.vue'
+import ConversationAssetListPanel from './ConversationAssetListPanel.vue'
+import ConversationAssetDetailPanel from './ConversationAssetDetailPanel.vue'
 const props = defineProps<{ conversationId: string }>()
 const {
   draft,
@@ -111,9 +121,16 @@ watch(
   },
 )
 const tools = computed(() => [...state.tools.values()])
-const open = ref(false)
+const listOpen = ref(false)
+const detailOpen = ref(false)
+const listVisible = ref(false)
+const detailVisible = ref(false)
+const open = computed(() => listOpen.value || detailOpen.value)
 const fullscreen = ref(false)
 const narrow = ref(false)
+const mobile = ref(false)
+const panelId = useId()
+const assetsButton = useTemplateRef<HTMLButtonElement>('assetsButton')
 const ratio = ref(52)
 const selected = ref<{ messageId: string; cardId: string } | null>(null)
 const selectedAsset = ref<{ type: string; resourceId: string } | null>(null)
@@ -141,47 +158,82 @@ const card = computed<MessageCard | null>(() => {
     data: null,
   }
 })
-const modal = computed(() => narrow.value || fullscreen.value)
+const detailModal = computed(() => narrow.value || fullscreen.value)
+const modal = computed(
+  () => (detailVisible.value && detailModal.value) || (listVisible.value && mobile.value),
+)
 const root = useTemplateRef<HTMLElement>('root')
 const inputDock = useTemplateRef<HTMLElement>('inputDock')
 const inputHeight = ref(160)
 let inputObserver: ResizeObserver | undefined
 let trigger: HTMLElement | null = null
 let query: MediaQueryList | undefined
+let mobileQuery: MediaQueryList | undefined
 function syncNarrow() {
   narrow.value = query?.matches ?? false
+  mobile.value = mobileQuery?.matches ?? false
 }
-function show() {
+function rememberTrigger() {
   if (!open.value)
     trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  open.value = true
+}
+function focusPanel(selector: string) {
   void nextTick(() =>
     root.value
-      ?.querySelector<HTMLButtonElement>('.chat-asset-panel button')
+      ?.querySelector<HTMLButtonElement>(`${selector} button`)
       ?.focus({ preventScroll: true }),
   )
 }
+function showDetail() {
+  listOpen.value = false
+  detailVisible.value = true
+  detailOpen.value = true
+  focusPanel('.asset-detail-panel')
+}
 function openCard(messageId: string, value: MessageCard) {
+  rememberTrigger()
   selected.value = { messageId, cardId: value.id }
   selectedAsset.value = null
-  show()
+  showDetail()
 }
 function openAsset(value: MessageCard) {
+  rememberTrigger()
   selected.value = null
   selectedAsset.value = value.resource_id
     ? { type: value.type, resourceId: value.resource_id }
     : null
-  show()
+  showDetail()
 }
 function showAssets() {
-  selected.value = null
-  selectedAsset.value = null
-  show()
+  rememberTrigger()
+  detailOpen.value = false
+  listVisible.value = true
+  listOpen.value = true
+  focusPanel('.asset-list-panel')
   void loadAssets()
 }
+function toggleAssets() {
+  if (listOpen.value) close()
+  else showAssets()
+}
 function close() {
-  open.value = false
-  void nextTick(() => trigger?.isConnected && trigger.focus())
+  listOpen.value = false
+  detailOpen.value = false
+  void nextTick(() => {
+    const destination =
+      trigger?.isConnected && !trigger.closest('.chat-asset-panel') ? trigger : assetsButton.value
+    destination?.focus({ preventScroll: true })
+  })
+}
+function afterListClosed() {
+  if (!listOpen.value) listVisible.value = false
+}
+function afterDetailClosed() {
+  if (detailOpen.value) return
+  detailVisible.value = false
+  fullscreen.value = false
+  selected.value = null
+  selectedAsset.value = null
 }
 function keydown(event: KeyboardEvent) {
   if (!open.value) return
@@ -191,17 +243,18 @@ function keydown(event: KeyboardEvent) {
     return
   }
   if (event.key !== 'Tab' || !modal.value) return
+  const activePanel = root.value?.querySelector(
+    detailOpen.value ? '.asset-detail-panel' : '.asset-list-panel',
+  )
   const elements = [
-    ...(root.value?.querySelectorAll<HTMLElement>(
-      '.chat-asset-panel button:not(:disabled), .chat-asset-panel [tabindex="0"]',
-    ) ?? []),
+    ...(listOpen.value && assetsButton.value ? [assetsButton.value] : []),
+    ...(activePanel?.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]') ?? []),
   ]
   const first = elements[0],
     last = elements.at(-1)
   if (
     event.shiftKey &&
-    (document.activeElement === first ||
-      !root.value?.querySelector('.chat-asset-panel')?.contains(document.activeElement))
+    (document.activeElement === first || !activePanel?.contains(document.activeElement))
   ) {
     event.preventDefault()
     last?.focus()
@@ -218,13 +271,16 @@ onMounted(() => {
   inputObserver = new ResizeObserver(measureInput)
   if (inputDock.value) inputObserver.observe(inputDock.value)
   query = matchMedia('(max-width: 1100px)')
+  mobileQuery = matchMedia('(max-width: 760px)')
   syncNarrow()
   query.addEventListener('change', syncNarrow)
+  mobileQuery.addEventListener('change', syncNarrow)
   document.addEventListener('keydown', keydown)
 })
 onBeforeUnmount(() => {
   inputObserver?.disconnect()
   query?.removeEventListener('change', syncNarrow)
+  mobileQuery?.removeEventListener('change', syncNarrow)
   document.removeEventListener('keydown', keydown)
 })
 </script>
@@ -237,21 +293,42 @@ onBeforeUnmount(() => {
     <Teleport
       to="#workspace-actions"
       defer
-      ><button
-        class="text-button"
-        :aria-expanded="open"
-        @click="showAssets"
-      >
-        <UIcon name="i-lucide-panels-top-left" />{{ $t('conversation.assets') }}
-      </button></Teleport
+      ><span class="assets-toggle-wrap">
+        <button
+          ref="assetsButton"
+          type="button"
+          class="icon-button assets-toggle"
+          :aria-label="$t('conversation.assets')"
+          :aria-expanded="listOpen"
+          :aria-controls="panelId"
+          @click="toggleAssets"
+        >
+          <UIcon
+            name="i-lucide-folder"
+            aria-hidden="true"
+          />
+        </button>
+        <span
+          class="assets-toggle-tooltip"
+          role="tooltip"
+          >{{ $t('conversation.assetTitle') }}</span
+        >
+      </span></Teleport
     >
     <SplitPane
       v-model="ratio"
       :enabled="open"
-      :resizable="!modal"
+      :resizable="detailOpen && !detailModal"
+      :right-width="listOpen ? '392px' : undefined"
+      :style="{
+        '--asset-detail-width': `${100 - ratio}cqw`,
+        '--split-motion':
+          listOpen || (!detailOpen && listVisible)
+            ? 'var(--motion-asset-list)'
+            : 'var(--motion-asset-detail)',
+      }"
       :min="35"
       :max="65"
-      @closed="!open && (fullscreen = false)"
     >
       <template #left>
         <section
@@ -396,21 +473,31 @@ onBeforeUnmount(() => {
           </div>
         </section>
       </template>
-      <template #right
-        ><ConversationAssetPanel
+      <template #right>
+        <ConversationAssetListPanel
+          :id="panelId"
+          :open="listOpen"
           :assets="assets"
           :loading="assetsLoading"
           :error="assetsError"
-          :selected="card"
-          :fullscreen="fullscreen"
-          :modal="modal"
+          :modal="mobile"
           @close="close"
-          @back="showAssets"
-          @fullscreen="fullscreen = !fullscreen"
+          @closed="afterListClosed"
           @retry="loadAssets()"
           @more="loadAssets((assets?.replays.page ?? 0) + 1)"
           @open="openAsset"
-      /></template>
+        />
+        <ConversationAssetDetailPanel
+          :open="detailOpen"
+          :selected="card"
+          :fullscreen="fullscreen"
+          :modal="detailModal"
+          @close="close"
+          @closed="afterDetailClosed"
+          @back="showAssets"
+          @fullscreen="fullscreen = !fullscreen"
+        />
+      </template>
     </SplitPane>
   </div>
 </template>
