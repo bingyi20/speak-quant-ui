@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { envelope } from './auth-fixtures'
+import { currentStrategy } from './strategy-fixtures'
 import {
   conversationId,
   message,
@@ -77,19 +78,21 @@ test('asset list toggles below the toolbar and opens shared cards without reopen
   await expect(panel.locator('.message-card').first()).toContainText(strategyCard.title)
   await expect(panel.locator('.message-card').last()).toContainText(replayCard.title)
   const panelBounds = (await panel.boundingBox())!
+  expect(page.viewportSize()!.width - panelBounds.x - panelBounds.width).toBe(8)
+  expect(page.viewportSize()!.height - panelBounds.y - panelBounds.height).toBe(8)
   const cardBounds = (await panel.locator('.message-card').first().boundingBox())!
   expect(cardBounds.x - panelBounds.x).toBe(20)
   expect(panelBounds.x + panelBounds.width - cardBounds.x - cardBounds.width).toBe(20)
   await expect(panel.locator('header')).toHaveCSS('padding-left', '20px')
   if (!isMobile) {
     expect(panelBounds.width).toBe(384)
-    expect(originalWidth - (await chat.boundingBox())!.width).toBe(392)
+    expect(originalWidth - (await chat.boundingBox())!.width).toBe(396)
     expect((await chat.boundingBox())!.x + (await chat.boundingBox())!.width).toBeLessThan(
       (await panel.boundingBox())!.x,
     )
   } else {
     expect((await panel.boundingBox())!.x).toBe(4)
-    expect((await panel.boundingBox())!.width).toBe(page.viewportSize()!.width - 8)
+    expect((await panel.boundingBox())!.width).toBe(page.viewportSize()!.width - 12)
   }
   await page.screenshot({ path: test.info().outputPath('assets-open.png') })
   await toggle.click()
@@ -105,7 +108,12 @@ test('asset list toggles below the toolbar and opens shared cards without reopen
     await toggle.click()
     await panel.getByRole('button', { name: new RegExp(name) }).click()
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    await expect(detail.getByRole('heading', { name, exact: true })).toBeVisible()
+    await expect(
+      detail.getByRole('heading', {
+        name: name === strategyCard.title ? currentStrategy.change_summary! : name,
+        exact: true,
+      }),
+    ).toBeVisible()
     if (!isMobile) expect((await detail.boundingBox())!.width).toBeGreaterThan(400)
     await detail.getByRole('button', { name: '关闭', exact: true }).click()
     await expect(detail).toBeHidden()
@@ -149,7 +157,9 @@ test('list and detail finish their own transitions when detail closes and the li
   await expect(page.locator('.split-pane')).not.toHaveClass(/is-transitioning/)
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await list.locator('.message-card').click()
-  await expect(detail.getByRole('heading', { name: strategyCard.title, exact: true })).toBeVisible()
+  await expect(
+    detail.getByRole('heading', { name: currentStrategy.change_summary!, exact: true }),
+  ).toBeVisible()
   await detail.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(detail).toBeHidden()
   await expect(list).toBeHidden()

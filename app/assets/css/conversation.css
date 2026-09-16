@@ -17,9 +17,9 @@
 }
 .agent-workspace {
   --asset-panel-gap: 4px;
-  --split-edge-top: calc(var(--asset-panel-gap) - var(--workspace-toolbar-height));
+  --split-edge-top: calc(8px - var(--workspace-toolbar-height));
   --split-edge-left: var(--asset-panel-gap);
-  --split-edge-bottom: var(--asset-panel-gap);
+  --split-edge-bottom: 8px;
   height: 100%;
   min-height: 0;
   position: relative;
@@ -124,60 +124,6 @@
 }
 .assistant-message:empty {
   display: none;
-}
-.assistant-message .markdown-content {
-  line-height: 1.625;
-}
-.assistant-message .markdown-content > :first-child {
-  margin-top: 0;
-}
-.assistant-message .markdown-content > * + * {
-  margin-top: 0.75em;
-}
-.assistant-message .markdown-content h1,
-.assistant-message .markdown-content h2,
-.assistant-message .markdown-content h3,
-.assistant-message .markdown-content h4 {
-  font-weight: 600;
-  line-height: 1.5;
-  margin-top: 1.5em;
-}
-.assistant-message .markdown-content h1 {
-  font-size: 1.35em;
-}
-.assistant-message .markdown-content h2 {
-  font-size: 1.22em;
-}
-.assistant-message .markdown-content h3,
-.assistant-message .markdown-content h4 {
-  font-size: 1.08em;
-}
-.assistant-message .markdown-content blockquote {
-  border-left: 2px solid var(--color-border-default);
-  padding-left: 16px;
-  color: var(--color-text-secondary);
-}
-.assistant-message .markdown-content code {
-  font-family: var(--font-mono);
-  font-size: 0.86em;
-  background: var(--color-bg-subtle);
-  border-radius: 4px;
-  padding: 2px 4px;
-}
-.assistant-message .markdown-content pre code {
-  padding: 0;
-  background: transparent;
-}
-.assistant-message .markdown-content pre {
-  line-height: 1.65;
-  max-width: 100%;
-}
-.assistant-message .markdown-content hr {
-  border: 0;
-  border-top: 1px solid var(--color-border-default);
-}
-.assistant-message .markdown-content li + li {
-  margin-top: 0.35em;
 }
 .message-cards {
   display: grid;
@@ -672,8 +618,8 @@ button.message-card {
 .agent-workspace .chat-asset-panel {
   position: absolute;
   left: auto;
-  right: 4px;
-  bottom: 4px;
+  right: 8px;
+  bottom: 8px;
   min-width: 0;
   margin: 0;
   border: 0;

@@ -120,7 +120,7 @@ const replayCards = computed<MessageCard[]>(() =>
   z-index: 25;
 }
 .asset-list-panel.is-modal {
-  width: calc(100% - 8px);
+  width: calc(100% - 12px);
 }
 .asset-list-panel > header {
   height: 52px;
@@ -144,7 +144,7 @@ const replayCards = computed<MessageCard[]>(() =>
 }
 .asset-list-reveal-enter-from,
 .asset-list-reveal-leave-to {
-  transform: translateX(calc(100% + 4px));
+  transform: translateX(calc(100% + 8px));
 }
 .asset-list-reveal-leave-active {
   pointer-events: none;

@@ -2,7 +2,7 @@ import { expect, test, type Locator } from '@playwright/test'
 import { conversationId, message, strategyCard, stubConversation } from './conversation-fixtures'
 import { anonymous, authResponse, envelope, stubGoogle } from './auth-fixtures'
 
-test('asset detail aligns its header and resizes directly from its border', async ({
+test('asset detail keeps its compact strategy header and resizes directly from its border', async ({
   page,
   isMobile,
 }) => {
@@ -20,13 +20,17 @@ test('asset detail aligns its header and resizes directly from its border', asyn
     .click()
   await expect(panel).toBeVisible()
   await expect(page.locator('.split-pane')).not.toHaveClass(/is-transitioning/)
+  await expect(panel).toHaveCSS('transform', 'none')
   const bounds = (await panel.boundingBox())!
   const header = (await panel.locator('header').boundingBox())!
   const toolbar = (await page.locator('.workspace-toolbar').boundingBox())!
   expect(toolbar.height).toBe(48)
-  expect(bounds.y).toBe(4)
+  expect(bounds.y).toBe(8)
+  expect(page.viewportSize()!.width - bounds.x - bounds.width).toBe(8)
+  expect(page.viewportSize()!.height - bounds.y - bounds.height).toBe(8)
   expect(header.height).toBe(44)
-  expect(header.y + header.height).toBe(toolbar.y + toolbar.height)
+  expect(header.y).toBe(bounds.y)
+  expect(header.y + header.height).toBe(toolbar.y + toolbar.height + 4)
   const handle = page.getByRole('separator')
   if (isMobile) {
     await expect(handle).toBeHidden()
@@ -85,7 +89,7 @@ test('asset detail aligns its header and resizes directly from its border', asyn
   await panel.getByRole('button', { name: '全屏', exact: true }).click()
   await expect(handle).toBeHidden()
   await expect(page.getByRole('tooltip')).toBeHidden()
-  expect((await panel.boundingBox())!.y).toBe(4)
+  expect((await panel.boundingBox())!.y).toBe(0)
   await page.keyboard.press('Escape')
   await expect(panel).toBeHidden()
   await expect(input).toHaveValue('调整面板时保留草稿')
@@ -248,16 +252,21 @@ test('new research streams, locks only send, submits multiple answers and restor
   })
   await expect(page.getByRole('button', { name: '发送研究想法' })).toBeEnabled()
   await page.locator('.message-card').first().click()
-  await expect(page.getByText('详情将在后续接入。')).toBeVisible()
+  await expect(page.locator('.strategy-document')).toContainText('当前设计')
   if (!isMobile) await expect(page.getByRole('separator')).toBeVisible()
-  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page
+    .locator('.asset-detail-panel')
+    .getByRole('button', { name: '关闭', exact: true })
+    .click()
+  await page.getByRole('button', { name: '查看资产', exact: true }).click()
   await page.locator('.asset-list-panel .message-card').first().click()
-  await expect(page.getByText('详情将在后续接入。')).toBeVisible()
+  await expect(page.locator('.strategy-document')).toContainText('当前设计')
   await page.getByRole('button', { name: '全屏', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(input).toHaveValue('保留给下一轮的草稿')
   await page.locator('[data-card-id="replay-card"]').first().click()
-  await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible()
+  await expect(page.locator('.asset-detail-panel header h2')).toHaveText('BTC 均线验证')
+  await expect(page.locator('.replay-detail-metrics')).toBeVisible()
   await page.keyboard.press('Escape')
   await page.reload()
   await expect(page.locator('.user-message')).toHaveCount(2)

@@ -76,6 +76,7 @@ onBeforeUnmount(() => {
   >
     <MarkdownContent
       v-if="rendered"
+      class="markdown-prose"
       :content="rendered"
     />
     <ul

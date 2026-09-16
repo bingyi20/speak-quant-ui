@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { stubStrategyDetails } from './strategy-fixtures'
 import { authResponse, envelope, stubHistory } from './auth-fixtures'
 import type { ConversationMessage, MessageCard } from '../../app/features/conversation/types'
 export const conversationId = '01K4ABCDE00000000000000001'
@@ -80,6 +81,7 @@ export async function stubConversation(
 ) {
   const clarificationCard = options.questionsCard ?? questionsCard
   await stubHistory(page)
+  await stubStrategyDetails(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({ json: envelope(authResponse) }),
   )

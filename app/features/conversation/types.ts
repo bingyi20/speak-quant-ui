@@ -107,27 +107,10 @@ export interface StrategySummary {
   replay_count: number
   updated_at: string
 }
-export interface ReplaySummary {
-  id: string
-  name: string
-  result_type: string
-  strategy_node_id: string
-  symbol: string
-  market_type: string
-  contract_type: string | null
-  execution_timeframe: string
-  auxiliary_timeframes: string[]
-  start_at: string
-  end_at: string
-  net_return_rate: string
-  max_drawdown_rate: string
-  trade_count: number
-  quality_status: string
-  created_at: string
-}
+export type { ReplaySummary } from '~/features/replay'
 export interface ConversationAssets {
   strategy: StrategySummary | null
-  replays: import('#shared/types/http').Page<ReplaySummary>
+  replays: import('#shared/types/http').Page<import('~/features/replay').ReplaySummary>
 }
 export interface DisplayMessage extends SnapshotMessage {
   created_at?: string

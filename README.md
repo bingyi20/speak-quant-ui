@@ -1,6 +1,6 @@
 # Trade Lab UI
 
-Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱 / Google 登录、研究历史和 Agent 对话主流程；策略与 Replay 的完整详情、执行操作仍待实现。
+Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱 / Google 登录、研究历史和 Agent 对话主流程；策略详情与 Replay 结果概览已接入；Replay 图表/播放和执行操作仍待实现。
 
 ## 启动
 
@@ -136,7 +136,7 @@ HOST=127.0.0.1 PORT=6002 node .output/server/index.mjs
 
 已实现 Agent 对话：新建研究、访客发送衔接登录、纯文本消息、Markdown 流式回复、工具状态、批量澄清、历史分页和断流恢复。用户消息先正常显示，仅失败时提示；AI 回复结束前输入仍可编辑，但不能发送，没有暂停按钮。Markdown 复用 `marked` 与 `sanitize-html`，不自写解析器。
 
-Strategy / Replay 卡片可展开侧边面板，资产列表读取真实概要；详情、图表、策略/回测执行操作、Runner 与支付仍待实现。当前卡片详情明确显示后续接入，不生成假数据。真实联调与测试范围见 [Agent 对话接口联调记录](docs/Agent%20对话接口联调记录.md)。
+Strategy / Replay 卡片可展开侧边面板。Strategy 的 Header 切换当前/历史版本，同步更新 Design、只读代码和回测表；回测默认展示所选版本，可手动查看全部并标记所选版本。Replay 已接入条件、核心指标和研究结论，返回策略时保留列表位置。Replay 图表/播放、策略恢复、执行操作、Runner 与支付仍待实现。实现契约见[策略详情模块技术方案](docs/策略详情模块技术方案.md)。真实联调与测试范围见 [Agent 对话接口联调记录](docs/Agent%20对话接口联调记录.md)。
 
 公开 SEO 页面可以直接嵌入下面的组件，统一处理草稿、登录、创建与跳转，页面继续使用 SSR：
 

@@ -892,7 +892,7 @@ AI 是协同研发策略的研究伙伴，不只是命令执行器。它应主�
 - 历史节点使用 AI 生成的语义名称、形成时间和 Replay 数量，不使用 V1/V2 编号。
 - 点击历史节点后，仍在 Strategy 详情中展示与当前 Strategy 相同的页面结构，但明确标记“历史状态 · 只读”。
 - 历史详情展示当时冻结的 Strategy Design.md，以及使用该节点运行的 Replay 概要列表。
-- 历史详情不展示 Strategy Code Files，不提供任何直接编辑控件。
+- 历史详情只读展示该节点入口代码，不提供直接编辑控件。
 - 点击某条 Replay 概要后打开对应 Replay Workspace。
 - 历史详情提供“恢复为当前 Strategy”和“生成 Runner 下载包”。
 
@@ -1029,7 +1029,7 @@ Replay 卡片：
 - 当前状态：“已验证”“存在未验证修改”或“从历史恢复，尚未重新回测”
 - 最近更新时间
 
-主体只读展示 AI 生成的 Strategy Design.md。用户看到渲染后的策略设计，不展示 Markdown 原文，也不展示 Strategy Code Files。
+主体采用 Design / 回测记录 / 代码 Tab，Header 的版本选择控制三个 Tab。Design 渲染 Markdown，支持复制原文；代码展示所选版本的只读入口文件。具体实现与交互见[策略详情模块技术方案](策略详情模块技术方案.md)。
 
 Strategy Design.md 至少包含：
 
@@ -1041,10 +1041,11 @@ Strategy Design.md 至少包含：
 6. 使用的指标、阈值和关键数值
 7. 已知假设、限制和风险
 
-下方展示当前历史策略节点关联的 Replay 概要：
+回测记录 Tab 默认展示所选策略节点关联的 Replay 表格，用户可手动切换全部记录：
 
 - 每条概要展示交易标的、周期、回测区间、收益率和最大回撤率。
-- 点击概要打开对应 Replay Workspace。
+- 点击记录打开对应 Replay 详情；返回保留版本、范围和滚动位置。
+- 查看所有回测不改变 Header 版本或 Design/代码；匹配所选节点的记录特殊标记。重新打开、切换版本、从其他 Tab 切回时重置为所选范围。
 - 不在 Strategy 详情内嵌 K 线、Timeline、完整交易记录或完整回测报告。
 - 当前 Strategy 尚未形成历史策略节点时，显示“当前策略尚未完成回测”。
 - 从历史恢复但尚未重新回测时，显示来源节点和“恢复后尚未产生新 Replay”；来源节点的 Replay 不复制到当前 Strategy。
@@ -1069,8 +1070,8 @@ Strategy Design.md 至少包含：
 
 - 使用与当前 Strategy 相同的详情结构。
 - 顶部明确标记“历史策略 · 只读”。
-- 只展示该节点冻结的 Strategy Design.md，不展示代码。
-- 下方展示仍然归属于该历史节点的全部 Replay 概要。
+- Design 和代码展示该节点冻结内容。
+- 回测 Tab 默认展示归属于该节点的记录，可手动查看全部并标记所选版本。
 - 提供“恢复为当前 Strategy”和“生成 Runner 下载包”。
 
 ### 恢复历史 Strategy
@@ -1475,7 +1476,7 @@ AI 发现当前策略在震荡期连续亏损，说明证据并提出增加趋�
 - 产品明确表达“一个历史策略节点可以关联多条 Replay”，每条 Replay 都能追溯到对应历史策略节点。
 - 从 Replay 下载时，打包的是其关联历史策略节点的 Strategy Code Files，而不是 Replay 结果或回测条件。
 - 未回测的临时调整不生成历史节点。
-- Strategy 详情只读展示渲染后的 Strategy Design.md，不展示 Strategy Code Files 或独立 Parameters。
+- Strategy 详情只读展示渲染后的 Design、所选版本的入口代码与回测表，不提供独立 Parameters。
 - 恢复历史 Strategy 只复制 Strategy Design.md 与 Strategy Code Files，不移动 Replay，也不立即创建历史节点。
 - 每次成功回测都有只读且可查看完整结果的 Replay Record，并可以进入其关联的历史策略节点。
 - 用户侧不出现 V1/V2 或正式版本编号等概念。

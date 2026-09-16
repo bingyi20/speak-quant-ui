@@ -18,6 +18,9 @@
   --color-border-focus: #986b2c;
   --color-success: #387f66;
   --color-danger: #b56459;
+  --color-code-keyword: #795a99;
+  --color-code-string: #387f66;
+  --color-code-number: #986b2c;
   --color-chart-up: #448a79;
   --color-chart-down: #be756e;
   --color-chart-grid: #eeede7;

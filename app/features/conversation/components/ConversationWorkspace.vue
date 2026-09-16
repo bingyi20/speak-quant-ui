@@ -46,6 +46,10 @@ const {
   loadAssets,
 } = useConversation(props.conversationId)
 const { active, reconnecting, error: runError, state } = run
+const assetRevision = ref(0)
+watch(active, (value, previous) => {
+  if (previous && !value) assetRevision.value++
+})
 const questions = computed(() => pendingClarification(messages.value))
 const questionCount = computed(
   () => questions.value?.cards.reduce((total, card) => total + card.data.questions.length, 0) ?? 0,
@@ -127,9 +131,12 @@ const listVisible = ref(false)
 const detailVisible = ref(false)
 const open = computed(() => listOpen.value || detailOpen.value)
 const fullscreen = ref(false)
+const detailMenuOpen = ref(false)
+const detailSelection = ref(0)
 const narrow = ref(false)
 const mobile = ref(false)
 const panelId = useId()
+const detailPanelId = useId()
 const assetsButton = useTemplateRef<HTMLButtonElement>('assetsButton')
 const ratio = ref(52)
 const selected = ref<{ messageId: string; cardId: string } | null>(null)
@@ -163,6 +170,20 @@ const modal = computed(
   () => (detailVisible.value && detailModal.value) || (listVisible.value && mobile.value),
 )
 const root = useTemplateRef<HTMLElement>('root')
+watch(
+  [fullscreen, detailOpen],
+  ([isFullscreen, isOpen], _, onCleanup) => {
+    if (!isFullscreen || !isOpen) return
+    const workspace = root.value?.closest<HTMLElement>('.workspace-shell')
+    if (!workspace) return
+    const wasInert = workspace.inert
+    workspace.inert = true
+    onCleanup(() => {
+      workspace.inert = wasInert
+    })
+  },
+  { flush: 'post' },
+)
 const inputDock = useTemplateRef<HTMLElement>('inputDock')
 const inputHeight = ref(160)
 let inputObserver: ResizeObserver | undefined
@@ -179,12 +200,16 @@ function rememberTrigger() {
 }
 function focusPanel(selector: string) {
   void nextTick(() =>
-    root.value
-      ?.querySelector<HTMLButtonElement>(`${selector} button`)
+    (selector === '.asset-detail-panel'
+      ? document.getElementById(detailPanelId)
+      : root.value?.querySelector(selector)
+    )
+      ?.querySelector<HTMLButtonElement>('button')
       ?.focus({ preventScroll: true }),
   )
 }
 function showDetail() {
+  detailSelection.value++
   listOpen.value = false
   detailVisible.value = true
   detailOpen.value = true
@@ -217,6 +242,7 @@ function toggleAssets() {
   else showAssets()
 }
 function close() {
+  detailMenuOpen.value = false
   listOpen.value = false
   detailOpen.value = false
   void nextTick(() => {
@@ -236,20 +262,22 @@ function afterDetailClosed() {
   selectedAsset.value = null
 }
 function keydown(event: KeyboardEvent) {
-  if (!open.value) return
+  if (!open.value || event.defaultPrevented || detailMenuOpen.value) return
   if (event.key === 'Escape') {
     event.preventDefault()
     close()
     return
   }
   if (event.key !== 'Tab' || !modal.value) return
-  const activePanel = root.value?.querySelector(
-    detailOpen.value ? '.asset-detail-panel' : '.asset-list-panel',
-  )
+  const activePanel = detailOpen.value
+    ? document.getElementById(detailPanelId)
+    : root.value?.querySelector('.asset-list-panel')
   const elements = [
     ...(listOpen.value && assetsButton.value ? [assetsButton.value] : []),
-    ...(activePanel?.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]') ?? []),
-  ]
+    ...(activePanel?.querySelectorAll<HTMLElement>(
+      'button:not(:disabled):not([tabindex="-1"]), a[href], [tabindex="0"]',
+    ) ?? []),
+  ].filter((el) => el.getClientRects().length && !el.closest('[inert], [hidden]'))
   const first = elements[0],
     last = elements.at(-1)
   if (
@@ -319,7 +347,7 @@ onBeforeUnmount(() => {
       v-model="ratio"
       :enabled="open"
       :resizable="detailOpen && !detailModal"
-      :right-width="listOpen ? '392px' : undefined"
+      :right-width="listOpen ? '396px' : undefined"
       :style="{
         '--asset-detail-width': `${100 - ratio}cqw`,
         '--split-motion':
@@ -488,13 +516,17 @@ onBeforeUnmount(() => {
           @open="openAsset"
         />
         <ConversationAssetDetailPanel
+          :id="detailPanelId"
+          :conversation-id="conversationId"
+          :revision="assetRevision"
+          :selection="detailSelection"
           :open="detailOpen"
           :selected="card"
           :fullscreen="fullscreen"
           :modal="detailModal"
           @close="close"
           @closed="afterDetailClosed"
-          @back="showAssets"
+          @menu="detailMenuOpen = $event"
           @fullscreen="fullscreen = !fullscreen"
         />
       </template>
