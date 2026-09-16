@@ -9,6 +9,7 @@ export interface PendingSubmission {
   conversationId?: string
   body: MessageSubmission
   display: string
+  referenceLabel?: string
   createdAt: number
   phase: 'ready' | 'sending' | 'failed' | 'accepted'
   autoContinue?: boolean
@@ -18,6 +19,41 @@ export interface PendingSubmission {
 export const submissionExpired = (s: PendingSubmission) =>
   Date.now() - s.createdAt >= 23 * 60 * 60 * 1000
 const storageKey = (owner: string) => `trade-pending-submission:${owner}`
+export function isReplayMessageContext(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  const keys = ['replay_id', 'trade_id', 'fill_id', 'insight_id', 'timestamp']
+  if (Object.keys(value).some((key) => !keys.includes(key))) return false
+  if (typeof value.replay_id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.replay_id))
+    return false
+  for (const key of ['trade_id', 'fill_id', 'insight_id'])
+    if (
+      value[key] !== undefined &&
+      (typeof value[key] !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value[key] as string))
+    )
+      return false
+  return (
+    value.timestamp === undefined ||
+    (typeof value.timestamp === 'string' &&
+      /^\d{4}-\d{2}-\d{2}T/.test(value.timestamp) &&
+      Number.isFinite(Date.parse(value.timestamp)))
+  )
+}
+export function readInvalidReferenceDraft(owner: string, conversationId: string): string | null {
+  try {
+    const value = readStorage(sessionStorage, storageKey(owner), isRecord)
+    if (
+      value?.owner === owner &&
+      value.conversationId === conversationId &&
+      isRecord(value.body) &&
+      value.body.context !== undefined &&
+      !isReplayMessageContext(value.body.context)
+    )
+      return typeof value.body.content === 'string' ? value.body.content : ''
+  } catch {
+    /* optional storage */
+  }
+  return null
+}
 export function readSubmission(owner: string) {
   try {
     return readStorage(sessionStorage, storageKey(owner), (v): v is PendingSubmission => {
@@ -33,7 +69,10 @@ export function readSubmission(owner: string) {
         !['ready', 'sending', 'failed', 'accepted'].includes(String(v.phase))
       )
         return false
-      if (v.kind === 'create') return typeof v.body.content === 'string'
+      if (v.body.context !== undefined && !isReplayMessageContext(v.body.context)) return false
+      if (v.referenceLabel !== undefined && typeof v.referenceLabel !== 'string') return false
+      if (v.kind === 'create')
+        return typeof v.body.content === 'string' && v.body.context === undefined
       if (typeof v.conversationId !== 'string') return false
       return (
         typeof v.body.content === 'string' ||

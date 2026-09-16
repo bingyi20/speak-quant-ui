@@ -2,7 +2,7 @@ import { onScopeDispose, reactive, ref } from 'vue'
 import { parseAgentEvent, isTerminal } from '../agent-events'
 import { applyAgentEvent, emptyRun, finishRun } from '../message-state'
 import type { ConversationApi } from '../api'
-import type { AgentRun, ConversationMessage } from '../types'
+import type { AgentRun, ConversationMessage, MessageCard } from '../types'
 
 export function useAgentRun(
   api: ConversationApi,
@@ -15,6 +15,8 @@ export function useAgentRun(
   const reconnecting = ref(false)
   const error = ref('')
   const current = ref<AgentRun | null>(null)
+  const replayCompletion = ref<{ key: string; messageId: string; card: MessageCard } | null>(null)
+  const completedReplays = new Set<string>()
   let connection: AbortController | undefined
   let generation = 0
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -34,6 +36,8 @@ export function useAgentRun(
     Object.assign(state, emptyRun())
     current.value = null
     error.value = ''
+    replayCompletion.value = null
+    completedReplays.clear()
   }
   function delay(ms: number, signal: AbortSignal) {
     return new Promise<void>((resolve) => {
@@ -73,7 +77,34 @@ export function useAgentRun(
                 clearTimers()
                 reconnecting.value = false
               }
+              const previousCard =
+                event.type === 'card.upsert'
+                  ? (
+                      state.messages.get(event.payload.message_id)?.cards ??
+                      history().find((m) => m.id === event.payload.message_id)?.cards
+                    )?.find((c) => c.id === event.payload.card.id)
+                  : undefined
+              const accepted = !isTerminal(state.status) && state.receivedSnapshot
               applyAgentEvent(state, event, history())
+              if (
+                accepted &&
+                event.type === 'card.upsert' &&
+                event.payload.card.type === 'replay_card' &&
+                event.payload.card.status === 'completed' &&
+                event.payload.card.resource_id &&
+                previousCard &&
+                ['queued', 'running'].includes(previousCard.status)
+              ) {
+                const key = `${run.id}:${event.payload.card.id}:${event.payload.card.resource_id}`
+                if (!completedReplays.has(key)) {
+                  completedReplays.add(key)
+                  replayCompletion.value = {
+                    key,
+                    messageId: event.payload.message_id,
+                    card: event.payload.card,
+                  }
+                }
+              }
               if (event.type === 'tool.status' && event.payload.status !== 'running') {
                 const tool = event.payload
                 clearTimeout(timers.get(tool.id))
@@ -131,5 +162,5 @@ export function useAgentRun(
     if (current.value) void connect(current.value)
   }
   onScopeDispose(stop)
-  return { state, active, reconnecting, error, current, connect, retry, reset }
+  return { state, active, reconnecting, error, current, replayCompletion, connect, retry, reset }
 }

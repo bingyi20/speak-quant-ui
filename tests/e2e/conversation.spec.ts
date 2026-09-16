@@ -266,7 +266,7 @@ test('new research streams, locks only send, submits multiple answers and restor
   await expect(input).toHaveValue('保留给下一轮的草稿')
   await page.locator('[data-card-id="replay-card"]').first().click()
   await expect(page.locator('.asset-detail-panel header h2')).toHaveText('BTC 均线验证')
-  await expect(page.locator('.replay-detail-metrics')).toBeVisible()
+  await expect(page.locator('.replay-summary-metrics')).toBeVisible()
   await page.keyboard.press('Escape')
   await page.reload()
   await expect(page.locator('.user-message')).toHaveCount(2)

@@ -71,6 +71,7 @@ export type StructuredAnswer =
   | { question_id: string; value: string; custom_text?: never }
   | { question_id: string; custom_text: string; value?: never }
 export interface MessageSubmission {
+  context?: import('~/features/replay/types').ReplayMessageContext
   content?: string
   reply_to_message_id?: string
   structured_answers?: StructuredAnswer[]

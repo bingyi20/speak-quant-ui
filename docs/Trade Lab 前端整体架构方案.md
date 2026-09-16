@@ -161,7 +161,7 @@ trade-ui/
 │   │   ├── http/                   # JSON 请求、错误、认证协调、幂等
 │   │   ├── sse/                    # 传输、帧解析；不识别业务卡片
 │   │   ├── download/               # 文件响应及浏览器保存
-│   │   ├── chart/                  # 图表 SDK 适配接口
+│   │   ├── chart/                  # 图表 SDK 适配器与有界缓存
 │   │   ├── format/                 # Decimal、日期、比率等纯函数
 │   │   └── telemetry/              # 脱敏日志与事件出口
 │   └── assets/css/
@@ -247,7 +247,8 @@ features 的公开入口
 | 问答交互预览（仅本地测试） | `tests/preview/playwright.config.ts`、`tests/preview/questions.spec.ts`；`pnpm preview:questions` 复用测试夹具、独立浏览器上下文拦截 API，不增加生产路由 |
 | 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationAssetListPanel.vue`、`ConversationAssetDetailPanel.vue` 分别维护列表与详情的布局和过渡；聊天与列表共用 `cards/MessageCard.vue`；`app/components/common/SplitPane.vue` 只处理列表固定宽度及详情比例调宽；样式 `app/assets/css/conversation.css` |
 | 策略详情与历史版本 | `app/features/strategy/api.ts`、`types.ts`、`detail-state.ts`、`composables/useStrategyDetail.ts`、`components/`（`StrategyReplayList.vue` 承载回测记录行）；契约见[策略详情模块技术方案](策略详情模块技术方案.md) |
-| Replay 结果概览 | `app/features/replay/api.ts`、`types.ts`、`composables/useReplayDetail.ts`、`components/ReplayDetailContent.vue`；`ReplaySummary` 由 Replay 模块导出供资产列表复用 |
+| 回测详情工作区 | `app/features/replay/api.ts`、`types.ts`、`normalize.ts`、`data-state.ts`、`events.ts`、`playback-state.ts`、`composables/useReplayDetail.ts` 与 `components/`；图表 SDK 位于 `app/lib/chart/lightweight.ts`。职责与状态契约见[回测详情模块技术方案](回测详情模块技术方案.md) |
+| 运行包与开源声明 | `app/features/runner/api.ts`、`components/RunnerDownloadDialog.vue` 复用下载基础设施；`app/pages/open-source.vue` 与 `public/licenses/` 提供图表署名和许可证 |
 | 详情样式与复制 | `app/assets/css/asset-details.css`、`app/components/ui/CopyButton.vue`；Python 高亮组件按需加载，配色在主题文件 |
 | 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
 | 订阅套餐、积分加购与支付待上线提示 | `app/features/billing/index.ts`、`catalog.ts`、`components/`、`app/assets/css/billing.css`；复用契约和验证见[订阅与积分模块技术方案](订阅与积分模块技术方案.md) |

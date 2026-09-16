@@ -6,6 +6,9 @@ import {
   StrategyVersionSelect,
 } from '~/features/strategy'
 import { useReplayDetail, ReplayDetailContent, type ReplaySummary } from '~/features/replay'
+import { useAuthStore } from '~/features/auth'
+import ReplayTitleSelect from '~/features/replay/components/ReplayTitleSelect.vue'
+import type { ReplayQuestionReference } from '~/features/replay/types'
 import type { MessageCard } from '../types'
 const props = defineProps<{
   id: string
@@ -16,11 +19,24 @@ const props = defineProps<{
   selected: MessageCard | null
   fullscreen: boolean
   modal: boolean
+  autoplayKey?: string | null
 }>()
-const emit = defineEmits<{ close: []; closed: []; fullscreen: []; menu: [open: boolean] }>()
+const emit = defineEmits<{
+  close: []
+  closed: []
+  fullscreen: []
+  menu: [open: boolean]
+  question: [reference: ReplayQuestionReference]
+}>()
+const auth = useAuthStore()
+const { t } = useI18n()
+const linkedNode = ref<string | null>(null)
+const replayContent = useTemplateRef<InstanceType<typeof ReplayDetailContent>>('replayContent')
 const isStrategy = computed(() => props.selected?.type === 'strategy_card')
 const nestedReplay = ref<ReplaySummary | null>(null)
-const menuOpen = ref(false)
+const menuOpen = ref(false),
+  layerOpen = ref(false)
+watch([menuOpen, layerOpen], ([menu, layer]) => emit('menu', menu || layer))
 const panel = useTemplateRef<HTMLElement>('panel')
 const strategy = useStrategyDetail(
   () => props.conversationId,
@@ -29,6 +45,13 @@ const strategy = useStrategyDetail(
   () => props.selection,
 )
 const { current, detail, version, versions, historyLoading, historyError } = strategy
+const linkedStrategy = useStrategyDetail(
+  () => props.conversationId,
+  () => props.open && !!linkedNode.value,
+  () => props.revision,
+  () => props.selection,
+  () => linkedNode.value,
+)
 const replay = useReplayDetail(
   () =>
     !props.open
@@ -36,9 +59,13 @@ const replay = useReplayDetail(
       : (nestedReplay.value?.id ??
         (!isStrategy.value ? (props.selected?.resource_id ?? null) : null)),
   () => props.revision,
+  () => props.autoplayKey ?? null,
+  () => props.open && !linkedNode.value,
 )
-const { detail: replayDetail, loading: replayLoading, error: replayError } = replay
-const showingReplay = computed(() => !isStrategy.value || !!nestedReplay.value)
+const { detail: replayDetail } = replay
+const showingReplay = computed(
+  () => !linkedNode.value && (!isStrategy.value || !!nestedReplay.value),
+)
 const title = computed(() =>
   showingReplay.value
     ? (replayDetail.value?.name ?? nestedReplay.value?.name ?? props.selected?.title)
@@ -48,13 +75,20 @@ const title = computed(() =>
 )
 watch([() => props.open, () => props.selected?.resource_id, () => props.selection], () => {
   nestedReplay.value = null
-  if (!props.open) setMenu(false)
+  linkedNode.value = null
+  if (!props.open) {
+    setMenu(false)
+    layerOpen.value = false
+  }
 })
 function openReplay(value: ReplaySummary) {
+  replay.pause()
+  linkedNode.value = null
   nestedReplay.value = value
   void nextTick(() => document.querySelector<HTMLButtonElement>('.asset-detail-back')?.focus())
 }
 function returnToStrategy() {
+  replay.pause()
   const id = nestedReplay.value?.id
   nestedReplay.value = null
   void nextTick(() => {
@@ -63,6 +97,34 @@ function returnToStrategy() {
     row?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
   })
 }
+function viewStrategy() {
+  if (!replayDetail.value?.strategy.node_id) return
+  replay.pause()
+  linkedNode.value = replayDetail.value.strategy.node_id
+}
+function returnToReplay() {
+  linkedNode.value = null
+}
+const replayMenu = computed(() => [
+  {
+    label: t('replay.viewStrategy'),
+    icon: 'i-lucide-file-code-2',
+    disabled: !replayDetail.value?.strategy.node_id,
+    onSelect: viewStrategy,
+  },
+  {
+    label: t('replay.report'),
+    icon: 'i-lucide-file-text',
+    disabled: replayDetail.value?.status !== 'completed',
+    onSelect: () => replayContent.value?.open('report'),
+  },
+  {
+    label: t('replay.downloadRunner'),
+    icon: 'i-lucide-download',
+    disabled: replayDetail.value?.status !== 'completed' || !replayDetail.value.strategy.node_id,
+    onSelect: () => replayContent.value?.open('download'),
+  },
+])
 watch(
   () => props.fullscreen,
   async () => {
@@ -79,10 +141,9 @@ watch(
 )
 function setMenu(open: boolean) {
   menuOpen.value = open
-  emit('menu', open)
 }
 function escape(event: KeyboardEvent) {
-  if (menuOpen.value || event.defaultPrevented) return
+  if (menuOpen.value || layerOpen.value || event.defaultPrevented) return
   event.stopPropagation()
   emit('close')
 }
@@ -114,11 +175,11 @@ function escape(event: KeyboardEvent) {
           :class="{ 'is-strategy-header': !showingReplay }"
         >
           <button
-            v-if="nestedReplay"
+            v-if="linkedNode || (isStrategy && nestedReplay)"
             type="button"
             class="detail-icon-button asset-detail-back"
-            :aria-label="$t('strategy.backToStrategy')"
-            @click="returnToStrategy"
+            :aria-label="$t(linkedNode ? 'replay.backToReplay' : 'strategy.backToStrategy')"
+            @click="linkedNode ? returnToReplay() : returnToStrategy()"
           >
             <UIcon
               name="i-lucide-arrow-left"
@@ -126,7 +187,7 @@ function escape(event: KeyboardEvent) {
             />
           </button>
           <h2
-            v-if="open && isStrategy && !nestedReplay"
+            v-if="open && isStrategy && !nestedReplay && !linkedNode"
             class="asset-strategy-heading"
             :aria-labelledby="`${id}-strategy-title`"
           >
@@ -147,12 +208,65 @@ function escape(event: KeyboardEvent) {
             />
           </h2>
           <h2
-            v-else
-            :title="title"
+            v-else-if="linkedNode"
+            class="asset-strategy-heading"
+            :aria-labelledby="`${id}-linked-title`"
           >
-            {{ title }}
+            <StrategyVersionSelect
+              :title-id="`${id}-linked-title`"
+              :name="linkedStrategy.detail.value?.name"
+              :selected="linkedStrategy.version.value"
+              :versions="linkedStrategy.versions.value"
+              :current-name="linkedStrategy.current.value?.name"
+              :current-summary="linkedStrategy.current.value?.change_summary"
+              :current-updated-at="linkedStrategy.current.value?.updated_at"
+              :disabled="!linkedStrategy.current.value"
+              :loading="linkedStrategy.historyLoading.value"
+              :error="linkedStrategy.historyError.value"
+              @select="linkedStrategy.selectVersion"
+              @retry="linkedStrategy.loadHistory"
+              @expanded="setMenu"
+            />
+          </h2>
+          <h2
+            v-else
+            class="asset-replay-heading"
+            :aria-labelledby="`${id}-replay-title`"
+          >
+            <ReplayTitleSelect
+              :id="replayDetail?.id ?? nestedReplay?.id ?? selected?.resource_id ?? null"
+              :title-id="`${id}-replay-title`"
+              :conversation-id="conversationId"
+              :name="title || $t('conversation.replay')"
+              :owner="auth.user?.id ?? null"
+              @select="openReplay"
+              @expanded="setMenu"
+            />
           </h2>
           <div class="asset-detail-actions">
+            <template v-if="showingReplay">
+              <UTooltip
+                :text="t('replay.viewStrategy')"
+                :delay-duration="400"
+                ><button
+                  class="detail-icon-button replay-strategy-action"
+                  :aria-label="t('replay.viewStrategy')"
+                  :disabled="!replayDetail?.strategy.node_id"
+                  @click="viewStrategy"
+                >
+                  <UIcon name="i-lucide-file-code-2" /></button
+              ></UTooltip>
+              <UDropdownMenu
+                :items="replayMenu"
+                :ui="{ content: 'z-[60]' }"
+                @update:open="setMenu"
+                ><button
+                  class="detail-icon-button"
+                  :aria-label="t('replay.more')"
+                >
+                  <UIcon name="i-lucide-ellipsis" /></button
+              ></UDropdownMenu>
+            </template>
             <UTooltip
               :text="$t(fullscreen ? 'common.exitFullscreen' : 'common.fullscreen')"
               :delay-duration="400"
@@ -189,16 +303,23 @@ function escape(event: KeyboardEvent) {
         </header>
         <StrategyDetailContent
           v-if="isStrategy"
-          v-show="!nestedReplay"
+          v-show="!nestedReplay && !linkedNode"
           :state="strategy"
           @open-replay="openReplay"
         />
+        <StrategyDetailContent
+          v-if="linkedNode"
+          :state="linkedStrategy"
+          @open-replay="openReplay"
+        />
         <ReplayDetailContent
-          v-if="showingReplay"
-          :detail="replayDetail"
-          :loading="replayLoading"
-          :error="replayError"
-          @retry="replay.load"
+          v-if="!isStrategy || nestedReplay"
+          v-show="showingReplay"
+          ref="replayContent"
+          :state="replay"
+          :active="open && showingReplay"
+          @menu="layerOpen = $event"
+          @question="emit('question', $event)"
         />
       </section>
     </Transition>

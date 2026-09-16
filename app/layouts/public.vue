@@ -21,7 +21,8 @@
     <main id="main-content"><slot /></main>
     <footer class="public-footer">
       <CommonBrandMark /><span>{{ $t('landing.tag') }}</span
-      ><span>{{ $t('landing.footer') }}</span>
+      ><span>{{ $t('landing.footer') }}</span
+      ><NuxtLink to="/open-source">{{ $t('openSource.title') }}</NuxtLink>
     </footer>
   </div>
 </template>

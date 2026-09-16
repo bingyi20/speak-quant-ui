@@ -1,6 +1,6 @@
 # Trade Lab UI
 
-Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱 / Google 登录、研究历史和 Agent 对话主流程；策略详情与 Replay 结果概览已接入；Replay 图表/播放和执行操作仍待实现。
+Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱 / Google 登录、研究历史和 Agent 对话主流程；策略与回测详情工作区已接入；回测执行/重试/取消等写操作仍待实现。
 
 ## 启动
 
@@ -58,7 +58,7 @@ Google 从 `/auth/google/config` 获取 client ID 和 nonce。官方脚本加载
 - `app/lib/sse` / `download`：共享 HTTP 认证的流传输和文件处理。
 - `app/stores`：全局偏好与弹窗；认证 store 位于 auth 模块，只保存用户和状态。
 - `app/components`：基础按钮、异步状态、Markdown、分栏等公共组件。
-- `app/lib/chart`：SDK 接口与有界缓存。未选用/加载真实图表引擎。
+- `app/lib/chart`：Lightweight Charts 5.2.0 客户端适配器、有界行情视野与原始页缓存。
 - `i18n`：中英文静态消息，共享 SSR 与客户端配置；当前体量小，直接打包以避免首屏异步语言加载。
 - `shared`：通用协议类型，不依赖 Vue。
 - `tests`：HTTP、会话、SSE、下载、精度、安全边界以及浏览器路径测试。
@@ -94,7 +94,7 @@ SSE 使用 `openEventStream(http, streamUrl, { signal, onEvent, isTerminal })`�
 
 `tokens.css` 管尺寸/排版，`themes/light.css`、`dark.css` 使用相同的语义键。`useTheme` 是模式入口，Cookie 保存偏好，首屏脚本在渲染前解析系统模式；Nuxt UI、自定义 CSS 使用相同变量。深色目前为工程验证配色，默认不显示选择入口。
 
-如未来接入 CSP，需要为当前的同源 `theme-init.js` 配置允许策略。图表接入时实现 `ChartAdapter.applyTheme`，不要在页面直接依赖 SDK。
+如未来接入 CSP，需要为当前的同源 `theme-init.js` 配置允许策略。图表已通过 `ChartAdapter.applyTheme` 同步主题，不要在页面直接依赖 SDK。
 
 ## 快速预览 Agent 问答
 
@@ -136,7 +136,7 @@ HOST=127.0.0.1 PORT=6002 node .output/server/index.mjs
 
 已实现 Agent 对话：新建研究、访客发送衔接登录、纯文本消息、Markdown 流式回复、工具状态、批量澄清、历史分页和断流恢复。用户消息先正常显示，仅失败时提示；AI 回复结束前输入仍可编辑，但不能发送，没有暂停按钮。Markdown 复用 `marked` 与 `sanitize-html`，不自写解析器。
 
-Strategy / Replay 卡片可展开侧边面板。Strategy 的 Header 切换当前/历史版本，同步更新 Design、只读代码和回测表；回测默认展示所选版本，可手动查看全部并标记所选版本。Replay 已接入条件、核心指标和研究结论，返回策略时保留列表位置。Replay 图表/播放、策略恢复、执行操作、Runner 与支付仍待实现。实现契约见[策略详情模块技术方案](docs/策略详情模块技术方案.md)。真实联调与测试范围见 [Agent 对话接口联调记录](docs/Agent%20对话接口联调记录.md)。
+Strategy / Replay 卡片可展开侧边面板。Strategy 的 Header 切换当前/历史版本，以变更摘要识别节点，同步更新 Design、只读代码和回测记录；回测默认展示所选版本，可手动查看全部并标记所选版本。Design 共用 Agent Markdown 排版，代码支持高亮与复制；策略和 Replay 支持覆盖整个页面的全屏查看。回测详情提供全宽 K 线、播放与事件定位、洞察/交易/成交明细、报告、冻结策略往返、上下文追问和运行包下载，返回策略保留版本、列表范围、滚动与焦点。多周期按服务端能力清单启用。前端回测执行/重试/取消、策略恢复、Runner 运行控制、支付及会员/积分数据仍待接入。实现契约见[策略详情模块技术方案](docs/策略详情模块技术方案.md)与[回测详情模块技术方案](docs/回测详情模块技术方案.md)，回测验证见[回测详情联调记录](docs/回测详情联调记录.md)。真实联调与测试范围见 [Agent 对话接口联调记录](docs/Agent%20对话接口联调记录.md)。
 
 公开 SEO 页面可以直接嵌入下面的组件，统一处理草稿、登录、创建与跳转，页面继续使用 SSR：
 

@@ -24,6 +24,10 @@
   --color-chart-up: #448a79;
   --color-chart-down: #be756e;
   --color-chart-grid: #eeede7;
+  --color-chart-volume-up: #448a7930;
+  --color-chart-volume-down: #be756e30;
+  --color-chart-evidence: #986b2c0d;
+  --color-chart-evidence-edge: #986b2c50;
   --color-overlay: rgb(35 35 30 / 30%);
   --shadow-composer: 0 4px 20px rgb(48 49 46 / 3%);
   --shadow-composer-active: 0 4px 22px rgb(48 49 46 / 7%);

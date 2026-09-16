@@ -13,6 +13,7 @@ import SplitPane from '~/components/common/SplitPane.vue'
 import { useConversation } from '../composables/useConversation'
 import { pendingClarification } from '../clarification'
 import type { MessageCard } from '../types'
+import type { ReplayQuestionReference } from '~/features/replay/types'
 import MessageList from './MessageList.vue'
 import MessageComposer from './MessageComposer.vue'
 import ClarificationQuestions from './ClarificationQuestions.vue'
@@ -21,6 +22,9 @@ import ConversationAssetDetailPanel from './ConversationAssetDetailPanel.vue'
 const props = defineProps<{ conversationId: string }>()
 const {
   draft,
+  replayReference,
+  setReplayReference,
+  invalidReference,
   messages,
   loading,
   loadError,
@@ -133,6 +137,7 @@ const open = computed(() => listOpen.value || detailOpen.value)
 const fullscreen = ref(false)
 const detailMenuOpen = ref(false)
 const detailSelection = ref(0)
+const replayAutoKey = ref<string | null>(null)
 const narrow = ref(false)
 const mobile = ref(false)
 const panelId = useId()
@@ -216,12 +221,16 @@ function showDetail() {
   focusPanel('.asset-detail-panel')
 }
 function openCard(messageId: string, value: MessageCard) {
+  handledReplayCompletion = run.replayCompletion.value?.key ?? null
+  replayAutoKey.value = null
   rememberTrigger()
   selected.value = { messageId, cardId: value.id }
   selectedAsset.value = null
   showDetail()
 }
 function openAsset(value: MessageCard) {
+  handledReplayCompletion = run.replayCompletion.value?.key ?? null
+  replayAutoKey.value = null
   rememberTrigger()
   selected.value = null
   selectedAsset.value = value.resource_id
@@ -230,6 +239,7 @@ function openAsset(value: MessageCard) {
   showDetail()
 }
 function showAssets() {
+  handledReplayCompletion = run.replayCompletion.value?.key ?? null
   rememberTrigger()
   detailOpen.value = false
   listVisible.value = true
@@ -242,6 +252,8 @@ function toggleAssets() {
   else showAssets()
 }
 function close() {
+  handledReplayCompletion = run.replayCompletion.value?.key ?? null
+  replayAutoKey.value = null
   detailMenuOpen.value = false
   listOpen.value = false
   detailOpen.value = false
@@ -250,6 +262,39 @@ function close() {
       trigger?.isConnected && !trigger.closest('.chat-asset-panel') ? trigger : assetsButton.value
     destination?.focus({ preventScroll: true })
   })
+}
+let handledReplayCompletion: string | null = null
+watch([run.replayCompletion, active], ([completion, streaming]) => {
+  // The same response may ask a question after producing the completed card.
+  // Settle the turn first so automatic navigation cannot cover that question.
+  if (!completion || streaming || completion.key === handledReplayCompletion) return
+  handledReplayCompletion = completion.key
+  if (
+    questions.value ||
+    document.hidden ||
+    matchMedia('(prefers-reduced-motion: reduce)').matches ||
+    detailOpen.value ||
+    listOpen.value ||
+    detailMenuOpen.value ||
+    draft.value.trim() ||
+    document.activeElement?.matches('textarea, input, [contenteditable="true"]')
+  )
+    return
+  rememberTrigger()
+  selected.value = { messageId: completion.messageId, cardId: completion.card.id }
+  selectedAsset.value = null
+  replayAutoKey.value = completion.key
+  showDetail()
+})
+async function askFromReplay(reference: ReplayQuestionReference) {
+  setReplayReference(reference)
+  fullscreen.value = false
+  if (narrow.value) {
+    detailOpen.value = false
+    trigger = null
+  }
+  await nextTick()
+  await composer.value?.focus()
 }
 function afterListClosed() {
   if (!listOpen.value) listVisible.value = false
@@ -275,7 +320,7 @@ function keydown(event: KeyboardEvent) {
   const elements = [
     ...(listOpen.value && assetsButton.value ? [assetsButton.value] : []),
     ...(activePanel?.querySelectorAll<HTMLElement>(
-      'button:not(:disabled):not([tabindex="-1"]), a[href], [tabindex="0"]',
+      'button:not(:disabled):not([tabindex="-1"]), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
     ) ?? []),
   ].filter((el) => el.getClientRects().length && !el.closest('[inert], [hidden]'))
   const first = elements[0],
@@ -471,6 +516,22 @@ onBeforeUnmount(() => {
               @close="composer?.focus()"
               @collapse="collapseQuestions"
             />
+            <div
+              v-if="replayReference || invalidReference"
+              class="replay-reference"
+            >
+              <UIcon
+                name="i-lucide-chart-candlestick"
+                aria-hidden="true"
+              /><span>{{ replayReference?.label || $t('replay.errors.reference') }}</span
+              ><button
+                class="detail-icon-button"
+                :aria-label="$t('replay.removeReference')"
+                @click="setReplayReference(null)"
+              >
+                <UIcon name="i-lucide-x" />
+              </button>
+            </div>
             <MessageComposer
               ref="composer"
               v-model="draft"
@@ -519,6 +580,7 @@ onBeforeUnmount(() => {
           :id="detailPanelId"
           :conversation-id="conversationId"
           :revision="assetRevision"
+          :autoplay-key="replayAutoKey"
           :selection="detailSelection"
           :open="detailOpen"
           :selected="card"
@@ -527,6 +589,7 @@ onBeforeUnmount(() => {
           @close="close"
           @closed="afterDetailClosed"
           @menu="detailMenuOpen = $event"
+          @question="askFromReplay"
           @fullscreen="fullscreen = !fullscreen"
         />
       </template>

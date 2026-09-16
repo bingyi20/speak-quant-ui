@@ -1,42 +1,604 @@
-import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useNuxtApp } from '#app'
 import { useAuthStore } from '~/features/auth'
 import { createReplayApi } from '../api'
-import type { ReplayDetail } from '../types'
+import { createReplayDataState } from '../data-state'
+import { buildReplayEvents, resolveSelection } from '../events'
+import { nearestBar, nextBarTime, normalizeState } from '../normalize'
+import { advancePlayback } from '../playback-state'
+import type {
+  ReplayCandle,
+  ReplayQuestionReference,
+  ReplaySelection,
+  ReplayViewSnapshot,
+} from '../types'
 
-export function useReplayDetail(id: () => string | null, revision: () => number) {
-  const api = createReplayApi(useNuxtApp().$http)
-  const auth = useAuthStore()
-  const detail = shallowRef<ReplayDetail | null>(null)
-  const loading = ref(false)
-  const error = ref('')
-  let request: AbortController | undefined
-  function reset() {
-    request?.abort()
-    detail.value = null
-    error.value = ''
-    loading.value = false
+export function useReplayDetail(
+  id: () => string | null,
+  revision: () => number,
+  autoKey: () => string | null = () => null,
+  visible: () => boolean = () => true,
+) {
+  const api = createReplayApi(useNuxtApp().$http),
+    auth = useAuthStore()
+  const data = createReplayDataState(api)
+  const mode = ref<'overview' | 'playback'>('overview')
+  const status = ref<'paused' | 'playing' | 'event-hold' | 'buffering'>('paused')
+  const index = ref(-1),
+    speed = ref(8)
+  const selection = shallowRef<ReplaySelection | null>(null)
+  const currentCandle = shallowRef<ReplayCandle | null>(null)
+  const currentLoading = ref(false),
+    currentError = ref(''),
+    locateError = ref(''),
+    gapTime = ref<number | null>(null)
+  const tab = ref<'insights' | 'trades'>('insights'),
+    expanded = ref(false)
+  const viewRange = shallowRef<{ from: number; to: number } | null>(null)
+  const requestedRange = shallowRef<{ from: number; to: number; revision: number } | null>(null)
+  const follow = ref(true),
+    scrollTop = ref(0)
+  const snapshots = new Map<string, ReplayViewSnapshot>()
+  const consumedAutoKeys = new Set<string>()
+  const events = computed(() =>
+    buildReplayEvents(
+      data.axis.value,
+      data.trades.value,
+      data.insights.value,
+      data.candlesComplete.value && data.tradesComplete.value,
+      data.drawdownRange.value,
+    ),
+  )
+  const processEvents = computed(() =>
+    events.value.filter((e) => e.kind === 'fill' || e.kind === 'insight'),
+  )
+  const currentBar = computed(() => data.axis.value[index.value] ?? null)
+  const currentState = computed(() =>
+    normalizeState(
+      currentCandle.value?.state,
+      data.detail.value?.conditions.initial_capital ?? '0',
+    ),
+  )
+  const playing = computed(() => status.value !== 'paused')
+  const speeds = computed(() =>
+    (data.detail.value?.playback?.available_speeds ?? [1, 2, 4, 8, 16]).filter(
+      (n) => Number.isFinite(n) && n > 0 && n <= 64,
+    ),
+  )
+  const canPlay = computed(
+    () =>
+      data.detail.value?.status === 'completed' &&
+      data.axis.value.length > 0 &&
+      data.tradesComplete.value &&
+      speeds.value.length > 0 &&
+      !data.displayLoading.value,
+  )
+  const visibleInsights = computed(() =>
+    data.insights.value.filter((i) =>
+      mode.value === 'overview'
+        ? true
+        : i.scope === 'runtime' &&
+          i.candle_id &&
+          (data.indexById.get(i.candle_id) ?? Infinity) <= index.value,
+    ),
+  )
+  const currentEvent = computed(() => processEvents.value.findLast((e) => e.index <= index.value))
+  const renderedBars = computed(() =>
+    mode.value === 'playback' ? data.axis.value.slice(0, index.value + 1) : data.bars.value,
+  )
+  const renderedEvents = computed(() =>
+    mode.value === 'playback'
+      ? processEvents.value.filter((e) => e.index <= index.value)
+      : processEvents.value,
+  )
+  const selectedTrade = computed(
+    () => data.trades.value.find((t) => t.id === selection.value?.tradeId) ?? null,
+  )
+  const selectedInsight = computed(
+    () => data.insights.value.find((i) => i.id === selection.value?.insightId) ?? null,
+  )
+  let frame = 0,
+    intent = 0,
+    seekGeneration = 0,
+    lastFrame = 0,
+    accumulator = 0,
+    lastAdvance = 0,
+    holdUntil = 0
+  let currentId: string | null = null,
+    overviewTimeframe = '',
+    pendingAuto: string | null = null
+  let restore: ReplayViewSnapshot | undefined,
+    polling: ReturnType<typeof setTimeout> | undefined,
+    pollFailures = 0
+  let rangeRevision = 0,
+    alive = true
+  function pause() {
+    intent++
+    seekGeneration++
+    cancelAnimationFrame(frame)
+    status.value = 'paused'
+    currentLoading.value = false
+    pendingAuto = null
   }
-  async function load() {
-    reset()
-    const replayId = id()
-    if (!replayId || !auth.isAuthenticated) return
-    const pending = new AbortController()
-    request = pending
-    loading.value = true
+  function save() {
+    if (!currentId) return
+    snapshots.delete(currentId)
+    snapshots.set(currentId, {
+      mode: mode.value,
+      index: index.value,
+      speed: speed.value,
+      timeframe: data.displayTimeframe.value,
+      range: viewRange.value,
+      selection: selection.value,
+      tab: tab.value,
+      expanded: expanded.value,
+      scrollTop: scrollTop.value,
+    })
+    while (snapshots.size > 10) snapshots.delete(snapshots.keys().next().value!)
+  }
+  function requestRange(range: { from: number; to: number }) {
+    if (!(range.to > range.from)) return
+    requestedRange.value = { ...range, revision: ++rangeRevision }
+  }
+  function locateRange(target: ReplaySelection) {
+    const bar = target.candleId ? data.axis.value[data.indexById.get(target.candleId) ?? -1] : null
+    const step =
+      data.axis.value.length > 1
+        ? Math.max(1, data.axis.value[1]!.time - data.axis.value[0]!.time)
+        : 3600
+    if (target.range) {
+      const margin = Math.max(step * 8, (target.range.to - target.range.from) * 0.1)
+      requestRange({ from: target.range.from - margin, to: target.range.to + margin })
+    } else if (bar) requestRange({ from: bar.time - step * 50, to: bar.time + step * 50 })
+  }
+  async function readAt(next: number, ticket: number) {
+    const bar = data.axis.value[next]
+    if (!bar) {
+      currentCandle.value = null
+      return false
+    }
+    const ownerId = currentId
+    currentLoading.value = true
+    currentError.value = ''
     try {
-      const result = await api.detail(replayId, pending.signal)
-      if (!pending.signal.aborted) detail.value = result
+      const raw = await data.readCandle(bar.id)
+      if (ticket !== seekGeneration || ownerId !== currentId || !alive) return false
+      currentCandle.value = raw
+      index.value = next
+      if (!raw) currentError.value = 'replay.errors.state'
+      return !!raw
     } catch {
-      if (!pending.signal.aborted) error.value = 'strategy.replayFailed'
+      if (ticket === seekGeneration && ownerId === currentId) {
+        currentCandle.value = null
+        index.value = next
+        currentError.value = 'replay.errors.state'
+      }
+      return false
     } finally {
-      if (!pending.signal.aborted) loading.value = false
+      if (ticket === seekGeneration) currentLoading.value = false
     }
   }
-  watch([id, () => auth.user?.id, () => auth.isAuthenticated, revision], load, {
-    immediate: true,
-    flush: 'sync',
+  async function seek(next: number) {
+    pause()
+    const ticket = seekGeneration
+    gapTime.value = null
+    currentError.value = ''
+    currentCandle.value = null
+    const bounded = Math.max(0, Math.min(data.axis.value.length - 1, next))
+    if (!data.axis.value[bounded]) return
+    await readAt(bounded, ticket)
+    if (ticket !== seekGeneration) return
+    if (mode.value === 'overview') locateRange({ candleId: data.axis.value[bounded]!.id })
+    follow.value = true
+  }
+  async function seekTime(time: number) {
+    pause()
+    const bars = data.axis.value,
+      n = nearestBar(bars, time)
+    if (!data.candlesComplete.value && time > (bars.at(-1)?.time ?? 0)) {
+      locateError.value = 'replay.errors.indexing'
+      return
+    }
+    locateError.value = ''
+    if (n < 0) return
+    const prior = bars[n]!.time <= time ? n : n - 1
+    if (prior >= 0 && prior + 1 < bars.length) {
+      const expected = nextBarTime(
+        bars[prior]!.time,
+        data.detail.value!.strategy.execution_timeframe,
+      )
+      if (expected && time >= expected && time < bars[prior + 1]!.time) {
+        gapTime.value = time
+        index.value = prior
+        currentCandle.value = null
+        return
+      }
+    }
+    await seek(n)
+  }
+  async function overview() {
+    pause()
+    const ticket = seekGeneration
+    mode.value = 'overview'
+    gapTime.value = null
+    if (overviewTimeframe && data.availableTimeframes.value.includes(overviewTimeframe))
+      await data.setTimeframe(overviewTimeframe, viewRange.value ?? undefined)
+    if (ticket !== seekGeneration) return
+    if (currentBar.value) locateRange({ candleId: currentBar.value.id })
+  }
+  async function locate(target: ReplaySelection) {
+    pause()
+    const ticket = seekGeneration
+    locateError.value = ''
+    mode.value = 'overview'
+    follow.value = true
+    gapTime.value = null
+    await data.setTimeframe(data.detail.value?.strategy.execution_timeframe ?? '')
+    if (ticket !== seekGeneration) return
+    overviewTimeframe = data.displayTimeframe.value
+    const resolved = resolveSelection(
+      target,
+      data.axis.value,
+      data.trades.value,
+      data.insights.value,
+    )
+    if (!resolved) {
+      if (target.insightId && data.insights.value.some((i) => i.id === target.insightId)) {
+        selection.value = { insightId: target.insightId }
+        tab.value = 'insights'
+        expanded.value = true
+        index.value = -1
+        currentCandle.value = null
+      }
+      locateError.value = data.candlesComplete.value
+        ? 'replay.errors.locate'
+        : 'replay.errors.indexing'
+      return
+    }
+    selection.value = resolved
+    expanded.value = true
+    tab.value = resolved.insightId ? 'insights' : resolved.tradeId ? 'trades' : tab.value
+    const n = resolved.candleId
+      ? data.indexById.get(resolved.candleId)
+      : resolved.range
+        ? nearestBar(data.axis.value, resolved.range.to)
+        : undefined
+    if (n !== undefined) await readAt(n, ticket)
+    else {
+      index.value = -1
+      currentCandle.value = null
+    }
+    if (ticket !== seekGeneration) return
+    locateRange(resolved)
+  }
+  async function selectCandle(time: number) {
+    pause()
+    gapTime.value = null
+    if (data.displayTimeframe.value !== data.detail.value?.strategy.execution_timeframe) {
+      currentCandle.value = null
+      selection.value = null
+      index.value = -1
+      return
+    }
+    const n = nearestBar(data.axis.value, time),
+      bar = data.axis.value[n]
+    if (!bar || bar.time !== time) {
+      locateError.value = 'replay.errors.indexing'
+      return
+    }
+    selection.value = { candleId: bar.id }
+    await readAt(n, seekGeneration)
+  }
+  function finish() {
+    void overview()
+    expanded.value = false
+    selection.value = null
+    tab.value = 'insights'
+  }
+  async function tick(now: number, token: number) {
+    if (token !== intent || !alive || !visible() || !playing.value) return
+    const delta = lastFrame ? Math.min(100, now - lastFrame) : 0
+    lastFrame = now
+    if (now < holdUntil) {
+      frame = requestAnimationFrame((t) => {
+        void tick(t, token)
+      })
+      return
+    }
+    if (status.value === 'event-hold') status.value = 'playing'
+    accumulator += (delta * speed.value) / 1000
+    if ((accumulator >= 1 || status.value === 'buffering') && now - lastAdvance >= 100) {
+      lastAdvance = now
+      const steps = Math.floor(accumulator)
+      const result = advancePlayback(
+        index.value,
+        steps,
+        data.axis.value,
+        processEvents.value,
+        data.detail.value!.strategy.execution_timeframe,
+        data.candlesComplete.value,
+        data.tradesComplete.value && data.phases.insights === 'ready',
+      )
+      accumulator = Math.max(0, accumulator - steps)
+      if (result.gap) {
+        pause()
+        index.value = result.index
+        gapTime.value = nextBarTime(
+          data.axis.value[result.index]!.time,
+          data.detail.value!.strategy.execution_timeframe,
+        )
+        currentCandle.value = null
+        return
+      }
+      if (result.buffering) {
+        if (data.errors.candles) {
+          pause()
+          return
+        }
+        status.value = 'buffering'
+      } else {
+        if (result.index !== index.value) {
+          status.value = 'buffering'
+          const ok = await readAt(result.index, seekGeneration)
+          if (token !== intent) return
+          if (!ok) {
+            pause()
+            return
+          }
+        }
+        if (result.ended) {
+          finish()
+          return
+        }
+        status.value = result.hold ? 'event-hold' : 'playing'
+        holdUntil = result.hold ? now + result.hold : 0
+      }
+    }
+    if (token === intent)
+      frame = requestAnimationFrame((t) => {
+        void tick(t, token)
+      })
+  }
+  function play() {
+    if (!canPlay.value || !visible() || document.hidden || gapTime.value !== null) return
+    pause()
+    status.value = 'playing'
+    lastFrame = 0
+    lastAdvance = 0
+    holdUntil = 0
+    accumulator = 0
+    follow.value = true
+    const token = intent
+    frame = requestAnimationFrame((t) => {
+      void tick(t, token)
+    })
+  }
+  async function start(from = -1) {
+    if (!canPlay.value) return
+    pause()
+    const ticket = seekGeneration
+    overviewTimeframe = data.displayTimeframe.value
+    await data.setTimeframe(data.detail.value!.strategy.execution_timeframe)
+    if (ticket !== seekGeneration) return
+    mode.value = 'playback'
+    index.value = from
+    currentCandle.value = null
+    selection.value = null
+    expanded.value = false
+    gapTime.value = null
+    if (from >= 0 && !(await readAt(from, ticket))) return
+    if (ticket === seekGeneration) play()
+  }
+  function stepEvent(direction: -1 | 1) {
+    const e =
+      direction === 1
+        ? processEvents.value.find((e) => e.index > index.value)
+        : processEvents.value.findLast((e) => e.index < index.value)
+    if (e) void seek(e.index)
+  }
+  async function setTimeframe(value: string) {
+    pause()
+    const ticket = seekGeneration,
+      range = viewRange.value
+    if (mode.value !== 'overview') return
+    const ok = await data.setTimeframe(value, range ?? undefined)
+    if (ok && ticket === seekGeneration) {
+      selection.value = null
+      currentCandle.value = null
+      index.value = -1
+      if (range) requestRange(range)
+    }
+  }
+  function question(): ReplayQuestionReference | null {
+    if (!data.detail.value) return null
+    pause()
+    const s = selection.value
+    return {
+      context: {
+        replay_id: data.detail.value.id,
+        ...(s?.tradeId ? { trade_id: s.tradeId } : {}),
+        ...(s?.fillId ? { fill_id: s.fillId } : {}),
+        ...(s?.insightId ? { insight_id: s.insightId } : {}),
+        ...(currentBar.value
+          ? { timestamp: new Date(currentBar.value.time * 1000).toISOString() }
+          : {}),
+      },
+      label:
+        selectedInsight.value?.title ||
+        (selectedTrade.value
+          ? `#${selectedTrade.value.sequence} · ${data.detail.value.name}`
+          : data.detail.value.name),
+    }
+  }
+  function schedulePoll() {
+    clearTimeout(polling)
+    if (
+      !currentId ||
+      !visible() ||
+      document.hidden ||
+      !['queued', 'running'].includes(data.detail.value?.status ?? '')
+    )
+      return
+    polling = setTimeout(
+      async () => {
+        if (!currentId) return
+        await data.load(currentId, false, true)
+        pollFailures = data.error.value ? pollFailures + 1 : 0
+        schedulePoll()
+      },
+      Math.min(30000, 5000 * 2 ** pollFailures),
+    )
+  }
+  const stopWatch = watch(
+    [id, () => auth.user?.id, () => auth.isAuthenticated],
+    ([replayId, owner, authenticated], previous) => {
+      save()
+      pause()
+      clearTimeout(polling)
+      if (previous && previous[1] !== owner) {
+        snapshots.clear()
+        consumedAutoKeys.clear()
+      }
+      currentId = authenticated && owner ? replayId : null
+      data.reset()
+      currentCandle.value = null
+      currentLoading.value = false
+      currentError.value = ''
+      locateError.value = ''
+      gapTime.value = null
+      mode.value = 'overview'
+      index.value = -1
+      selection.value = null
+      expanded.value = false
+      tab.value = 'insights'
+      scrollTop.value = 0
+      viewRange.value = null
+      requestedRange.value = null
+      restore = currentId ? snapshots.get(currentId) : undefined
+      if (!currentId) return
+      const key = autoKey()
+      pendingAuto = key && !consumedAutoKeys.has(key) ? key : null
+      if (pendingAuto) consumedAutoKeys.add(pendingAuto)
+      void data.load(currentId, !!pendingAuto).then(() => {
+        speed.value = restore?.speed ?? data.detail.value?.playback?.default_speed ?? 8
+        if (!speeds.value.includes(speed.value)) speed.value = speeds.value[0] ?? 1
+        schedulePoll()
+      })
+    },
+    { immediate: true, flush: 'sync' },
+  )
+  watch(revision, () => {
+    if (currentId) void data.load(currentId, false, true).then(schedulePoll)
   })
-  onBeforeUnmount(reset)
-  return { detail, loading, error, load }
+  watch(visible, (value) => {
+    if (!value) pause()
+    schedulePoll()
+  })
+  watch(
+    [canPlay, () => data.phases.insights, () => data.errors.candles, () => data.errors.trades],
+    () => {
+      if (!pendingAuto) return
+      if (
+        data.errors.candles ||
+        data.errors.trades ||
+        data.errors.insights ||
+        data.detail.value?.result_type === 'no_trades'
+      ) {
+        pendingAuto = null
+        return
+      }
+      if (canPlay.value && data.phases.insights === 'ready') {
+        pendingAuto = null
+        if (
+          !document.hidden &&
+          !matchMedia('(prefers-reduced-motion: reduce)').matches &&
+          visible()
+        )
+          void start()
+      }
+    },
+  )
+  watch(
+    () => data.candlesComplete.value,
+    async (complete) => {
+      if (!complete || !restore) return
+      const snapshot = restore
+      restore = undefined
+      const restoringId = currentId
+      if (snapshot.index >= 0) await seek(snapshot.index)
+      const ticket = seekGeneration
+      if (currentId !== restoringId) return
+      selection.value = snapshot.selection
+      tab.value = snapshot.tab
+      expanded.value = snapshot.expanded
+      scrollTop.value = snapshot.scrollTop
+      // Reopening is always an overview. A linked-strategy visit keeps this instance mounted.
+      if (data.availableTimeframes.value.includes(snapshot.timeframe))
+        await data.setTimeframe(snapshot.timeframe, snapshot.range ?? undefined)
+      if (currentId === restoringId && ticket === seekGeneration && snapshot.range)
+        requestRange(snapshot.range)
+    },
+  )
+  const visibility = () => {
+    if (document.hidden) pause()
+    schedulePoll()
+  }
+  onMounted(() => document.addEventListener('visibilitychange', visibility))
+  onBeforeUnmount(() => {
+    alive = false
+    stopWatch()
+    pause()
+    clearTimeout(polling)
+    data.reset()
+    snapshots.clear()
+    document.removeEventListener('visibilitychange', visibility)
+  })
+  return {
+    ...data,
+    api,
+    mode,
+    status,
+    index,
+    speed,
+    speeds,
+    selection,
+    currentCandle,
+    currentBar,
+    currentState,
+    currentLoading,
+    currentError,
+    locateError,
+    gapTime,
+    tab,
+    expanded,
+    viewRange,
+    requestedRange,
+    follow,
+    scrollTop,
+    events,
+    processEvents,
+    currentEvent,
+    playing,
+    canPlay,
+    visibleInsights,
+    renderedBars,
+    renderedEvents,
+    selectedTrade,
+    selectedInsight,
+    pause,
+    play,
+    start,
+    overview,
+    locate,
+    selectCandle,
+    seek,
+    seekTime,
+    stepEvent,
+    setTimeframe,
+    question,
+    requestRange,
+    save,
+    refresh: () => (currentId ? data.load(currentId, false, true) : Promise.resolve()),
+  }
 }
+export type ReplayDetailState = ReturnType<typeof useReplayDetail>

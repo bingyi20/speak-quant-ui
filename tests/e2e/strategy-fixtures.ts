@@ -83,6 +83,29 @@ export async function stubStrategyDetails(
     const node = nodes.find((n) => route.request().url().endsWith(n.id))
     return route.fulfill({ status: node ? 200 : 404, json: envelope(node) })
   })
+  // Read-only Replay subresources are used by the full detail workspace.
+  await page.route(/\/api\/replays\/[^/?]+\/candles(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({ timeframe: '1h', items: [], next_cursor: null, has_more: false }),
+    }),
+  )
+  await page.route(/\/api\/replays\/[^/?]+\/trades(?:\?.*)?$/, (route) =>
+    route.fulfill({ json: envelope({ items: [], page: 1, size: 100, total: 0, total_pages: 0 }) }),
+  )
+  await page.route(/\/api\/replays\/[^/?]+\/insights$/, (route) =>
+    route.fulfill({ json: envelope({ items: [] }) }),
+  )
+  await page.route(/\/api\/conversations\/[^/?]+\/replays(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        items: current.replays,
+        page: 1,
+        size: 20,
+        total: current.replays.length,
+        total_pages: 1,
+      }),
+    }),
+  )
   await page.route(/\/api\/replays\/[^/?]+$/, (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-1)!
     const summary =

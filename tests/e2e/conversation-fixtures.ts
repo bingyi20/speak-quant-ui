@@ -72,6 +72,7 @@ export async function stubConversation(
   options: {
     initialMessages?: ConversationMessage[]
     questionsCard?: MessageCard
+    noQuestions?: boolean
     immediateStream?: boolean
     failSendOnce?: boolean
     manyMessages?: boolean
@@ -248,7 +249,9 @@ export async function stubConversation(
       seq,
       'assistant',
       chunks.join(''),
-      round === 1 ? [strategyCard, replayCard, clarificationCard] : [strategyCard, replayCard],
+      round === 1 && !options.noQuestions
+        ? [strategyCard, replayCard, clarificationCard]
+        : [strategyCard, replayCard],
     )
     const events: [string, unknown][] = [
       ['run.snapshot', { run: { id: runId, status: 'running' }, messages: [], active_tools: [] }],
@@ -264,7 +267,10 @@ export async function stubConversation(
       ...final.cards
         .filter((c) => c.type === 'clarification_card')
         .map((c) => ['card.upsert', { message_id: id, card: c }] as [string, unknown]),
-      ['run.finished', { status: round === 1 ? 'waiting_user' : 'completed', error: null }],
+      [
+        'run.finished',
+        { status: round === 1 && !options.noQuestions ? 'waiting_user' : 'completed', error: null },
+      ],
     ]
     let deliver = events
     if (options.disconnectOnce && !disconnected) {

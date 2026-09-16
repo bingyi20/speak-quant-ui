@@ -7,6 +7,7 @@ import { useConversationHistoryStore } from '../history-store'
 import { emptyRun, mergeHistory, projectMessages } from '../message-state'
 import {
   readSubmission,
+  readInvalidReferenceDraft,
   saveSubmission,
   submissionExpired,
   type PendingSubmission,
@@ -14,6 +15,7 @@ import {
 import { useResearchDraft } from './useResearchDraft'
 import { clearClarificationDrafts } from './useClarification'
 import { useAgentRun } from './useAgentRun'
+import type { ReplayQuestionReference } from '~/features/replay/types'
 import type {
   ConversationAssets,
   ConversationMessage,
@@ -28,6 +30,8 @@ export function useConversation(id: string) {
   const historyStore = useConversationHistoryStore()
   const enabled = String(useRuntimeConfig().public.apiEnabled) === 'true'
   const draft = useResearchDraft(id)
+  const replayReference = ref<ReplayQuestionReference | null>(null)
+  const invalidReference = ref(false)
   const history = ref<ConversationMessage[]>([])
   const loading = ref(true)
   const loadError = ref('')
@@ -81,6 +85,7 @@ export function useConversation(id: string) {
   const messages = computed(() => projectMessages(history.value, run.state, pendingMessage.value))
   const blocked = computed(
     () =>
+      invalidReference.value ||
       !enabled ||
       loading.value ||
       !!loadError.value ||
@@ -234,18 +239,34 @@ export function useConversation(id: string) {
       owner: owner!,
       kind: 'message',
       conversationId: id,
-      body: structuredClone(toRaw(body ?? { content })),
+      body: structuredClone(
+        toRaw(
+          body ?? {
+            content,
+            ...(replayReference.value ? { context: toRaw(replayReference.value.context) } : {}),
+          },
+        ),
+      ),
+      ...(!body && replayReference.value ? { referenceLabel: replayReference.value.label } : {}),
       display: display ?? content,
       createdAt: Date.now(),
       phase: 'ready',
     })
-    if (!body) draft.value = ''
+    if (!body) {
+      draft.value = ''
+      replayReference.value = null
+    }
     void deliver()
   }
   function dismissPending() {
     if (submitting.value || !canEditPending.value) return
     if (pending.value?.body.content)
       draft.value = [pending.value.body.content, draft.value].filter(Boolean).join('\n\n')
+    if (pending.value?.body.context)
+      replayReference.value = {
+        context: pending.value.body.context,
+        label: pending.value.referenceLabel || pending.value.body.context.replay_id,
+      }
     persist(null)
     sendError.value = ''
     localFailed.value = false
@@ -272,6 +293,12 @@ export function useConversation(id: string) {
   }
   onMounted(() => {
     if (owner) {
+      const invalidDraft = readInvalidReferenceDraft(owner, id)
+      if (invalidDraft !== null) {
+        invalidReference.value = true
+        sendError.value = 'replay.errors.reference'
+        if (!draft.value) draft.value = invalidDraft
+      }
       const saved = readSubmission(owner)
       if (saved?.kind === 'message' && saved.conversationId === id) {
         pending.value = saved
@@ -299,6 +326,8 @@ export function useConversation(id: string) {
     assets.value = null
     pending.value = null
     otherPending.value = null
+    replayReference.value = null
+    invalidReference.value = false
   }
   watch(
     () => [auth.user?.id, auth.isAuthenticated],
@@ -311,7 +340,18 @@ export function useConversation(id: string) {
     alive = false
     dispose()
   })
+  function setReplayReference(value: ReplayQuestionReference | null) {
+    if (invalidReference.value && owner) {
+      saveSubmission(owner, null)
+      invalidReference.value = false
+      sendError.value = ''
+    }
+    replayReference.value = value
+  }
   return {
+    replayReference,
+    setReplayReference,
+    invalidReference,
     draft,
     messages,
     loading,

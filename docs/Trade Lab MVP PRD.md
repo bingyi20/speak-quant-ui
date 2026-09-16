@@ -643,7 +643,7 @@ Replay 卡片永久关联对应的只读 Replay Record。
 - 顶部：Replay 名称、Strategy 摘要、回测指标和回测条件
 - 中央主体：K 线图与交易事件
 - 底部：Replay Timeline 与播放控制
-- Replay 内右侧或右下区域：AI Explain 与关键洞察
+- 图表下方证据区：洞察与交易按需展开，半屏与全屏都不分走 K 线横向空间
 - 可展开区域：策略规则、详细指标、交易记录、回测假设
 
 K 线必须是 Replay 期间的视觉主体。

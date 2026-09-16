@@ -1,6 +1,7 @@
 @import './conversation.css';
 @import './billing.css';
 @import './asset-details.css';
+@import './replay.css';
 @import 'tailwindcss';
 @import '@nuxt/ui';
 @import './tokens.css';
