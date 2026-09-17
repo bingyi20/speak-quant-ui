@@ -1,3 +1,4 @@
+import { createDrawdownHistory } from './historical-result'
 import { computed, reactive, ref, shallowRef } from 'vue'
 import { BoundedCache } from '~/lib/chart/cache'
 import type { ReplayApi } from './api'
@@ -52,6 +53,8 @@ export function createReplayDataState(api: ReplayApi) {
     displayError = ref('')
   const displayBars = shallowRef<ReplayBar[]>([])
   const drawdownRange = shallowRef<{ from: number; to: number } | null>(null)
+  const historicalDrawdowns = new Map<string, string | null>()
+  let appendDrawdown = createDrawdownHistory()
   const indexById = new Map<string, number>()
   const pageById = new Map<string, number>(),
     pages: CandlePageIndex[] = []
@@ -114,6 +117,8 @@ export function createReplayDataState(api: ReplayApi) {
     availableTimeframes.value = []
     displayTimeframe.value = ''
     displayError.value = ''
+    historicalDrawdowns.clear()
+    appendDrawdown = createDrawdownHistory()
     indexById.clear()
     pageById.clear()
     pages.length = 0
@@ -286,6 +291,13 @@ export function createReplayDataState(api: ReplayApi) {
           indexById.set(c.id, axis.value.length + i)
           pageById.set(c.id, pageIndex)
           collectDrawdown(result.items[i]!)
+          historicalDrawdowns.set(
+            c.id,
+            appendDrawdown(
+              result.items[i]!.state?.equity,
+              detail.value!.conditions.initial_capital,
+            ),
+          )
         }
         pages.push({ cursor, ids: rows.map((c) => c.id) })
         rawCache.set(pageIndex, result.items)
@@ -524,6 +536,7 @@ export function createReplayDataState(api: ReplayApi) {
     displayLoading,
     displayError,
     drawdownRange,
+    historicalDrawdowns,
     displayWindow,
     load,
     reset,

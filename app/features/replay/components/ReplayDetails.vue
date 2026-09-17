@@ -4,7 +4,7 @@ import { formatDate, formatDecimal, formatRatio } from '~/lib/format'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
 import CopyButton from '~/components/ui/CopyButton.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
-const props = defineProps<{ state: ReplayDetailState }>()
+const props = defineProps<{ state: ReplayDetailState; historical?: boolean }>()
 const kind = defineModel<'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | null>({
   default: null,
 })
@@ -92,6 +92,24 @@ const rows = computed<Array<[string, string]>>(() => {
       ['realized', s.realized],
     ].map(([key, value]) => [t(`replay.${key}`), formatDecimal(value, locale.value)])
   }
+  if (kind.value === 'metrics' && props.historical) {
+    const r = props.state.summaryResult.value
+    const s = props.state.currentLoading.value ? null : currentState.value
+    return [
+      [t('replay.netReturn'), formatRatio(r?.net_return_rate ?? null, locale.value)],
+      [t('replay.drawdown'), formatRatio(r?.max_drawdown_rate ?? null, locale.value)],
+      [t('replay.tradeTotal'), r ? String(r.trade_count) : '—'],
+      [t('replay.winRate'), formatRatio(r?.win_rate ?? null, locale.value)],
+      [t('replay.profitFactor'), formatDecimal(r?.profit_factor, locale.value)],
+      [t('replay.netProfit'), formatDecimal(r?.net_profit, locale.value)],
+      [
+        t('replay.positionStatus'),
+        s?.direction ? t(`replay.holdingDirection.${s.direction}`) : '—',
+      ],
+      [t('replay.unrealized'), formatDecimal(s?.unrealized, locale.value)],
+      [t('replay.currentDrawdown'), formatRatio(s?.drawdown ?? null, locale.value)],
+    ]
+  }
   const r = d.result
   if (kind.value !== 'metrics' || !r) return []
   const values: Array<[string, string | number | null | undefined, boolean?]> = [
@@ -99,7 +117,7 @@ const rows = computed<Array<[string, string]>>(() => {
     ['grossReturn', r.gross_return_rate, true],
     ['netProfit', r.net_profit],
     ['drawdown', r.max_drawdown_rate, true],
-    ['trades', r.trade_count],
+    ['tradeTotal', r.trade_count],
     ['winRate', r.win_rate, true],
     ['profitFactor', r.profit_factor],
     ['payoffRatio', r.payoff_ratio],
@@ -132,7 +150,11 @@ const warnings = computed(
 <template>
   <UModal
     v-model:open="open"
-    :title="t(`replay.${kind ?? 'conditions'}`)"
+    :title="
+      historical && kind === 'metrics'
+        ? t('replay.asOfResult')
+        : t(`replay.${kind ?? 'conditions'}`)
+    "
     :ui="{ overlay: 'z-[60]', content: 'replay-reading-layer z-[61]' }"
   >
     <template #body>
@@ -180,7 +202,7 @@ const warnings = computed(
             <dd>{{ value }}</dd>
           </div>
         </dl>
-        <template v-if="kind === 'metrics' && detail?.result"
+        <template v-if="kind === 'metrics' && !historical && detail?.result"
           ><section
             v-for="side in ['long', 'short'] as const"
             :key="side"

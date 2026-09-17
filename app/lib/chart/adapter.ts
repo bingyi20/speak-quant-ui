@@ -4,6 +4,9 @@ export interface ChartTheme {
   grid: string
   up: string
   down: string
+  buy: string
+  sell: string
+  tagText: string
   accent?: string
   volumeUp?: string
   volumeDown?: string
@@ -20,7 +23,16 @@ export interface ChartMarker {
   id: string
   time: number
   label: string
-  direction: 'up' | 'down' | 'neutral'
+  side: 'buy' | 'sell'
+  price: number
+  edgePrice: number
+}
+export interface ChartMarkerHit {
+  id: string
+  left: number
+  top: number
+  width: number
+  height: number
 }
 export interface ChartRange {
   from: number
@@ -44,7 +56,7 @@ export interface ChartAdapter {
   resize(width: number, height: number): void
   onRangeChange(handler: (range: ChartRange) => void): () => void
   onSelect(handler: (time: number, markerId?: string) => void): () => void
-  onCrosshair(handler: (time: number | null) => void): () => void
+  onCrosshair(handler: (time: number | null, marker?: ChartMarkerHit) => void): () => void
   destroy(): void
 }
 export type ChartFactory = (element: HTMLElement, theme: ChartTheme) => ChartAdapter

@@ -16,7 +16,7 @@ export function advancePlayback(
   events: readonly ReplayEvent[],
   timeframe: string,
   complete: boolean,
-  compress: boolean,
+  eventHoldMs?: number,
 ): PlaybackStep {
   const last = bars.length - 1
   if (index >= last) return { index, hold: 0, gap: false, ended: complete, buffering: !complete }
@@ -24,8 +24,6 @@ export function advancePlayback(
   const nextEvent = events.find(
     (e) => e.index > index && (e.kind === 'fill' || e.kind === 'insight'),
   )
-  if (compress && index >= 0 && (nextEvent?.index ?? last) - index > 240)
-    target = Math.min(last, (nextEvent?.index ?? last) - 8, index + Math.max(steps, 240))
   if (nextEvent && nextEvent.index <= target) target = nextEvent.index
   for (let i = Math.max(0, index); i < target; i++) {
     const expected = nextBarTime(bars[i]!.time, timeframe)
@@ -38,7 +36,7 @@ export function advancePlayback(
   const insight = events.some((e) => e.index === target && e.kind === 'insight')
   return {
     index: target,
-    hold: atEvent ? (insight ? 2400 : 1200) : 0,
+    hold: atEvent ? (eventHoldMs ?? (insight ? 2400 : 1200)) : 0,
     gap: false,
     ended: target === last && complete && !atEvent,
     buffering: false,

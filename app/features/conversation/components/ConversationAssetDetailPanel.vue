@@ -7,6 +7,7 @@ import {
 } from '~/features/strategy'
 import { useReplayDetail, ReplayDetailContent, type ReplaySummary } from '~/features/replay'
 import { useAuthStore } from '~/features/auth'
+import RunnerDownloadDialog from '~/features/runner/components/RunnerDownloadDialog.vue'
 import ReplayTitleSelect from '~/features/replay/components/ReplayTitleSelect.vue'
 import type { ReplayQuestionReference } from '~/features/replay/types'
 import type { MessageCard } from '../types'
@@ -31,12 +32,14 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 const { t } = useI18n()
 const linkedNode = ref<string | null>(null)
-const replayContent = useTemplateRef<InstanceType<typeof ReplayDetailContent>>('replayContent')
 const isStrategy = computed(() => props.selected?.type === 'strategy_card')
 const nestedReplay = ref<ReplaySummary | null>(null)
 const menuOpen = ref(false),
-  layerOpen = ref(false)
-watch([menuOpen, layerOpen], ([menu, layer]) => emit('menu', menu || layer))
+  layerOpen = ref(false),
+  downloadOpen = ref(false)
+watch([menuOpen, layerOpen, downloadOpen], ([menu, layer, download]) =>
+  emit('menu', menu || layer || download),
+)
 const panel = useTemplateRef<HTMLElement>('panel')
 const strategy = useStrategyDetail(
   () => props.conversationId,
@@ -105,26 +108,29 @@ function viewStrategy() {
 function returnToReplay() {
   linkedNode.value = null
 }
-const replayMenu = computed(() => [
-  {
-    label: t('replay.viewStrategy'),
-    icon: 'i-lucide-file-code-2',
-    disabled: !replayDetail.value?.strategy.node_id,
-    onSelect: viewStrategy,
+const downloadState = computed(() => (linkedNode.value ? linkedStrategy : strategy))
+const downloadSource = computed(
+  () =>
+    [...(downloadState.value.detail.value?.replays ?? [])]
+      .filter(
+        (item) =>
+          item.strategy_node_id === downloadState.value.selectedNodeId.value &&
+          ['traded', 'no_trades'].includes(item.result_type),
+      )
+      .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))[0] ??
+    null,
+)
+watch(
+  [
+    () => props.open,
+    showingReplay,
+    () => downloadSource.value?.id,
+    () => downloadState.value.selectedNodeId.value,
+  ],
+  () => {
+    downloadOpen.value = false
   },
-  {
-    label: t('replay.report'),
-    icon: 'i-lucide-file-text',
-    disabled: replayDetail.value?.status !== 'completed',
-    onSelect: () => replayContent.value?.open('report'),
-  },
-  {
-    label: t('replay.downloadRunner'),
-    icon: 'i-lucide-download',
-    disabled: replayDetail.value?.status !== 'completed' || !replayDetail.value.strategy.node_id,
-    onSelect: () => replayContent.value?.open('download'),
-  },
-])
+)
 watch(
   () => props.fullscreen,
   async () => {
@@ -256,17 +262,21 @@ function escape(event: KeyboardEvent) {
                 >
                   <UIcon name="i-lucide-file-code-2" /></button
               ></UTooltip>
-              <UDropdownMenu
-                :items="replayMenu"
-                :ui="{ content: 'z-[60]' }"
-                @update:open="setMenu"
-                ><button
-                  class="detail-icon-button"
-                  :aria-label="t('replay.more')"
-                >
-                  <UIcon name="i-lucide-ellipsis" /></button
-              ></UDropdownMenu>
             </template>
+            <UTooltip
+              v-else
+              :text="t('replay.downloadRunner')"
+              :delay-duration="400"
+            >
+              <button
+                class="detail-icon-button"
+                :aria-label="t('replay.downloadRunner')"
+                :disabled="!downloadSource"
+                @click="downloadOpen = true"
+              >
+                <UIcon name="i-lucide-download" />
+              </button>
+            </UTooltip>
             <UTooltip
               :text="$t(fullscreen ? 'common.exitFullscreen' : 'common.fullscreen')"
               :delay-duration="400"
@@ -315,11 +325,21 @@ function escape(event: KeyboardEvent) {
         <ReplayDetailContent
           v-if="!isStrategy || nestedReplay"
           v-show="showingReplay"
-          ref="replayContent"
           :state="replay"
           :active="open && showingReplay"
           @menu="layerOpen = $event"
           @question="emit('question', $event)"
+        />
+        <RunnerDownloadDialog
+          v-if="downloadSource && !showingReplay"
+          v-model:open="downloadOpen"
+          :node-id="downloadState.selectedNodeId.value"
+          :replay-id="downloadSource.id"
+          :name="downloadSource.name"
+          :strategy-name="downloadState.detail.value?.name ?? ''"
+          :summary="downloadState.detail.value?.change_summary"
+          :symbol="downloadSource.symbol"
+          :timeframe="downloadSource.execution_timeframe"
         />
       </section>
     </Transition>

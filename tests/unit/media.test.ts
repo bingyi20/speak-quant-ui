@@ -3,7 +3,13 @@ import { parseSse } from '~/lib/sse/parser'
 import { openEventStream } from '~/lib/sse/connection'
 import { createHttpClient } from '~/lib/http/client'
 import { requestDownload, downloadFilename } from '~/lib/download/client'
-import { formatDecimal, formatRatio, formatDate } from '~/lib/format'
+import {
+  formatDecimal,
+  formatRatio,
+  formatDate,
+  formatDateTime,
+  formatQuantity,
+} from '~/lib/format'
 import { renderMarkdown } from '~/lib/format/markdown'
 import { BoundedCache } from '~/lib/chart/cache'
 import { safeReturnPath } from '~/lib/storage/safe-storage'
@@ -84,6 +90,19 @@ describe('stream and non-JSON transports', () => {
   })
 })
 describe('presentation boundaries', () => {
+  it('preserves fractional quantities without padding integer volumes or trailing zeros', () => {
+    expect(formatQuantity('22629.8900', 'zh-CN')).toBe('22,629.89')
+    expect(formatQuantity('22629.00', 'en-US')).toBe('22,629')
+    expect(formatQuantity('0.00000001')).toBe('0.00000001')
+    expect(formatQuantity('1.23456789')).toBe('1.23456789')
+    expect(formatQuantity(null)).toBe('—')
+    expect(formatQuantity('invalid')).toBe('—')
+  })
+  it('formats API timestamps consistently without shifting to the browser timezone', () => {
+    expect(formatDateTime('2026-08-01T08:00:00Z')).toBe('2026/08/01 08:00')
+    expect(formatDateTime(Date.parse('2026-01-01T00:05:00Z'))).toBe('2026/01/01 00:05')
+    expect(formatDateTime('invalid')).toBe('—')
+  })
   it('formats decimal strings without float loss, including negative subunit amounts', () => {
     expect(formatDecimal('9007199254740993.129', 'en-US')).toBe('9,007,199,254,740,993.13')
     expect(formatDecimal('-0.125', 'en-US')).toBe('-0.13')

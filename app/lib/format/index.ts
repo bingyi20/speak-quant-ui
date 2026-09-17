@@ -21,6 +21,17 @@ export function formatDecimal(
     return '—'
   }
 }
+/** Quantities may be fractional; trim trailing zeros without forcing price precision. */
+export function formatQuantity(value: string | null | undefined, locale = 'zh-CN'): string {
+  if (value == null || value === '') return '—'
+  try {
+    const quantity = new Decimal(value)
+    if (!quantity.isFinite()) return '—'
+    return formatDecimal(value, locale, quantity.decimalPlaces())
+  } catch {
+    return '—'
+  }
+}
 export function formatRatio(value: string | null, locale = 'zh-CN', digits = 2): string {
   try {
     if (value === null) return '—'
@@ -42,6 +53,13 @@ export function formatDate(value: string, locale = 'zh-CN', timeZone = 'UTC'): s
   } catch {
     return '—'
   }
+}
+
+/** Locale-independent API timestamp; keep the existing UTC clock without a visible suffix. */
+export function formatDateTime(value: string | number): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toISOString().slice(0, 16).replaceAll('-', '/').replace('T', ' ')
 }
 
 /** Compact message timestamp in the reader's local timezone. */

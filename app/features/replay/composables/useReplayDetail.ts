@@ -1,3 +1,4 @@
+import { historicalResult } from '../historical-result'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useNuxtApp } from '#app'
 import { useAuthStore } from '~/features/auth'
@@ -6,6 +7,7 @@ import { createReplayDataState } from '../data-state'
 import { buildReplayEvents, resolveSelection } from '../events'
 import { nearestBar, nextBarTime, normalizeState } from '../normalize'
 import { advancePlayback } from '../playback-state'
+import { closedBars, revealTrades } from '../visibility'
 import type {
   ReplayCandle,
   ReplayQuestionReference,
@@ -22,7 +24,7 @@ export function useReplayDetail(
   const api = createReplayApi(useNuxtApp().$http),
     auth = useAuthStore()
   const data = createReplayDataState(api)
-  const mode = ref<'overview' | 'playback'>('overview')
+  const initializing = ref(true)
   const status = ref<'paused' | 'playing' | 'event-hold' | 'buffering'>('paused')
   const index = ref(-1),
     speed = ref(8)
@@ -53,13 +55,50 @@ export function useReplayDetail(
     events.value.filter((e) => e.kind === 'fill' || e.kind === 'insight'),
   )
   const currentBar = computed(() => data.axis.value[index.value] ?? null)
+  const atEnd = computed(
+    () =>
+      !initializing.value &&
+      data.candlesComplete.value &&
+      index.value === data.axis.value.length - 1,
+  )
+  const cutoff = computed(() =>
+    currentBar.value
+      ? (currentBar.value.closeTime ??
+        nextBarTime(currentBar.value.time, data.detail.value?.strategy.execution_timeframe ?? '') ??
+        currentBar.value.time)
+      : -Infinity,
+  )
+  const visibleTrades = computed(() => revealTrades(data.trades.value, data.indexById, index.value))
   const currentState = computed(() =>
     normalizeState(
       currentCandle.value?.state,
       data.detail.value?.conditions.initial_capital ?? '0',
     ),
   )
+  const summaryResult = computed(() => {
+    if (atEnd.value) return data.detail.value?.result ?? null
+    // Do not retain the previous candle's equity while the next state is loading.
+    if (
+      initializing.value ||
+      !data.tradesComplete.value ||
+      currentLoading.value ||
+      gapTime.value ||
+      !currentBar.value
+    )
+      return null
+    return historicalResult(
+      visibleTrades.value,
+      currentState.value?.cumulative ?? null,
+      currentState.value?.equity ?? null,
+      data.detail.value?.conditions.initial_capital ?? '0',
+      data.historicalDrawdowns.get(currentBar.value.id) ?? null,
+    )
+  })
   const playing = computed(() => status.value !== 'paused')
+  const baseSpeed = computed(() => {
+    const value = data.detail.value?.playback?.default_speed ?? 8
+    return Number.isFinite(value) && value > 0 && value <= 64 ? value : 8
+  })
   const speeds = computed(() =>
     (data.detail.value?.playback?.available_speeds ?? [1, 2, 4, 8, 16]).filter(
       (n) => Number.isFinite(n) && n > 0 && n <= 64,
@@ -68,34 +107,34 @@ export function useReplayDetail(
   const canPlay = computed(
     () =>
       data.detail.value?.status === 'completed' &&
+      !initializing.value &&
+      data.candlesComplete.value &&
       data.axis.value.length > 0 &&
       data.tradesComplete.value &&
       speeds.value.length > 0 &&
       !data.displayLoading.value,
   )
   const visibleInsights = computed(() =>
-    data.insights.value.filter((i) =>
-      mode.value === 'overview'
-        ? true
-        : i.scope === 'runtime' &&
-          i.candle_id &&
-          (data.indexById.get(i.candle_id) ?? Infinity) <= index.value,
+    data.insights.value.filter((insight) =>
+      insight.scope === 'global'
+        ? atEnd.value
+        : !!insight.candle_id && (data.indexById.get(insight.candle_id) ?? Infinity) <= index.value,
     ),
   )
-  const currentEvent = computed(() => processEvents.value.findLast((e) => e.index <= index.value))
-  const renderedBars = computed(() =>
-    mode.value === 'playback' ? data.axis.value.slice(0, index.value + 1) : data.bars.value,
-  )
+  const renderedBars = computed(() => {
+    if (initializing.value && index.value < 0) return restore ? [] : data.bars.value
+    return data.displayTimeframe.value === data.detail.value?.strategy.execution_timeframe
+      ? data.axis.value.slice(0, index.value + 1)
+      : closedBars(data.bars.value, cutoff.value, data.displayTimeframe.value)
+  })
   const renderedEvents = computed(() =>
-    mode.value === 'playback'
-      ? processEvents.value.filter((e) => e.index <= index.value)
-      : processEvents.value,
+    processEvents.value.filter((event) => event.index <= index.value),
   )
   const selectedTrade = computed(
-    () => data.trades.value.find((t) => t.id === selection.value?.tradeId) ?? null,
+    () => visibleTrades.value.find((t) => t.id === selection.value?.tradeId) ?? null,
   )
   const selectedInsight = computed(
-    () => data.insights.value.find((i) => i.id === selection.value?.insightId) ?? null,
+    () => visibleInsights.value.find((i) => i.id === selection.value?.insightId) ?? null,
   )
   let frame = 0,
     intent = 0,
@@ -105,7 +144,6 @@ export function useReplayDetail(
     lastAdvance = 0,
     holdUntil = 0
   let currentId: string | null = null,
-    overviewTimeframe = '',
     pendingAuto: string | null = null
   let restore: ReplayViewSnapshot | undefined,
     polling: ReturnType<typeof setTimeout> | undefined,
@@ -121,10 +159,9 @@ export function useReplayDetail(
     pendingAuto = null
   }
   function save() {
-    if (!currentId) return
+    if (!currentId || initializing.value) return
     snapshots.delete(currentId)
     snapshots.set(currentId, {
-      mode: mode.value,
       index: index.value,
       speed: speed.value,
       timeframe: data.displayTimeframe.value,
@@ -139,6 +176,18 @@ export function useReplayDetail(
   function requestRange(range: { from: number; to: number }) {
     if (!(range.to > range.from)) return
     requestedRange.value = { ...range, revision: ++rangeRevision }
+  }
+  function previewResult(target: ReplaySelection) {
+    const resolved = resolveSelection(
+      target,
+      data.axis.value,
+      data.trades.value,
+      data.insights.value,
+    )
+    if (!resolved?.range || resolved.range.to > (currentBar.value?.time ?? -Infinity)) return
+    pause()
+    follow.value = false
+    locateRange(resolved)
   }
   function locateRange(target: ReplaySelection) {
     const bar = target.candleId ? data.axis.value[data.indexById.get(target.candleId) ?? -1] : null
@@ -180,19 +229,33 @@ export function useReplayDetail(
   }
   async function seek(next: number) {
     pause()
+    selection.value = null
+    locateError.value = ''
     const ticket = seekGeneration
     gapTime.value = null
     currentError.value = ''
     currentCandle.value = null
     const bounded = Math.max(0, Math.min(data.axis.value.length - 1, next))
     if (!data.axis.value[bounded]) return
-    await readAt(bounded, ticket)
+    index.value = bounded
+    const bar = data.axis.value[bounded]!
+    const step =
+      (nextBarTime(bar.time, data.detail.value!.strategy.execution_timeframe) ?? bar.time + 3600) -
+      bar.time
+    const range = { from: bar.time - step * 50, to: bar.time + step * 8 }
+    await Promise.all([
+      readAt(bounded, ticket),
+      data.displayTimeframe.value !== data.detail.value?.strategy.execution_timeframe
+        ? data.setTimeframe(data.displayTimeframe.value, range)
+        : Promise.resolve(),
+    ])
     if (ticket !== seekGeneration) return
-    if (mode.value === 'overview') locateRange({ candleId: data.axis.value[bounded]!.id })
+    requestRange(range)
     follow.value = true
   }
   async function seekTime(time: number) {
     pause()
+    selection.value = null
     const bars = data.axis.value,
       n = nearestBar(bars, time)
     if (!data.candlesComplete.value && time > (bars.at(-1)?.time ?? 0)) {
@@ -216,39 +279,25 @@ export function useReplayDetail(
     }
     await seek(n)
   }
-  async function overview() {
-    pause()
-    const ticket = seekGeneration
-    mode.value = 'overview'
-    gapTime.value = null
-    if (overviewTimeframe && data.availableTimeframes.value.includes(overviewTimeframe))
-      await data.setTimeframe(overviewTimeframe, viewRange.value ?? undefined)
-    if (ticket !== seekGeneration) return
-    if (currentBar.value) locateRange({ candleId: currentBar.value.id })
-  }
-  async function locate(target: ReplaySelection) {
+  async function locate(target: ReplaySelection, movePlayhead = true) {
     pause()
     const ticket = seekGeneration
     locateError.value = ''
-    mode.value = 'overview'
-    follow.value = true
-    gapTime.value = null
+    follow.value = movePlayhead
+    if (movePlayhead) gapTime.value = null
     await data.setTimeframe(data.detail.value?.strategy.execution_timeframe ?? '')
     if (ticket !== seekGeneration) return
-    overviewTimeframe = data.displayTimeframe.value
     const resolved = resolveSelection(
       target,
       data.axis.value,
-      data.trades.value,
-      data.insights.value,
+      visibleTrades.value,
+      visibleInsights.value,
     )
     if (!resolved) {
       if (target.insightId && data.insights.value.some((i) => i.id === target.insightId)) {
         selection.value = { insightId: target.insightId }
         tab.value = 'insights'
         expanded.value = true
-        index.value = -1
-        currentCandle.value = null
       }
       locateError.value = data.candlesComplete.value
         ? 'replay.errors.locate'
@@ -258,42 +307,58 @@ export function useReplayDetail(
     selection.value = resolved
     expanded.value = true
     tab.value = resolved.insightId ? 'insights' : resolved.tradeId ? 'trades' : tab.value
-    const n = resolved.candleId
-      ? data.indexById.get(resolved.candleId)
-      : resolved.range
-        ? nearestBar(data.axis.value, resolved.range.to)
-        : undefined
-    if (n !== undefined) await readAt(n, ticket)
-    else {
-      index.value = -1
+    const insight = visibleInsights.value.find((i) => i.id === resolved.insightId)
+    const openTrade = visibleTrades.value.find(
+      (trade) => trade.id === resolved.tradeId && !trade.isComplete,
+    )
+    if (openTrade && !resolved.fillId && !insight && currentBar.value)
+      resolved.range = {
+        from: resolved.range?.from ?? currentBar.value.time,
+        to: currentBar.value.time,
+      }
+    const n =
+      insight?.scope === 'global' || (openTrade && !resolved.fillId && !insight)
+        ? undefined
+        : resolved.candleId
+          ? data.indexById.get(resolved.candleId)
+          : resolved.range
+            ? nearestBar(data.axis.value, resolved.range.to)
+            : undefined
+    if (movePlayhead && n !== undefined) {
+      index.value = n
       currentCandle.value = null
+      await readAt(n, ticket)
     }
     if (ticket !== seekGeneration) return
-    locateRange(resolved)
+    if (resolved.range && currentBar.value)
+      selection.value = {
+        ...resolved,
+        range: {
+          from: resolved.range.from,
+          to: Math.min(resolved.range.to, currentBar.value.time),
+        },
+      }
+    if (ticket !== seekGeneration) return
+    locateRange(selection.value ?? resolved)
   }
   async function selectCandle(time: number) {
     pause()
-    gapTime.value = null
+    const selected = renderedBars.value.find((bar) => bar.time === time)
+    if (!selected) return
+    let n = nearestBar(data.axis.value, time)
     if (data.displayTimeframe.value !== data.detail.value?.strategy.execution_timeframe) {
-      currentCandle.value = null
-      selection.value = null
-      index.value = -1
-      return
+      const close = selected.closeTime ?? nextBarTime(time, data.displayTimeframe.value)
+      if (close === null) return
+      n = data.axis.value.findLastIndex(
+        (bar) =>
+          (bar.closeTime ??
+            nextBarTime(bar.time, data.detail.value!.strategy.execution_timeframe) ??
+            Infinity) <= close,
+      )
     }
-    const n = nearestBar(data.axis.value, time),
-      bar = data.axis.value[n]
-    if (!bar || bar.time !== time) {
-      locateError.value = 'replay.errors.indexing'
-      return
-    }
-    selection.value = { candleId: bar.id }
-    await readAt(n, seekGeneration)
-  }
-  function finish() {
-    void overview()
-    expanded.value = false
-    selection.value = null
-    tab.value = 'insights'
+    if (n < 0) return
+    await seek(n)
+    if (index.value === n) selection.value = { candleId: data.axis.value[n]!.id }
   }
   async function tick(now: number, token: number) {
     if (token !== intent || !alive || !visible() || !playing.value) return
@@ -317,7 +382,9 @@ export function useReplayDetail(
         processEvents.value,
         data.detail.value!.strategy.execution_timeframe,
         data.candlesComplete.value,
-        data.tradesComplete.value && data.phases.insights === 'ready',
+        window.matchMedia('(min-width: 761px)').matches
+          ? Math.min(150, 1000 / speed.value)
+          : undefined,
       )
       accumulator = Math.max(0, accumulator - steps)
       if (result.gap) {
@@ -347,7 +414,7 @@ export function useReplayDetail(
           }
         }
         if (result.ended) {
-          finish()
+          pause()
           return
         }
         status.value = result.hold ? 'event-hold' : 'playing'
@@ -359,9 +426,14 @@ export function useReplayDetail(
         void tick(t, token)
       })
   }
-  function play() {
+  async function play() {
     if (!canPlay.value || !visible() || document.hidden || gapTime.value !== null) return
     pause()
+    const ticket = seekGeneration
+    await data.setTimeframe(data.detail.value!.strategy.execution_timeframe)
+    if (ticket !== seekGeneration) return
+    selection.value = null
+    locateError.value = ''
     status.value = 'playing'
     lastFrame = 0
     lastAdvance = 0
@@ -373,39 +445,18 @@ export function useReplayDetail(
       void tick(t, token)
     })
   }
-  async function start(from = -1) {
+  async function start() {
     if (!canPlay.value) return
-    pause()
-    const ticket = seekGeneration
-    overviewTimeframe = data.displayTimeframe.value
-    await data.setTimeframe(data.detail.value!.strategy.execution_timeframe)
-    if (ticket !== seekGeneration) return
-    mode.value = 'playback'
-    index.value = from
-    currentCandle.value = null
-    selection.value = null
-    expanded.value = false
-    gapTime.value = null
-    if (from >= 0 && !(await readAt(from, ticket))) return
-    if (ticket === seekGeneration) play()
-  }
-  function stepEvent(direction: -1 | 1) {
-    const e =
-      direction === 1
-        ? processEvents.value.find((e) => e.index > index.value)
-        : processEvents.value.findLast((e) => e.index < index.value)
-    if (e) void seek(e.index)
+    await seek(0)
+    if (index.value === 0 && !currentError.value) await play()
   }
   async function setTimeframe(value: string) {
     pause()
     const ticket = seekGeneration,
       range = viewRange.value
-    if (mode.value !== 'overview') return
     const ok = await data.setTimeframe(value, range ?? undefined)
     if (ok && ticket === seekGeneration) {
       selection.value = null
-      currentCandle.value = null
-      index.value = -1
       if (range) requestRange(range)
     }
   }
@@ -466,7 +517,7 @@ export function useReplayDetail(
       currentError.value = ''
       locateError.value = ''
       gapTime.value = null
-      mode.value = 'overview'
+      initializing.value = true
       index.value = -1
       selection.value = null
       expanded.value = false
@@ -479,9 +530,13 @@ export function useReplayDetail(
       const key = autoKey()
       pendingAuto = key && !consumedAutoKeys.has(key) ? key : null
       if (pendingAuto) consumedAutoKeys.add(pendingAuto)
+      const ownerId = currentId,
+        preferredSpeed = restore?.speed
       void data.load(currentId, !!pendingAuto).then(() => {
-        speed.value = restore?.speed ?? data.detail.value?.playback?.default_speed ?? 8
-        if (!speeds.value.includes(speed.value)) speed.value = speeds.value[0] ?? 1
+        if (ownerId !== currentId || !alive) return
+        speed.value = preferredSpeed ?? baseSpeed.value
+        const supported = [...speeds.value, ...[0.5, 1, 2, 5, 10].map((n) => n * baseSpeed.value)]
+        if (!supported.includes(speed.value)) speed.value = baseSpeed.value
         schedulePoll()
       })
     },
@@ -521,22 +576,35 @@ export function useReplayDetail(
   watch(
     () => data.candlesComplete.value,
     async (complete) => {
-      if (!complete || !restore) return
+      if (!complete || !initializing.value) return
       const snapshot = restore
       restore = undefined
-      const restoringId = currentId
-      if (snapshot.index >= 0) await seek(snapshot.index)
-      const ticket = seekGeneration
-      if (currentId !== restoringId) return
-      selection.value = snapshot.selection
-      tab.value = snapshot.tab
-      expanded.value = snapshot.expanded
-      scrollTop.value = snapshot.scrollTop
-      // Reopening is always an overview. A linked-strategy visit keeps this instance mounted.
-      if (data.availableTimeframes.value.includes(snapshot.timeframe))
-        await data.setTimeframe(snapshot.timeframe, snapshot.range ?? undefined)
-      if (currentId === restoringId && ticket === seekGeneration && snapshot.range)
-        requestRange(snapshot.range)
+      const owner = currentId,
+        ticket = seekGeneration
+      index.value = snapshot
+        ? Math.min(data.axis.value.length - 1, Math.max(0, snapshot.index))
+        : data.axis.value.length - 1
+      await readAt(index.value, ticket)
+      if (currentId !== owner || !alive) return
+      if (ticket !== seekGeneration) {
+        initializing.value = false
+        return
+      }
+      if (snapshot) {
+        selection.value = snapshot.selection
+        tab.value = snapshot.tab
+        expanded.value = snapshot.expanded
+        scrollTop.value = snapshot.scrollTop
+        if (data.availableTimeframes.value.includes(snapshot.timeframe))
+          await data.setTimeframe(snapshot.timeframe, snapshot.range ?? undefined)
+        if (currentId !== owner || !alive) return
+        if (ticket !== seekGeneration) {
+          initializing.value = false
+          return
+        }
+        if (snapshot.range) requestRange(snapshot.range)
+      }
+      initializing.value = false
     },
   )
   const visibility = () => {
@@ -556,15 +624,20 @@ export function useReplayDetail(
   return {
     ...data,
     api,
-    mode,
+    initializing,
+    atEnd,
+    cutoff,
+    visibleTrades,
     status,
     index,
     speed,
     speeds,
+    baseSpeed,
     selection,
     currentCandle,
     currentBar,
     currentState,
+    summaryResult,
     currentLoading,
     currentError,
     locateError,
@@ -577,7 +650,6 @@ export function useReplayDetail(
     scrollTop,
     events,
     processEvents,
-    currentEvent,
     playing,
     canPlay,
     visibleInsights,
@@ -586,14 +658,13 @@ export function useReplayDetail(
     selectedTrade,
     selectedInsight,
     pause,
+    previewResult,
     play,
     start,
-    overview,
     locate,
     selectCandle,
     seek,
     seekTime,
-    stepEvent,
     setTimeframe,
     question,
     requestRange,

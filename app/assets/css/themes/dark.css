@@ -21,8 +21,19 @@
   --color-code-keyword: #c3a4df;
   --color-code-string: #8fc5af;
   --color-code-number: #dfb778;
+  --color-chart-candle-up: #2ebd85;
+  --color-chart-candle-down: #f6465d;
+  --color-chart-candle-volume-up: #2ebd8530;
+  --color-chart-candle-volume-down: #f6465d30;
   --color-chart-up: #81bda9;
   --color-chart-down: #d5948b;
+  --color-chart-buy: #c76e62;
+  --color-chart-sell: #41967e;
+  --color-chart-tag-text: #ffffff;
+  --color-chart-time-label-bg: #dedede;
+  --color-chart-time-label-text: #171717;
+  --color-chart-insight: #a99ae8;
+  --color-chart-progress: #d9bc810b;
   --color-chart-grid: #36382f;
   --color-chart-volume-up: #81bda935;
   --color-chart-volume-down: #d5948b35;
@@ -34,6 +45,7 @@
   --shadow-panel: 0 6px 30px rgb(0 0 0 / 16%);
   /* Theme-dependent derived values stay here, never in business styles. */
   --color-bg-control-hover: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  --shadow-chart-tooltip: 0 2px 8px rgb(0 0 0 / 12%), 0 8px 24px rgb(0 0 0 / 18%);
   --shadow-menu: 0 3px 10px color-mix(in srgb, var(--color-text-primary) 8%, transparent);
   --color-border-selected-hover: color-mix(
     in srgb,

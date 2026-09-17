@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
-import { formatDate, formatDecimal, formatRatio } from '~/lib/format'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { formatDate, formatDateTime, formatDecimal, formatRatio } from '~/lib/format'
 import ReplayChart from './ReplayChart.client.vue'
 import ReplayTimeline from './ReplayTimeline.vue'
 import ReplayEvidencePanel from './ReplayEvidencePanel.vue'
 import ReplayDetails from './ReplayDetails.vue'
-import RunnerDownloadDialog from '~/features/runner/components/RunnerDownloadDialog.vue'
+import { resolveSelection } from '../events'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
-import type { ReplayQuestionReference } from '../types'
+import type { ReplayEvent, ReplayQuestionReference } from '../types'
 const props = defineProps<{ state: ReplayDetailState; active: boolean }>()
 const emit = defineEmits<{
   question: [reference: ReplayQuestionReference]
@@ -18,8 +18,8 @@ const {
   detail,
   loading,
   error,
-  mode,
-  status,
+  atEnd,
+  initializing,
   index,
   speed,
   speeds,
@@ -47,15 +47,72 @@ const {
   follow,
   scrollTop,
 } = props.state
+const desktop = ref(false)
+let desktopQuery: MediaQueryList | undefined
+const syncDesktop = () => {
+  desktop.value = desktopQuery?.matches ?? false
+}
+onMounted(() => {
+  desktopQuery = window.matchMedia('(min-width: 761px)')
+  syncDesktop()
+  desktopQuery.addEventListener('change', syncDesktop)
+})
+onBeforeUnmount(() => desktopQuery?.removeEventListener('change', syncDesktop))
+const speedOptions = computed(() =>
+  desktop.value
+    ? [0.5, 1, 2, 5, 10].map((multiplier) => ({
+        value: props.state.baseSpeed.value * multiplier,
+        label: `${multiplier}x`,
+      }))
+    : speeds.value.map((value) => ({ value, label: t('replay.barsPerSecond', { count: value }) })),
+)
 const body = useTemplateRef<HTMLElement>('body'),
   chart = useTemplateRef<InstanceType<typeof ReplayChart>>('chart')
 const reading = ref<'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | null>(null),
-  downloadOpen = ref(false),
   volume = ref(false)
 const complete = computed(() => detail.value?.status === 'completed')
+const shortcuts = computed(() =>
+  events.value.filter((e) => ['best', 'worst', 'drawdown'].includes(e.kind)),
+)
+const speedMenu = computed(() =>
+  speedOptions.value.map((option) => ({
+    label: option.label,
+    type: 'checkbox' as const,
+    checked: speed.value === option.value,
+    onSelect: () => {
+      speed.value = option.value
+    },
+  })),
+)
+const resultMenu = computed(() =>
+  shortcuts.value.map((event) => {
+    const resolved = resolveSelection(
+      event.selection,
+      props.state.axis.value,
+      props.state.trades.value,
+      props.state.insights.value,
+    )
+    return {
+      label: t(`replay.shortcuts.${event.kind}`),
+      disabled: !resolved?.range || resolved.range.to > (currentBar.value?.time ?? -Infinity),
+      onSelect: () => props.state.previewResult(event.selection),
+    }
+  }),
+)
+const menuUi = {
+  content: 'replay-compact-menu z-[60]',
+  item: 'replay-compact-menu-item',
+  itemTrailingIcon: 'size-3.5',
+}
 const warnings = computed(() => detail.value?.result?.quality_warnings?.length ?? 0)
 const metrics = computed(() => {
-  const r = detail.value?.result
+  const r = (desktop.value ? props.state.summaryResult.value : detail.value?.result) ?? {
+    net_return_rate: null,
+    max_drawdown_rate: null,
+    trade_count: null,
+    win_rate: null,
+    profit_factor: null,
+  }
   return r
     ? [
         {
@@ -64,9 +121,21 @@ const metrics = computed(() => {
           sign: Number(r.net_return_rate),
         },
         { key: 'drawdown', value: formatRatio(r.max_drawdown_rate, locale.value), sign: 0 },
-        { key: 'trades', value: String(r.trade_count), sign: 0 },
+        { key: 'trades', value: r.trade_count === null ? '—' : String(r.trade_count), sign: 0 },
         { key: 'winRate', value: formatRatio(r.win_rate, locale.value), sign: 0 },
         { key: 'profitFactor', value: formatDecimal(r.profit_factor, locale.value), sign: 0 },
+        ...(desktop.value
+          ? [
+              {
+                key: 'currentPosition',
+                value:
+                  currentLoading.value || gapTime.value || !currentState.value?.direction
+                    ? '—'
+                    : t(`replay.holdingDirection.${currentState.value.direction}`),
+                sign: 0,
+              },
+            ]
+          : []),
       ]
     : []
 })
@@ -84,19 +153,16 @@ const metadata = computed(() => {
     d.conditions.leverage ? `${formatDecimal(d.conditions.leverage, locale.value, 0)}×` : '',
   ].filter(Boolean)
 })
-function open(kind: 'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | 'download') {
+function open(kind: 'conditions' | 'metrics' | 'report' | 'state' | 'warnings') {
   props.state.pause()
-  if (kind === 'download') downloadOpen.value = true
-  else reading.value = kind
+  reading.value = kind
 }
-defineExpose({ open })
-watch([reading, downloadOpen], () => emit('menu', !!reading.value || downloadOpen.value))
+watch(reading, () => emit('menu', !!reading.value))
 watch(
   () => props.active,
   (value) => {
     if (!value) {
       reading.value = null
-      downloadOpen.value = false
       props.state.pause()
     }
   },
@@ -105,7 +171,6 @@ watch(
   () => detail.value?.id,
   () => {
     reading.value = null
-    downloadOpen.value = false
     volume.value = false
   },
 )
@@ -115,18 +180,17 @@ watch(scrollTop, async (value) => {
 })
 function select(time: number, markerId?: string) {
   const event = markerId ? events.value.find((e) => e.id === markerId) : null
-  if (event) void props.state.locate(event.selection)
+  if (event) selectEvent(event)
   else void props.state.selectCandle(time)
+}
+function selectEvent(event: ReplayEvent) {
+  void props.state.locate(event.selection)
 }
 let rangeTimer: ReturnType<typeof setTimeout> | undefined
 function rangeChanged(range: { from: number; to: number }) {
   viewRange.value = range
   clearTimeout(rangeTimer)
-  if (
-    mode.value !== 'overview' ||
-    displayTimeframe.value === detail.value?.strategy.execution_timeframe ||
-    displayLoading.value
-  )
+  if (displayTimeframe.value === detail.value?.strategy.execution_timeframe || displayLoading.value)
     return
   const window = props.state.displayWindow.value,
     d = detail.value
@@ -142,6 +206,37 @@ function rangeChanged(range: { from: number; to: number }) {
     if (props.active) void props.state.setTimeframe(displayTimeframe.value)
   }, 250)
 }
+function togglePlayback() {
+  if (playing.value) props.state.pause()
+  else if (canPlay.value && gapTime.value === null) {
+    if (atEnd.value) void props.state.start()
+    else void props.state.play()
+  }
+}
+function playbackKeydown(event: KeyboardEvent) {
+  if (
+    !desktop.value ||
+    !props.active ||
+    reading.value ||
+    event.code !== 'Space' ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.isComposing
+  )
+    return
+  const target = event.target
+  if (
+    !(target instanceof HTMLElement) ||
+    !target.matches('.replay-timeline input[type="range"], .replay-primary-action')
+  )
+    return
+  // Handle both controls once; suppress scrolling and the button's native Space click.
+  event.preventDefault()
+  event.stopPropagation()
+  if (!event.repeat) togglePlayback()
+}
 function interact() {
   props.state.pause()
   follow.value = false
@@ -155,6 +250,7 @@ onBeforeUnmount(() => {
   <div
     ref="body"
     class="replay-detail-content replay-workspace"
+    @keydown.capture="playbackKeydown"
     @scroll="scrollTop = ($event.target as HTMLElement).scrollTop"
   >
     <div
@@ -181,28 +277,40 @@ onBeforeUnmount(() => {
       </button>
     </div>
     <template v-else-if="detail">
-      <div class="replay-meta">
-        <strong>{{ detail.conditions.symbol }}</strong
-        ><span
-          v-for="value in metadata"
-          :key="value"
-          >{{ value }}</span
-        >
-      </div>
-      <div class="replay-date-row">
-        <span
-          >{{ detail.conditions.start_at.slice(0, 10) }} —
-          {{ detail.conditions.end_at.slice(0, 10) }}</span
-        ><button
-          class="text-button"
-          @click="open('conditions')"
-        >
-          {{ t('replay.conditions') }}<UIcon name="i-lucide-sliders-horizontal" />
-        </button>
+      <div class="replay-meta-line">
+        <div class="replay-meta">
+          <strong>{{ detail.conditions.symbol }}</strong
+          ><span
+            v-for="value in metadata"
+            :key="value"
+            >{{ value }}</span
+          >
+        </div>
+        <div class="replay-date-row">
+          <span
+            :title="`${detail.conditions.start_at.slice(0, 10)} — ${detail.conditions.end_at.slice(0, 10)}`"
+            >{{ detail.conditions.start_at.slice(0, 10) }} —
+            {{ detail.conditions.end_at.slice(0, 10) }}</span
+          ><button
+            class="text-button"
+            @click="open('conditions')"
+          >
+            {{ t('replay.conditions') }}<UIcon name="i-lucide-sliders-horizontal" />
+          </button>
+        </div>
       </div>
       <template v-if="detail.result && complete">
         <div class="replay-summary-heading">
-          <span>{{ t('replay.fullResult') }}</span
+          <span
+            class="replay-result-label"
+            :class="{ 'is-historical': desktop && !atEnd }"
+            >{{ t(desktop && !atEnd ? 'replay.asOfResult' : 'replay.fullResult') }}</span
+          ><button
+            v-if="desktop"
+            class="text-button replay-metrics-link"
+            @click="open('metrics')"
+          >
+            {{ t('replay.viewMetrics') }}<UIcon name="i-lucide-chevron-right" /></button
           ><button
             v-if="warnings"
             class="text-button replay-warning"
@@ -217,12 +325,13 @@ onBeforeUnmount(() => {
             :key="metric.key"
             :class="{ 'replay-secondary-metric': ['winRate', 'profitFactor'].includes(metric.key) }"
           >
-            <dt>{{ t(`replay.${metric.key}`) }}</dt>
+            <dt>{{ t(metric.key === 'trades' ? 'replay.tradeTotal' : `replay.${metric.key}`) }}</dt>
             <dd :class="{ 'is-positive': metric.sign > 0, 'is-negative': metric.sign < 0 }">
               {{ metric.sign > 0 ? '+' : '' }}{{ metric.value }}
             </dd>
           </div>
           <button
+            v-if="!desktop"
             class="detail-icon-button"
             :aria-label="t('replay.metrics')"
             @click="open('metrics')"
@@ -230,95 +339,127 @@ onBeforeUnmount(() => {
             <UIcon name="i-lucide-arrow-up-right" />
           </button>
         </dl>
-        <div class="replay-chart-toolbar">
-          <div
-            v-if="mode === 'overview' && availableTimeframes.length > 1"
-            class="replay-periods"
-            :aria-label="t('replay.viewTimeframe')"
-          >
-            <button
-              v-for="timeframe in availableTimeframes"
-              :key="timeframe"
-              :aria-pressed="timeframe === displayTimeframe"
-              @click="state.setTimeframe(timeframe)"
-            >
-              {{ timeframe }}
-            </button>
-          </div>
-          <USelect
-            v-if="mode === 'overview' && availableTimeframes.length > 1"
-            class="replay-period-select"
-            :model-value="displayTimeframe"
-            :items="availableTimeframes"
-            :aria-label="t('replay.viewTimeframe')"
-            size="sm"
-            @update:model-value="state.setTimeframe"
-          />
-          <span
-            v-else
-            class="replay-period-label"
-            >{{ displayTimeframe }}</span
-          >
-          <span
-            v-if="displayTimeframe !== detail.strategy.execution_timeframe"
-            class="replay-muted"
-            >{{ t('replay.execution', { timeframe: detail.strategy.execution_timeframe }) }}</span
-          >
-          <UIcon
-            v-if="displayLoading"
-            name="i-lucide-loader-circle"
-            class="chat-spinner"
-            :aria-label="t('common.loading')"
-          />
-          <span class="replay-toolbar-spacer" />
-          <UTooltip
-            :text="t('replay.volume')"
-            :delay-duration="400"
-            ><button
-              class="detail-icon-button"
-              :aria-pressed="volume"
-              :aria-label="t('replay.volume')"
-              @click="volume = !volume"
-            >
-              <UIcon name="i-lucide-chart-no-axes-column-increasing" /></button
-          ></UTooltip>
-          <UTooltip
-            :text="t('replay.resetChart')"
-            :delay-duration="400"
-            ><button
-              class="detail-icon-button"
-              :aria-label="t('replay.resetChart')"
-              @click="chart?.reset()"
-            >
-              <UIcon name="i-lucide-scan" /></button
-          ></UTooltip>
-        </div>
         <div
-          v-if="displayError"
-          class="replay-inline-error"
-          role="alert"
+          v-if="!desktop && shortcuts.length && atEnd"
+          class="replay-shortcuts"
+          :aria-label="t('replay.resultLocations')"
         >
-          {{ t(displayError) }}
+          <button
+            v-for="event in shortcuts"
+            :key="event.id"
+            class="text-button"
+            @click="state.locate(event.selection)"
+          >
+            {{ t(`replay.shortcuts.${event.kind}`) }}<UIcon name="i-lucide-arrow-up-right" />
+          </button>
         </div>
-        <ClientOnly>
-          <ReplayChart
-            ref="chart"
-            :bars="renderedBars"
-            :events="renderedEvents"
-            :selection="selection"
-            :trade="selectedTrade"
-            :timeframe="displayTimeframe"
-            :mode="mode"
-            :follow="follow"
-            :range="requestedRange"
-            :volume="volume"
-            :symbol="detail.conditions.symbol"
-            @select="select"
-            @range="rangeChanged"
-            @interact="interact"
-          />
-          <template #fallback><div class="replay-chart" /></template>
-        </ClientOnly>
+        <div class="replay-chart-region">
+          <div class="replay-chart-toolbar">
+            <div
+              v-if="!playing && availableTimeframes.length > 1"
+              class="replay-periods"
+              :aria-label="t('replay.viewTimeframe')"
+            >
+              <button
+                v-for="timeframe in availableTimeframes"
+                :key="timeframe"
+                :aria-pressed="timeframe === displayTimeframe"
+                @click="state.setTimeframe(timeframe)"
+              >
+                {{ timeframe }}
+              </button>
+            </div>
+            <USelect
+              v-if="!playing && availableTimeframes.length > 1"
+              class="replay-period-select"
+              :model-value="displayTimeframe"
+              :items="availableTimeframes"
+              :aria-label="t('replay.viewTimeframe')"
+              size="sm"
+              @update:model-value="state.setTimeframe"
+            />
+            <span
+              v-else
+              class="replay-period-label"
+              >{{ displayTimeframe }}</span
+            >
+            <span
+              v-if="displayTimeframe !== detail.strategy.execution_timeframe"
+              class="replay-muted"
+              >{{ t('replay.execution', { timeframe: detail.strategy.execution_timeframe }) }}</span
+            >
+            <UIcon
+              v-if="displayLoading"
+              name="i-lucide-loader-circle"
+              class="chat-spinner"
+              :aria-label="t('common.loading')"
+            />
+            <span class="replay-toolbar-spacer" />
+            <UDropdownMenu
+              v-if="desktop"
+              :items="resultMenu"
+              :ui="menuUi"
+              :content="{ align: 'end', sideOffset: 4 }"
+              :modal="false"
+              @update:open="emit('menu', $event)"
+            >
+              <button
+                class="replay-text-trigger"
+                :aria-label="t('replay.resultLocations')"
+                :disabled="!shortcuts.length"
+              >
+                {{ t('replay.resultLocations') }}<UIcon name="i-lucide-chevron-down" />
+              </button>
+            </UDropdownMenu>
+            <UTooltip
+              :text="t('replay.volume')"
+              :delay-duration="400"
+              ><button
+                class="detail-icon-button"
+                :aria-pressed="volume"
+                :aria-label="t('replay.volume')"
+                @click="volume = !volume"
+              >
+                <UIcon name="i-lucide-chart-no-axes-column-increasing" /></button
+            ></UTooltip>
+            <UTooltip
+              :text="t('replay.resetChart')"
+              :delay-duration="400"
+              ><button
+                class="detail-icon-button"
+                :aria-label="t('replay.resetChart')"
+                @click="chart?.reset()"
+              >
+                <UIcon :name="desktop ? 'i-lucide-rotate-ccw' : 'i-lucide-scan'" /></button
+            ></UTooltip>
+          </div>
+          <div
+            v-if="displayError"
+            class="replay-inline-error"
+            role="alert"
+          >
+            {{ t(displayError) }}
+          </div>
+          <ClientOnly>
+            <ReplayChart
+              ref="chart"
+              :bars="renderedBars"
+              :events="renderedEvents"
+              :selection="selection"
+              :trade="selectedTrade"
+              :timeframe="displayTimeframe"
+              :playing="playing"
+              :follow="follow"
+              :range="requestedRange"
+              :volume="volume"
+              :symbol="detail.conditions.symbol"
+              @select="select"
+              @range="rangeChanged"
+              @interact="interact"
+            />
+            <template #fallback><div class="replay-chart" /></template>
+          </ClientOnly>
+        </div>
         <div
           v-if="!renderedBars.length"
           class="replay-chart-empty"
@@ -348,22 +489,15 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div
-          v-if="mode === 'playback' || currentBar"
+          v-if="!desktop && currentBar && (!atEnd || selection)"
           class="replay-current-state"
           :aria-busy="currentLoading"
-          :title="t('replay.afterClose')"
         >
-          <time
-            >{{
-              currentBar
-                ? formatDate(new Date(currentBar.time * 1000).toISOString(), locale)
-                : t('replay.starting')
-            }}
-            UTC</time
+          <span class="replay-state-time">{{ t('replay.afterClose') }}</span
           ><strong>{{
             currentLoading || !currentState?.direction || gapTime
               ? '—'
-              : t(`replay.direction.${currentState.direction}`)
+              : t(`replay.holdingDirection.${currentState.direction}`)
           }}</strong
           ><span
             >{{ t('replay.cumulative') }}
@@ -424,93 +558,99 @@ onBeforeUnmount(() => {
           {{ t(locateError) }}
         </div>
         <div class="replay-playback-controls">
-          <span
-            class="replay-mode"
-            role="status"
-            >{{ t(mode === 'overview' ? 'replay.overview' : `replay.playback.${status}`) }}</span
-          >
-          <div
-            v-if="mode === 'overview'"
-            class="replay-playback-actions"
-          >
+          <div class="replay-playback-actions">
             <button
-              v-if="index >= 0"
-              class="text-button"
-              :disabled="!canPlay"
-              @click="state.start()"
+              class="detail-icon-button"
+              :aria-label="t('replay.toStart')"
+              :disabled="initializing || index <= 0"
+              @click="state.seek(0)"
             >
-              {{ t('replay.fromStart') }}</button
-            ><button
-              class="replay-primary-action"
-              :disabled="!canPlay"
-              @click="state.start(index >= 0 ? index : -1)"
-            >
-              <UIcon name="i-lucide-play" />{{
-                t(index >= 0 ? 'replay.fromHere' : 'replay.fromStart')
-              }}
+              <UIcon name="i-lucide-skip-back" />
             </button>
-          </div>
-          <div
-            v-else
-            class="replay-playback-actions"
-          >
+            <UTooltip
+              :text="t(playing ? 'replay.pause' : atEnd ? 'replay.fromStart' : 'replay.play')"
+              :delay-duration="400"
+              :disabled="!desktop"
+            >
+              <button
+                class="replay-primary-action"
+                :aria-label="
+                  t(playing ? 'replay.pause' : atEnd ? 'replay.fromStart' : 'replay.play')
+                "
+                :disabled="!playing && (!canPlay || gapTime !== null)"
+                @click="togglePlayback"
+              >
+                <UIcon :name="playing ? 'i-lucide-pause' : 'i-lucide-play'" />
+                <span class="replay-play-label">{{
+                  t(playing ? 'replay.pause' : atEnd ? 'replay.fromStart' : 'replay.play')
+                }}</span>
+              </button>
+            </UTooltip>
             <button
               class="detail-icon-button"
-              :aria-label="t('replay.previousEvent')"
-              :disabled="!state.processEvents.value.some((e) => e.index < index)"
-              @click="state.stepEvent(-1)"
+              :aria-label="t('replay.toEnd')"
+              :disabled="initializing || atEnd"
+              @click="state.seek(state.axis.value.length - 1)"
             >
-              <UIcon name="i-lucide-skip-back" /></button
-            ><button
-              class="replay-primary-action replay-play-toggle"
-              :aria-label="t(playing ? 'replay.pause' : 'replay.play')"
-              :disabled="!playing && (!canPlay || gapTime !== null)"
-              @click="playing ? state.pause() : state.play()"
+              <UIcon name="i-lucide-skip-forward" />
+            </button>
+            <UDropdownMenu
+              v-if="desktop"
+              :items="speedMenu"
+              :ui="menuUi"
+              :content="{ align: 'end', sideOffset: 4 }"
+              :modal="false"
+              @update:open="emit('menu', $event)"
             >
-              <UIcon :name="playing ? 'i-lucide-pause' : 'i-lucide-play'" /></button
-            ><button
-              class="detail-icon-button"
-              :aria-label="t('replay.nextEvent')"
-              :disabled="!state.processEvents.value.some((e) => e.index > index)"
-              @click="state.stepEvent(1)"
-            >
-              <UIcon name="i-lucide-skip-forward" /></button
-            ><select
+              <button
+                class="replay-speed replay-text-trigger"
+                :aria-label="t('replay.speed')"
+              >
+                <span class="replay-speed-value">{{ speed / state.baseSpeed.value }}x</span>
+                <UIcon name="i-lucide-chevron-down" />
+              </button>
+            </UDropdownMenu>
+            <select
+              v-else
               v-model.number="speed"
               class="replay-speed"
               :aria-label="t('replay.speed')"
             >
               <option
-                v-for="value in speeds"
-                :key="value"
-                :value="value"
+                v-for="option in speedOptions"
+                :key="option.value"
+                :value="option.value"
               >
-                {{ value }}×
-              </option></select
-            ><button
-              class="text-button"
-              @click="state.overview"
-            >
-              {{ t('replay.viewResult') }}
-            </button>
+                {{ option.label }}
+              </option>
+            </select>
           </div>
+          <span class="replay-progress-time">{{
+            currentBar
+              ? desktop
+                ? formatDateTime(currentBar.time * 1000)
+                : formatDate(new Date(currentBar.time * 1000).toISOString(), locale)
+              : initializing
+                ? t('common.loading')
+                : '—'
+          }}</span>
         </div>
         <ReplayTimeline
           :start="detail.conditions.start_at"
           :end="detail.conditions.end_at"
           :current="gapTime ?? currentBar?.time ?? null"
-          :events="events"
+          :events="renderedEvents"
           :bars="state.axis.value"
           :evidence-range="selection?.range"
-          :playback="mode === 'playback'"
           :index="index"
-          :disabled="!state.axis.value.length"
+          :disabled="initializing || !state.axis.value.length"
           @seek="state.seekTime"
-          @select="state.locate($event.selection)"
+          @select="selectEvent"
           @pause="state.pause"
         />
         <ReplayEvidencePanel
           :state="state"
+          :desktop="desktop"
           @question="emit('question', $event)"
         />
       </template>
@@ -535,16 +675,7 @@ onBeforeUnmount(() => {
       <ReplayDetails
         v-model="reading"
         :state="state"
-      />
-      <RunnerDownloadDialog
-        v-model:open="downloadOpen"
-        :node-id="detail.strategy.node_id"
-        :replay-id="detail.id"
-        :name="detail.name"
-        :strategy-name="detail.strategy.name"
-        :summary="detail.strategy.change_summary"
-        :symbol="detail.conditions.symbol"
-        :timeframe="detail.strategy.execution_timeframe"
+        :historical="desktop && !atEnd"
       />
     </template>
   </div>

@@ -3,27 +3,24 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { formatDate, formatDecimal, formatRatio } from '~/lib/format'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
-import type { ReplayQuestionReference } from '../types'
-const props = defineProps<{ state: ReplayDetailState }>()
+import { fillActionKey } from '../events'
+import type { ReplayQuestionReference, ReplaySelection } from '../types'
+const props = defineProps<{ state: ReplayDetailState; desktop?: boolean }>()
 const emit = defineEmits<{ question: [reference: ReplayQuestionReference] }>()
 const { t, locale } = useI18n()
 const {
   detail,
   tab,
   expanded,
-  mode,
-  insights,
-  trades,
+  atEnd,
+  visibleInsights: insights,
+  visibleTrades: trades,
   phases,
   errors,
   visibleInsights,
   selectedInsight,
   selectedTrade,
   selection,
-  currentEvent,
-  index,
-  processEvents,
-  events,
   tradesComplete,
 } = props.state
 const scope = ref<'global' | 'runtime'>('global'),
@@ -35,7 +32,7 @@ const scope = ref<'global' | 'runtime'>('global'),
 const summary = computed(
   () =>
     insights.value.find((i) => i.scope === 'global')?.title ||
-    detail.value?.result_summary ||
+    (atEnd.value ? detail.value?.result_summary : insights.value.at(-1)?.title) ||
     t('replay.noInsights'),
 )
 const filteredInsights = computed(() =>
@@ -61,10 +58,6 @@ const directionItems = computed(() => [
   { label: t('replay.direction.long'), value: 'long' },
   { label: t('replay.direction.short'), value: 'short' },
 ])
-const revealed = computed(() => processEvents.value.filter((e) => e.index <= index.value && e.fill))
-const shortcuts = computed(() =>
-  events.value.filter((e) => ['best', 'worst', 'drawdown'].includes(e.kind)),
-)
 function reason(value: string | null) {
   return value &&
     [
@@ -86,10 +79,29 @@ function changeTab(value: 'insights' | 'trades') {
   tab.value = value
   expanded.value = true
 }
+function locate(target: ReplaySelection) {
+  void props.state.locate(target, !props.desktop)
+}
 function ask() {
   const reference = props.state.question()
   if (reference) emit('question', reference)
 }
+watch(
+  atEnd,
+  (value) => {
+    scope.value = value ? 'global' : 'runtime'
+  },
+  { immediate: true },
+)
+watch(
+  () => trades.value.length,
+  () => {
+    page.value = Math.min(page.value, tradePages.value)
+  },
+)
+watch(exitReasons, (items) => {
+  if (!items.some((item) => item.value === exitReason.value)) exitReason.value = 'all'
+})
 watch([direction, exitReason], () => {
   page.value = 1
 })
@@ -144,7 +156,7 @@ const pnlClass = (value: string | null) =>
         aria-controls="replay-evidence-content"
         @click="changeTab('insights')"
       >
-        {{ t('replay.insights') }}<span v-if="mode === 'overview'">{{ insights.length }}</span>
+        {{ t('replay.insights') }}<span>{{ insights.length }}</span>
       </button>
       <button
         id="replay-trades-tab"
@@ -153,8 +165,7 @@ const pnlClass = (value: string | null) =>
         aria-controls="replay-evidence-content"
         @click="changeTab('trades')"
       >
-        {{ t('replay.trades')
-        }}<span v-if="mode === 'overview'">{{ detail?.result?.trade_count ?? trades.length }}</span>
+        {{ t('replay.tradeRecords') }}<span>{{ trades.length }}</span>
       </button>
       <button
         v-if="expanded"
@@ -183,51 +194,12 @@ const pnlClass = (value: string | null) =>
           {{ t('common.retry') }}
         </button>
       </div>
-      <template v-if="mode === 'playback'">
-        <div
-          class="replay-event-summary"
-          aria-live="polite"
-        >
-          <template v-if="currentEvent"
-            ><span>{{
-              currentEvent.insight?.title ||
-              `${t(`replay.actions.${currentEvent.fill?.action ?? 'trade'}`)} · ${formatDecimal(currentEvent.fill?.price, locale)}`
-            }}</span
-            ><button
-              class="text-button"
-              @click="state.locate(currentEvent.selection)"
-            >
-              {{ t('replay.expand') }}
-            </button></template
-          ><span v-else>{{ t('replay.awaitingTrade') }}</span>
-        </div>
-        <template v-if="tab === 'trades' && expanded"
-          ><button
-            v-for="event in revealed.slice(-20)"
-            :key="event.id"
-            class="replay-trade-row"
-            @click="state.locate(event.selection)"
-          >
-            <span
-              >{{ t(`replay.actions.${event.fill?.action ?? 'trade'}`)
-              }}<small>{{ formatDate(event.fill!.occurred_at, locale) }}</small></span
-            ><span>{{ formatDecimal(event.fill?.price, locale) }}</span></button
-          ><button
-            class="text-button"
-            @click="state.overview()"
-          >
-            {{ t('replay.allTrades') }}
-          </button></template
-        >
-      </template>
       <div
-        v-else-if="!expanded"
+        v-if="!expanded"
         class="replay-event-summary"
       >
         <span class="replay-summary-text">{{
-          tab === 'insights'
-            ? summary
-            : t('replay.tradeCount', { count: detail?.result?.trade_count ?? 0 })
+          tab === 'insights' ? summary : t('replay.tradeCount', { count: trades.length })
         }}</span
         ><button
           class="text-button"
@@ -239,25 +211,15 @@ const pnlClass = (value: string | null) =>
       <template v-else-if="tab === 'insights'">
         <div class="replay-evidence-filter">
           <button
-            v-for="value in ['global', 'runtime'] as const"
+            v-for="value in (atEnd ? ['global', 'runtime'] : ['runtime']) as Array<
+              'global' | 'runtime'
+            >"
             :key="value"
             :aria-pressed="scope === value"
             @click="scope = value"
           >
             {{ t(`replay.scope.${value}`) }}
-          </button>
-        </div>
-        <div
-          v-if="shortcuts.length && scope === 'global'"
-          class="replay-shortcuts"
-        >
-          <button
-            v-for="event in shortcuts"
-            :key="event.id"
-            class="text-button"
-            @click="state.locate(event.selection)"
-          >
-            {{ t(`replay.${event.kind}`) }}<UIcon name="i-lucide-arrow-up-right" />
+            {{ insights.filter((insight) => insight.scope === value).length }}
           </button>
         </div>
         <p
@@ -269,7 +231,7 @@ const pnlClass = (value: string | null) =>
         </p>
         <div v-else-if="!filteredInsights.length">
           <MarkdownContent
-            v-if="scope === 'global' && detail?.result_summary"
+            v-if="atEnd && scope === 'global' && detail?.result_summary"
             :content="detail.result_summary"
           />
           <p
@@ -288,7 +250,7 @@ const pnlClass = (value: string | null) =>
           <button
             class="replay-insight-title"
             :aria-expanded="selectedInsight?.id === insight.id"
-            @click="state.locate({ insightId: insight.id })"
+            @click="locate({ insightId: insight.id })"
           >
             <span>{{ insight.title }}</span
             ><span
@@ -320,7 +282,7 @@ const pnlClass = (value: string | null) =>
               <button
                 v-if="selectedTrade"
                 class="text-button"
-                @click="state.locate({ tradeId: selectedTrade.id })"
+                @click="locate({ tradeId: selectedTrade.id })"
               >
                 {{ t('replay.relatedTrade', { number: selectedTrade.sequence }) }}</button
               ><button
@@ -368,7 +330,7 @@ const pnlClass = (value: string | null) =>
           v-if="!rows.length && phases.trades !== 'loading'"
           class="replay-muted"
         >
-          {{ t('replay.noTrades') }}
+          {{ t(atEnd ? 'replay.noTrades' : 'replay.noTradesYet') }}
         </p>
         <div
           v-for="trade in rows"
@@ -379,11 +341,11 @@ const pnlClass = (value: string | null) =>
           <button
             class="replay-trade-row"
             :aria-expanded="selectedTrade?.id === trade.id"
-            @click="state.locate({ tradeId: trade.id })"
+            @click="locate({ tradeId: trade.id })"
           >
             <span
               >#{{ trade.sequence }} · {{ t(`replay.direction.${trade.direction}`) }} ·
-              {{ reason(trade.exit_reason)
+              {{ trade.isComplete ? reason(trade.exit_reason) : t('replay.unclosed')
               }}<small
                 >{{ trade.entry_at.slice(0, 16).replace('T', ' ') }} →
                 {{ trade.exit_at?.slice(0, 16).replace('T', ' ') || t('replay.unclosed') }}</small
@@ -461,13 +423,10 @@ const pnlClass = (value: string | null) =>
                   class="replay-fill-row"
                   :class="{ 'is-selected': selection?.fillId === fill.id }"
                   :aria-expanded="selection?.fillId === fill.id"
-                  @click="state.locate({ tradeId: trade.id, fillId: fill.id })"
+                  @click="locate({ tradeId: trade.id, fillId: fill.id })"
                 >
                   <span
-                    >{{
-                      t(
-                        `replay.actions.${['open', 'increase', 'reduce', 'close'].includes(fill.action) ? fill.action : 'trade'}`,
-                      )
+                    >{{ t(fillActionKey(fill.action, trade.direction))
                     }}<small>{{ formatDate(fill.occurred_at, locale) }}</small></span
                   ><span
                     >{{ formatDecimal(fill.price, locale)

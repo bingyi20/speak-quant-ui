@@ -355,8 +355,14 @@
     }
   },
   "replay": {
+    "orderDetails": "Order details",
+    "fillPrice": "Fill price",
     "conditions": "Conditions",
-    "fullResult": "Full result",
+    "currentPosition": "Current position",
+    "positionStatus": "Position status",
+    "asOfResult": "As of now",
+    "viewMetrics": "View details",
+    "fullResult": "Final result",
     "netReturn": "Net return",
     "drawdown": "Max drawdown",
     "trades": "Trades",
@@ -364,32 +370,27 @@
     "profitFactor": "Profit factor",
     "metrics": "All metrics",
     "viewTimeframe": "Chart timeframe",
-    "execution": "Execution {timeframe}",
+    "execution": "Strategy timeframe {timeframe}",
     "volume": "Volume",
     "resetChart": "Reset view",
     "noCandles": "No market data",
-    "afterClose": "State after this candle closes",
+    "afterClose": "After this candle closes",
     "starting": "Start",
-    "cumulative": "Return to date",
+    "cumulative": "Return to this point",
     "unrealized": "Unrealized P&L",
-    "state": "Current state",
+    "state": "Account state after close",
     "gap": "Missing candles. Playback paused.",
     "nextCandle": "Next available candle",
-    "overview": "Overview",
     "fromStart": "Play from start",
-    "fromHere": "Play from here",
-    "previousEvent": "Previous event",
-    "nextEvent": "Next event",
     "play": "Play",
     "pause": "Pause",
     "speed": "Playback speed",
-    "viewResult": "View full result",
     "refresh": "Refresh",
     "symbol": "Symbol",
     "executionTimeframe": "Execution timeframe",
     "auxiliaryTimeframes": "Auxiliary timeframes",
-    "start": "Start · UTC",
-    "end": "End · UTC",
+    "start": "Start",
+    "end": "End",
     "capital": "Initial capital",
     "market": "Market",
     "leverage": "Leverage",
@@ -397,8 +398,8 @@
     "commission": "Commission rate",
     "slippage": "Slippage rate",
     "dataSource": "Data source",
-    "availableStart": "Data start · UTC",
-    "availableEnd": "Data end · UTC",
+    "availableStart": "Data start",
+    "availableEnd": "Data end",
     "position": "Position quantity",
     "equity": "Equity",
     "cash": "Cash",
@@ -425,12 +426,10 @@
     "insights": "Insights",
     "collapse": "Collapse",
     "expand": "Expand",
-    "awaitingTrade": "Awaiting event",
-    "allTrades": "View all trades",
     "unvalidated": "Unvalidated",
     "suggestion": "Suggestion",
     "tradeoff": "Trade-off",
-    "relatedTrade": "Related trade",
+    "relatedTrade": "Related trade #{number}",
     "askAgent": "Ask Agent",
     "loadMore": "Load more",
     "loadingTrades": "Loading trades",
@@ -442,7 +441,7 @@
     "entry": "Entry",
     "exit": "Exit",
     "quantity": "Quantity",
-    "fills": "Fills",
+    "fills": "Fills · {count}",
     "holding": "Holding time",
     "seconds": "{count} seconds",
     "previousPage": "Previous",
@@ -481,12 +480,12 @@
     "playback": {
       "paused": "Paused",
       "playing": "Playing",
-      "event-hold": "Event",
+      "event-hold": "Key moment pause",
       "buffering": "Buffering"
     },
     "scope": {
-      "global": "Global",
-      "runtime": "Runtime"
+      "global": "Whole backtest",
+      "runtime": "Specific moments"
     },
     "actions": {
       "open": "Open",
@@ -505,11 +504,17 @@
       "other": "Other",
       "rule": "Strategy rule"
     },
+    "ohlcShort": {
+      "open": "Open",
+      "high": "High",
+      "low": "Low",
+      "close": "Close"
+    },
     "ohlc": {
-      "open": "O",
-      "high": "H",
-      "low": "L",
-      "close": "C"
+      "open": "Open",
+      "high": "High",
+      "low": "Low",
+      "close": "Close"
     },
     "errors": {
       "chart": "Chart could not load",
@@ -554,7 +559,46 @@
       "force_close_at_last_close": "Close at final candle close"
     },
     "positionBefore": "Position before",
-    "positionAfter": "Position after"
+    "positionAfter": "Position after",
+    "tradeTotal": "Trades",
+    "tradeRecords": "Trade history",
+    "barsPerSecond": "{count} bars/s",
+    "grossProfit": "Gross profit",
+    "resultLocations": "Locate result",
+    "shortcuts": {
+      "best": "Best trade",
+      "worst": "Worst trade",
+      "drawdown": "Max drawdown interval"
+    },
+    "holdingDirection": {
+      "long": "Holding long",
+      "short": "Holding short",
+      "flat": "Flat"
+    },
+    "fillActions": {
+      "long": {
+        "open": "Open long",
+        "increase": "Add long",
+        "reduce": "Reduce long",
+        "close": "Close long"
+      },
+      "short": {
+        "open": "Open short",
+        "increase": "Add short",
+        "reduce": "Reduce short",
+        "close": "Close short"
+      }
+    },
+    "toStart": "Go to start",
+    "toEnd": "Go to end",
+    "noTradesYet": "No trades yet",
+    "priceChange": "Change",
+    "percentChange": "Change %",
+    "markerKinds": {
+      "buy": "Buy",
+      "sell": "Sell",
+      "insight": "Insight"
+    }
   },
   "openSource": {
     "title": "Open source notices",

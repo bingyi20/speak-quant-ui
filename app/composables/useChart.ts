@@ -12,6 +12,9 @@ export function useChart(host: Ref<HTMLElement | null>, factory: ChartFactory) {
       grid: color('--color-chart-grid'),
       up: color('--color-chart-up'),
       down: color('--color-chart-down'),
+      buy: color('--color-chart-buy'),
+      sell: color('--color-chart-sell'),
+      tagText: color('--color-chart-tag-text'),
     }
   }
   function dispose() {

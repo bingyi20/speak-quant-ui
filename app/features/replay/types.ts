@@ -183,6 +183,11 @@ export interface ReplayTrade {
   holding_seconds: number | null
   fills: ReplayFill[]
 }
+export type ReplayTradeView = Omit<ReplayTrade, 'entry_price' | 'quantity'> & {
+  entry_price: string | null
+  quantity: string | null
+  isComplete: boolean
+}
 export interface ReplayEvidence {
   summary?: string
   trade_id?: string
@@ -232,7 +237,6 @@ export interface ReplayQuestionReference {
   label: string
 }
 export interface ReplayViewSnapshot {
-  mode: 'overview' | 'playback'
   index: number
   speed: number
   timeframe: string

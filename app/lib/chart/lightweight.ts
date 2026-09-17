@@ -1,11 +1,15 @@
+import { formatDateTime } from '~/lib/format'
+import { TradeTags } from './trade-tags'
+import { TimeLabel } from './time-label'
 import {
   CandlestickSeries,
   ColorType,
   HistogramSeries,
   LineStyle,
+  TickMarkType,
   createChart,
-  createSeriesMarkers,
   type IPriceLine,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts'
 import type {
@@ -26,6 +30,7 @@ export function createLightweightChart(
     plotted: readonly Candle[] = [],
     currentMarkers: readonly ChartMarker[] = [],
     selection: ChartSelection | null = null
+  const desktop = () => window.matchMedia('(min-width: 761px)').matches
   const chart = createChart(element, {
     width: Math.max(1, element.clientWidth),
     height: Math.max(1, element.clientHeight),
@@ -35,6 +40,9 @@ export function createLightweightChart(
       fontSize: 12,
       attributionLogo: false,
     },
+    localization: desktop()
+      ? { timeFormatter: (time: Time) => formatDateTime(Number(time) * 1000) }
+      : undefined,
     grid: { vertLines: { visible: false }, horzLines: { color: theme.grid } },
     rightPriceScale: { borderVisible: false, minimumWidth: 68 },
     timeScale: {
@@ -42,8 +50,14 @@ export function createLightweightChart(
       timeVisible: true,
       secondsVisible: false,
       rightOffset: 8,
+      tickMarkFormatter: desktop()
+        ? (time: Time, type: TickMarkType) => {
+            const text = formatDateTime(Number(time) * 1000)
+            return type >= TickMarkType.Time ? text.slice(11) : text.slice(0, 10)
+          }
+        : undefined,
     },
-    crosshair: { mode: 0 },
+    crosshair: { mode: 0, vertLine: { labelVisible: !desktop() } },
     handleScroll: { vertTouchDrag: false },
   })
   const series = chart.addSeries(CandlestickSeries, {
@@ -62,7 +76,27 @@ export function createLightweightChart(
     priceLineVisible: false,
   })
   volume.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } })
-  const markers = createSeriesMarkers(series, [])
+  let volumeVisible = false
+  function updateMargins(height = element.clientHeight) {
+    // Reserve quote + tag headroom in price coordinates, leaving the canvas/grid intact.
+    series.priceScale().applyOptions({
+      scaleMargins: {
+        top: desktop() ? Math.min(0.4, Math.max(0.08, 80 / Math.max(1, height - 28))) : 0.08,
+        bottom: volumeVisible ? 0.2 : 0.08,
+      },
+    })
+  }
+  const markers = new TradeTags(theme)
+  series.attachPrimitive(markers)
+  const timeLabelColors = () => {
+    const css = getComputedStyle(element)
+    return {
+      background: css.getPropertyValue('--color-chart-time-label-bg').trim(),
+      text: css.getPropertyValue('--color-chart-time-label-text').trim(),
+    }
+  }
+  const timeLabel = desktop() ? new TimeLabel(timeLabelColors()) : null
+  if (timeLabel) series.attachPrimitive(timeLabel)
   const shade = document.createElement('div')
   shade.className = 'replay-evidence-shade'
   shade.setAttribute('aria-hidden', 'true')
@@ -75,7 +109,9 @@ export function createLightweightChart(
     BUFFER = 500
   const rangeHandlers = new Set<(r: ChartRange) => void>(),
     selectHandlers = new Set<(time: number, id?: string) => void>(),
-    crosshairHandlers = new Set<(time: number | null) => void>()
+    crosshairHandlers = new Set<
+      (time: number | null, marker?: import('./adapter').ChartMarkerHit) => void
+    >()
   const candle = (c: Candle) => ({
     time: c.time as UTCTimestamp,
     open: c.open,
@@ -161,30 +197,13 @@ export function createLightweightChart(
   function setMarkers(value: readonly ChartMarker[]) {
     currentMarkers = value
     markers.setMarkers(
-      value
-        .filter(
-          (m) => plotted.length && m.time >= plotted[0]!.time && m.time <= plotted.at(-1)!.time,
-        )
-        .map((m) => ({
-          id: m.id,
-          time: m.time as UTCTimestamp,
-          position: m.direction === 'up' ? ('belowBar' as const) : ('aboveBar' as const),
-          shape:
-            m.direction === 'neutral'
-              ? ('circle' as const)
-              : m.direction === 'up'
-                ? ('arrowUp' as const)
-                : ('arrowDown' as const),
-          color:
-            m.direction === 'up'
-              ? theme.up
-              : m.direction === 'down'
-                ? theme.down
-                : (theme.accent ?? theme.text),
-          text: m.label,
-        })),
+      value.filter(
+        (marker) =>
+          plotted.length && marker.time >= plotted[0]!.time && marker.time <= plotted.at(-1)!.time,
+      ),
     )
   }
+
   function setSelection(value: ChartSelection | null) {
     selection = value
     priceLines.forEach((line) => series.removePriceLine(line))
@@ -203,8 +222,9 @@ export function createLightweightChart(
         )
     updateShade()
   }
+  // Time ranges round to candle boundaries; logical ranges also track fractional pans.
+  chart.timeScale().subscribeVisibleLogicalRangeChange(updateShade)
   chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-    updateShade()
     if (
       movingWindow ||
       destroyed ||
@@ -232,17 +252,21 @@ export function createLightweightChart(
     }
   })
   chart.subscribeClick((event) => {
-    if (typeof event.time === 'number')
+    const marker = currentMarkers.find((item) => item.id === event.hoveredObjectId)
+    if (typeof event.time === 'number' || marker)
       selectHandlers.forEach((h) =>
         h(
-          event.time as number,
+          marker?.time ?? (event.time as number),
           typeof event.hoveredObjectId === 'string' ? event.hoveredObjectId : undefined,
         ),
       )
   })
-  chart.subscribeCrosshairMove((event) =>
-    crosshairHandlers.forEach((h) => h(typeof event.time === 'number' ? event.time : null)),
-  )
+  chart.subscribeCrosshairMove((event) => {
+    const time = typeof event.time === 'number' ? event.time : null
+    timeLabel?.setTime(time)
+    const hit = event.point ? markers.markerAt(event.point.x, event.point.y) : undefined
+    crosshairHandlers.forEach((h) => h(time, hit))
+  })
   function setVisibleRange(requested: ChartRange) {
     if (!rows.length || requested.from >= requested.to) return
     const range = renderWindow(requested)
@@ -304,12 +328,13 @@ export function createLightweightChart(
     setSelection,
     setVolume(visible) {
       volume.applyOptions({ visible })
-      series
-        .priceScale()
-        .applyOptions({ scaleMargins: { top: 0.08, bottom: visible ? 0.2 : 0.08 } })
+      volumeVisible = visible
+      updateMargins()
     },
     applyTheme(value) {
       theme = value
+      markers.setTheme(value)
+      timeLabel?.setColors(timeLabelColors())
       chart.applyOptions({
         layout: {
           background: { type: ColorType.Solid, color: theme.background },
@@ -331,6 +356,7 @@ export function createLightweightChart(
     resize(width, height) {
       if (width > 0 && height > 0) {
         chart.resize(Math.floor(width), Math.floor(height))
+        updateMargins(height)
         updateShade()
       }
     },
@@ -358,7 +384,8 @@ export function createLightweightChart(
       rangeHandlers.clear()
       selectHandlers.clear()
       crosshairHandlers.clear()
-      markers.detach()
+      series.detachPrimitive(markers)
+      if (timeLabel) series.detachPrimitive(timeLabel)
       shade.remove()
       chart.remove()
     },

@@ -1,16 +1,31 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
-import type { ChartAdapter, ChartMarker, ChartRange, ChartTheme } from '~/lib/chart/adapter'
-import { formatDecimal } from '~/lib/format'
+import type {
+  ChartAdapter,
+  ChartMarker,
+  ChartMarkerHit,
+  ChartRange,
+  ChartTheme,
+} from '~/lib/chart/adapter'
+import {
+  formatDate,
+  formatDateTime,
+  formatDecimal,
+  formatRatio,
+  formatQuantity,
+} from '~/lib/format'
+import { tradeTooltipPosition } from '~/lib/chart/tooltip-position'
 import { nearestBar, nextBarTime } from '../normalize'
-import type { ReplayBar, ReplayEvent, ReplaySelection, ReplayTrade } from '../types'
+import { fillActionKey } from '../events'
+import { candleChange } from '../visibility'
+import type { ReplayBar, ReplayEvent, ReplaySelection, ReplayTradeView } from '../types'
 const props = defineProps<{
   bars: readonly ReplayBar[]
   events: readonly ReplayEvent[]
   selection: ReplaySelection | null
-  trade: ReplayTrade | null
+  trade: ReplayTradeView | null
   timeframe: string
-  mode: 'overview' | 'playback'
+  playing: boolean
   follow: boolean
   range: (ChartRange & { revision: number }) | null
   volume: boolean
@@ -27,8 +42,83 @@ const host = useTemplateRef<HTMLElement>('host'),
   hover = ref<ReplayBar | null>(null),
   failure = ref(false)
 const cluster = ref<ReplayEvent[]>([])
+const hoveredTag = ref<ChartMarkerHit | null>(null)
+const hoveredFills = ref<ReplayEvent[]>([])
+const fillElement = useTemplateRef<HTMLElement>('fillElement')
+const fillSize = ref({ width: 240, height: 86 })
+let fillResize: ResizeObserver | undefined
+watch(fillElement, (element) => {
+  fillResize?.disconnect()
+  if (!element) return
+  const measure = () => {
+    fillSize.value = { width: element.offsetWidth, height: element.offsetHeight }
+  }
+  measure()
+  fillResize = new ResizeObserver(measure)
+  fillResize.observe(element)
+})
+const fillPosition = computed(() => {
+  const tag = hoveredTag.value
+  if (!tag || !host.value) return null
+  return tradeTooltipPosition(tag, fillSize.value, {
+    width: host.value.clientWidth - 68,
+    height: host.value.clientHeight - 28,
+  })
+})
+const fillStyle = computed(() => ({
+  left: `${fillPosition.value?.left ?? 8}px`,
+  top: `${fillPosition.value?.top ?? 8}px`,
+  maxHeight: `${Math.max(86, (host.value?.clientHeight ?? 300) - 44)}px`,
+}))
+
+function interact() {
+  clearFill()
+  emit('interact')
+}
+let fillCloseTimer: ReturnType<typeof setTimeout> | undefined
+let insideFill = false
+function keepFill() {
+  clearTimeout(fillCloseTimer)
+  fillCloseTimer = undefined
+}
+function enterFill() {
+  insideFill = true
+  keepFill()
+}
+function scheduleFillClose() {
+  if (insideFill || fillCloseTimer) return
+  fillCloseTimer = setTimeout(clearFill, 220)
+}
+function leaveFill() {
+  insideFill = false
+  scheduleFillClose()
+}
+function clearFill() {
+  keepFill()
+  insideFill = false
+  hoveredTag.value = null
+  hoveredFills.value = []
+}
+const desktop = () => window.matchMedia('(min-width: 761px)').matches
 const markerGroups = new Map<string, ReplayEvent[]>()
-const quoted = computed(() => hover.value ?? props.bars.at(-1))
+const quoted = computed(() => {
+  const row = hover.value ? props.bars[nearestBar(props.bars, hover.value.time)] : undefined
+  return row && row.time === hover.value?.time ? row : props.bars.at(-1)
+})
+const changes = computed(() => {
+  const n = quoted.value ? nearestBar(props.bars, quoted.value.time) : -1
+  return candleChange(quoted.value, props.bars[n - 1], props.timeframe)
+})
+const quoteDate = computed(() => {
+  if (!quoted.value) return '—'
+  const time = quoted.value.time * 1000
+  if (desktop()) return formatDateTime(time)
+  return (
+    formatDate(new Date(time).toISOString(), locale.value) +
+    ' ' +
+    new Intl.DateTimeFormat(locale.value, { weekday: 'short', timeZone: 'UTC' }).format(time)
+  )
+})
 let adapter: ChartAdapter | undefined,
   resize: ResizeObserver | undefined,
   themeObserver: MutationObserver | undefined,
@@ -45,19 +135,22 @@ function theme(): ChartTheme {
     background: value('--color-bg-surface'),
     text: value('--color-text-muted'),
     grid: value('--color-chart-grid'),
-    up: value('--color-chart-up'),
-    down: value('--color-chart-down'),
+    up: value(desktop() ? '--color-chart-candle-up' : '--color-chart-up'),
+    buy: value('--color-chart-buy'),
+    sell: value('--color-chart-sell'),
+    tagText: value('--color-chart-tag-text'),
+    down: value(desktop() ? '--color-chart-candle-down' : '--color-chart-down'),
     accent: value('--color-brand'),
-    volumeUp: value('--color-chart-volume-up'),
-    volumeDown: value('--color-chart-volume-down'),
+    volumeUp: value(desktop() ? '--color-chart-candle-volume-up' : '--color-chart-volume-up'),
+    volumeDown: value(desktop() ? '--color-chart-candle-volume-down' : '--color-chart-volume-down'),
   }
 }
 function markers() {
   markerGroups.clear()
   const bars = props.bars,
-    grouped = new Map<number, ReplayEvent[]>()
+    grouped = new Map<string, { bar: ReplayBar; items: ReplayEvent[] }>()
   for (const event of props.events) {
-    if (event.kind !== 'fill' && event.kind !== 'insight') continue
+    if (event.kind !== 'fill') continue
     const time = event.fill ? Date.parse(event.fill.occurred_at) / 1000 : event.time
     let lo = 0,
       hi = bars.length - 1
@@ -71,13 +164,14 @@ function markers() {
     if (!bar) continue
     const end = bar.closeTime ?? nextBarTime(bar.time, props.timeframe)
     if (end && time > end) continue
-    const list = grouped.get(bar.time) ?? []
-    list.push(event)
-    grouped.set(bar.time, list)
+    const key = `${bar.time}:${event.fill?.side}`
+    const group = grouped.get(key) ?? { bar, items: [] }
+    group.items.push(event)
+    grouped.set(key, group)
   }
-  const values: ChartMarker[] = [...grouped]
-    .sort((a, b) => a[0] - b[0])
-    .map(([time, items]) => {
+  const values: ChartMarker[] = [...grouped.values()]
+    .sort((a, b) => a.bar.time - b.bar.time)
+    .map(({ bar, items }) => {
       const e =
         items.find(
           (e) =>
@@ -87,16 +181,11 @@ function markers() {
       markerGroups.set(e.id, items)
       return {
         id: e.id,
-        time,
-        direction: e.fill ? (e.fill.side === 'buy' ? 'up' : 'down') : 'neutral',
-        label:
-          items.length > 1
-            ? String(items.length)
-            : e.fill
-              ? t(
-                  `replay.actions.${['open', 'increase', 'reduce', 'close'].includes(e.fill.action) ? e.fill.action : 'trade'}`,
-                )
-              : '',
+        time: bar.time,
+        side: e.fill?.side === 'buy' ? 'buy' : 'sell',
+        price: Number(e.fill?.price),
+        edgePrice: bar.high,
+        label: `${e.fill?.side === 'buy' ? 'B' : 'S'}${items.length > 1 ? `×${items.length}` : ''}`,
       }
     })
   adapter?.setMarkers(values)
@@ -122,7 +211,9 @@ function selected() {
               : undefined),
           prices: trade
             ? [
-                { price: Number(trade.entry_price), label: t('replay.entry') },
+                ...(trade.entry_price
+                  ? [{ price: Number(trade.entry_price), label: t('replay.entry') }]
+                  : []),
                 ...(trade.exit_price
                   ? [{ price: Number(trade.exit_price), label: t('replay.exit') }]
                   : []),
@@ -138,7 +229,7 @@ function draw() {
   const rows = props.bars
   const saved = adapter.getViewState()
   const append =
-    props.mode === 'playback' &&
+    props.playing &&
     previous.length > 0 &&
     rows.length >= previous.length &&
     rows[0]?.id === previous[0]?.id &&
@@ -151,8 +242,8 @@ function draw() {
       to = rows.at(-1)!.time
     if (to > from) adapter.setVisibleRange({ from, to })
     initial = false
-  } else if (saved && props.mode === 'overview') adapter.setVisibleRange(saved)
-  if (props.mode === 'playback' && props.follow && rows.length) adapter.follow()
+  } else if (saved && !props.follow) adapter.setVisibleRange(saved)
+  if (props.follow && rows.length) adapter.follow()
   selected()
 }
 async function mount() {
@@ -167,12 +258,24 @@ async function mount() {
     adapter.onRangeChange((range) => emit('range', range))
     adapter.onSelect((time, marker) => {
       const items = marker ? markerGroups.get(marker) : null
+      if (desktop()) {
+        const bar = props.bars[nearestBar(props.bars, time)]
+        hover.value = bar?.time === time ? bar : null
+        return
+      }
       if (items && items.length > 1) {
         cluster.value = items
         emit('interact')
       } else emit('select', time, marker)
     })
-    adapter.onCrosshair((time) => {
+    adapter.onCrosshair((time, marker) => {
+      if (desktop()) {
+        if (marker) {
+          keepFill()
+          hoveredTag.value = marker
+          hoveredFills.value = markerGroups.get(marker.id) ?? []
+        } else scheduleFillClose()
+      }
       const bar = time === null ? undefined : props.bars[nearestBar(props.bars, time)]
       hover.value = bar?.time === time ? bar : null
       emit('hover', time)
@@ -190,21 +293,15 @@ function chooseEvent(event: ReplayEvent) {
 }
 function reset() {
   if (!adapter) return
-  if (props.mode === 'playback') adapter.follow()
-  else {
-    const rows = props.bars
-    if (rows.length > 1)
-      adapter.setVisibleRange({
-        from: rows[Math.max(0, rows.length - 200)]!.time,
-        to: rows.at(-1)!.time,
-      })
-  }
+  adapter.follow()
 }
 defineExpose({ reset })
 watch(
   () => props.bars,
   () => {
     cluster.value = []
+    clearFill()
+    hover.value = null
     draw()
   },
 )
@@ -238,6 +335,8 @@ onMounted(() => {
   })
 })
 onBeforeUnmount(() => {
+  clearFill()
+  fillResize?.disconnect()
   alive = false
   cancelAnimationFrame(frame)
   resize?.disconnect()
@@ -248,15 +347,63 @@ onBeforeUnmount(() => {
 <template>
   <div class="replay-chart-block">
     <div
-      class="replay-ohlc"
+      class="replay-quote"
       aria-live="off"
     >
-      <span>{{ symbol }}</span
-      ><span
-        v-for="key in ['open', 'high', 'low', 'close'] as const"
-        :key="key"
-        >{{ t(`replay.ohlc.${key}`) }} {{ price(quoted?.[key]) }}</span
+      <div class="replay-quote-date">
+        <span>{{ symbol }}</span
+        ><time :datetime="quoted ? new Date(quoted.time * 1000).toISOString() : undefined">{{
+          quoteDate
+        }}</time>
+      </div>
+      <dl
+        class="replay-ohlc"
+        :class="
+          quoted ? (quoted.close >= quoted.open ? 'is-candle-up' : 'is-candle-down') : undefined
+        "
       >
+        <div
+          v-for="key in ['open', 'high', 'low', 'close'] as const"
+          :key="key"
+        >
+          <dt>{{ t(`replay.${desktop() ? 'ohlcShort' : 'ohlc'}.${key}`) }}</dt>
+          <dd>{{ price(quoted?.[key]) }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('replay.priceChange') }}</dt>
+          <dd
+            :class="{
+              'is-positive': (changes.amount ?? 0) > 0,
+              'is-negative': (changes.amount ?? 0) < 0,
+            }"
+          >
+            {{ (changes.amount ?? 0) > 0 ? '+' : ''
+            }}{{ changes.amount === null ? '—' : price(changes.amount) }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t('replay.percentChange') }}</dt>
+          <dd
+            :class="{
+              'is-positive': (changes.rate ?? 0) > 0,
+              'is-negative': (changes.rate ?? 0) < 0,
+            }"
+          >
+            {{ (changes.rate ?? 0) > 0 ? '+' : ''
+            }}{{ formatRatio(changes.rate === null ? null : String(changes.rate), locale) }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t('replay.volume') }}</dt>
+          <dd class="replay-quote-volume">
+            {{
+              desktop()
+                ? formatQuantity(quoted?.volume.toString(), locale)
+                : formatDecimal(quoted?.volume.toString(), locale)
+            }}
+          </dd>
+        </div>
+      </dl>
     </div>
     <div
       v-if="cluster.length"
@@ -271,8 +418,7 @@ onBeforeUnmount(() => {
         @click="chooseEvent(event)"
       >
         {{
-          event.insight?.title ||
-          `${t(`replay.actions.${['open', 'increase', 'reduce', 'close'].includes(event.fill?.action ?? '') ? event.fill!.action : 'trade'}`)} · #${event.trade?.sequence}`
+          `${t(fillActionKey(event.fill?.action ?? '', event.trade?.direction))} · #${event.trade?.sequence}`
         }}
       </button>
       <button
@@ -284,12 +430,44 @@ onBeforeUnmount(() => {
       </button>
     </div>
     <div
+      v-if="hoveredTag && hoveredFills.length"
+      ref="fillElement"
+      class="replay-chart-local-fill"
+      :data-placement="fillPosition?.placement"
+      role="tooltip"
+      :style="fillStyle"
+      @pointerenter="enterFill"
+      @pointerleave="leaveFill"
+    >
+      <strong
+        >{{ formatDateTime(hoveredFills[0]?.fill?.occurred_at ?? '') }}
+        {{ t('replay.orderDetails') }}</strong
+      >
+      <div
+        v-for="event in hoveredFills"
+        :key="event.id"
+        class="replay-fill-tooltip-row"
+      >
+        <span :class="event.fill?.side === 'buy' ? 'is-buy' : 'is-sell'">{{
+          t(event.fill?.side === 'buy' ? 'replay.markerKinds.buy' : 'replay.markerKinds.sell')
+        }}</span>
+        <span
+          >{{ formatQuantity(event.fill?.quantity, locale) }}@{{
+            price(Number(event.fill?.price))
+          }}</span
+        >
+      </div>
+    </div>
+    <div
       ref="host"
       class="replay-chart"
       role="img"
+      :data-visible-start="bars[0]?.time"
+      :data-visible-end="bars.at(-1)?.time"
       :aria-label="t('replay.chartLabel', { symbol, timeframe })"
-      @pointerdown="emit('interact')"
-      @wheel.passive="emit('interact')"
+      @pointerdown="interact"
+      @wheel.passive="interact"
+      @pointerleave="scheduleFillClose"
     />
     <div
       v-if="failure"

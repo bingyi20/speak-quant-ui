@@ -2,6 +2,14 @@ import Decimal from 'decimal.js'
 import { decimal, evidenceIds } from './normalize'
 import type { ReplayBar, ReplayEvent, ReplayInsight, ReplaySelection, ReplayTrade } from './types'
 
+/** Position direction belongs to the trade; buy/sell alone cannot distinguish open/close. */
+export function fillActionKey(action: string, direction?: string) {
+  const knownAction = ['open', 'increase', 'reduce', 'close'].includes(action)
+  return knownAction && (direction === 'long' || direction === 'short')
+    ? `replay.fillActions.${direction}.${action}`
+    : `replay.actions.${knownAction ? action : 'trade'}`
+}
+
 export function buildReplayEvents(
   bars: readonly ReplayBar[],
   trades: readonly ReplayTrade[],
@@ -86,7 +94,7 @@ export function buildReplayEvents(
 export function resolveSelection(
   selection: ReplaySelection,
   bars: readonly ReplayBar[],
-  trades: readonly ReplayTrade[],
+  trades: readonly Pick<ReplayTrade, 'id' | 'entry_candle_id' | 'exit_candle_id' | 'fills'>[],
   insights: readonly ReplayInsight[],
 ): ReplaySelection | null {
   const byId = new Map(bars.map((c) => [c.id, c]))

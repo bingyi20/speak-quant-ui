@@ -355,8 +355,14 @@
     }
   },
   "replay": {
+    "orderDetails": "订单明细",
+    "fillPrice": "成交价",
     "conditions": "条件",
-    "fullResult": "完整回测",
+    "currentPosition": "当前持仓",
+    "positionStatus": "仓位状态",
+    "asOfResult": "截至此时",
+    "viewMetrics": "查看详情",
+    "fullResult": "最终结果",
     "netReturn": "净收益率",
     "drawdown": "最大回撤",
     "trades": "交易",
@@ -364,32 +370,27 @@
     "profitFactor": "盈亏因子",
     "metrics": "全部指标",
     "viewTimeframe": "查看周期",
-    "execution": "执行 {timeframe}",
+    "execution": "策略周期 {timeframe}",
     "volume": "成交量",
     "resetChart": "重置视野",
     "noCandles": "暂无行情数据",
-    "afterClose": "该 K 线收盘后的状态",
+    "afterClose": "该 K 线收盘后",
     "starting": "起点",
-    "cumulative": "累计收益",
+    "cumulative": "截至此时收益",
     "unrealized": "浮动盈亏",
-    "state": "当前状态",
+    "state": "收盘后账户状态",
     "gap": "行情缺失，播放已暂停",
     "nextCandle": "跳至下一根",
-    "overview": "整体预览",
     "fromStart": "从头播放",
-    "fromHere": "从这里播放",
-    "previousEvent": "上个事件",
-    "nextEvent": "下个事件",
     "play": "播放",
     "pause": "暂停",
     "speed": "播放速度",
-    "viewResult": "查看完整结果",
     "refresh": "刷新",
     "symbol": "交易对",
     "executionTimeframe": "执行周期",
     "auxiliaryTimeframes": "辅助周期",
-    "start": "开始时间 · UTC",
-    "end": "结束时间 · UTC",
+    "start": "开始时间",
+    "end": "结束时间",
     "capital": "初始资金",
     "market": "市场",
     "leverage": "杠杆",
@@ -397,8 +398,8 @@
     "commission": "手续费率",
     "slippage": "滑点率",
     "dataSource": "数据源",
-    "availableStart": "数据起点 · UTC",
-    "availableEnd": "数据终点 · UTC",
+    "availableStart": "数据起点",
+    "availableEnd": "数据终点",
     "position": "持仓数量",
     "equity": "权益",
     "cash": "现金",
@@ -425,12 +426,10 @@
     "insights": "洞察",
     "collapse": "收起",
     "expand": "展开",
-    "awaitingTrade": "等待事件",
-    "allTrades": "查看全部交易",
     "unvalidated": "未经验证",
     "suggestion": "改进建议",
     "tradeoff": "权衡",
-    "relatedTrade": "关联交易",
+    "relatedTrade": "关联交易 #{number}",
     "askAgent": "询问 Agent",
     "loadMore": "加载更多",
     "loadingTrades": "交易加载中",
@@ -442,7 +441,7 @@
     "entry": "入场",
     "exit": "离场",
     "quantity": "数量",
-    "fills": "成交明细",
+    "fills": "成交明细 · {count} 次",
     "holding": "持仓时长",
     "seconds": "{count} 秒",
     "previousPage": "上一页",
@@ -481,12 +480,12 @@
     "playback": {
       "paused": "已暂停",
       "playing": "播放中",
-      "event-hold": "事件停留",
+      "event-hold": "关键时刻停留",
       "buffering": "加载中"
     },
     "scope": {
-      "global": "整体",
-      "runtime": "过程"
+      "global": "整段回测",
+      "runtime": "特定时刻"
     },
     "actions": {
       "open": "开仓",
@@ -505,11 +504,17 @@
       "other": "其他原因",
       "rule": "策略规则"
     },
-    "ohlc": {
+    "ohlcShort": {
       "open": "开",
       "high": "高",
       "low": "低",
       "close": "收"
+    },
+    "ohlc": {
+      "open": "开盘",
+      "high": "最高",
+      "low": "最低",
+      "close": "收盘"
     },
     "errors": {
       "chart": "图表加载失败",
@@ -530,7 +535,7 @@
       "gross_return_rate": "毛收益率",
       "net_profit": "净利润",
       "max_drawdown_rate": "最大回撤",
-      "trade_count": "交易",
+      "trade_count": "交易笔数",
       "win_rate": "胜率",
       "profit_factor": "盈亏因子",
       "payoff_ratio": "盈亏比",
@@ -554,7 +559,46 @@
       "force_close_at_last_close": "末根收盘强制平仓"
     },
     "positionBefore": "成交前仓位",
-    "positionAfter": "成交后仓位"
+    "positionAfter": "成交后仓位",
+    "tradeTotal": "交易笔数",
+    "tradeRecords": "交易记录",
+    "barsPerSecond": "{count} 根/秒",
+    "grossProfit": "毛利润",
+    "resultLocations": "结果定位",
+    "shortcuts": {
+      "best": "最大盈利交易",
+      "worst": "最大亏损交易",
+      "drawdown": "最大回撤区间"
+    },
+    "holdingDirection": {
+      "long": "持有多仓",
+      "short": "持有空仓",
+      "flat": "空仓"
+    },
+    "fillActions": {
+      "long": {
+        "open": "开多",
+        "increase": "加多",
+        "reduce": "减多",
+        "close": "平多"
+      },
+      "short": {
+        "open": "开空",
+        "increase": "加空",
+        "reduce": "减空",
+        "close": "平空"
+      }
+    },
+    "toStart": "定位到开始",
+    "toEnd": "定位到结束",
+    "noTradesYet": "截至此时暂无交易",
+    "priceChange": "涨跌额",
+    "percentChange": "涨跌幅",
+    "markerKinds": {
+      "buy": "买入",
+      "sell": "卖出",
+      "insight": "洞察"
+    }
   },
   "openSource": {
     "title": "开源声明",
