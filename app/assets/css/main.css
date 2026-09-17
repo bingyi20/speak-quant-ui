@@ -220,7 +220,7 @@ p {
 }
 .landing-hero h1 {
   font-family: var(--font-display);
-  font-size: clamp(40px, 4.2vw, 61px);
+  font-size: clamp(36px, 4.2vw, 61px);
   line-height: 1.48;
   font-weight: 400;
   letter-spacing: -0.8px;
@@ -234,6 +234,9 @@ p {
   color: var(--color-text-secondary);
   line-height: 1.9;
   margin-bottom: 35px;
+}
+.research-entry {
+  width: min(100%, var(--home-width));
 }
 .research-composer {
   background: var(--color-bg-surface);
@@ -310,30 +313,36 @@ p {
 .quick-examples {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: 24px;
+  gap: 12px;
+  margin-top: 18px;
 }
 .quick-examples button {
-  border: 0;
-  background: transparent;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-bg-sidebar);
   text-align: left;
   color: var(--color-text-secondary);
-  padding: 10px 4px;
+  padding: 16px;
   min-width: 0;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast);
 }
 .quick-examples button:hover {
   color: var(--color-brand);
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-selected-hover);
 }
 .quick-examples svg {
   width: 50px;
   height: 27px;
-  color: var(--color-text-muted);
-  opacity: 0.72;
+  color: var(--color-brand);
+  opacity: 0.8;
   margin-bottom: 10px;
 }
 .quick-examples span {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 4px;
   font-size: 13px;
@@ -737,30 +746,6 @@ p {
   font-size: clamp(29px, 3vw, 42px);
   line-height: 1.45;
   font-weight: 400;
-}
-.new-task-inner .quick-examples {
-  gap: 12px;
-  margin-top: 18px;
-}
-.new-task-inner .quick-examples button {
-  padding: 16px;
-  border: 1px solid var(--color-border-default);
-  border-radius: 12px;
-  background: var(--color-bg-sidebar);
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast);
-}
-.new-task-inner .quick-examples button:hover {
-  background: var(--color-bg-selected);
-  border-color: var(--color-border-selected-hover);
-}
-.new-task-inner .quick-examples svg {
-  color: var(--color-brand);
-  opacity: 0.8;
-}
-.new-task-inner .quick-examples span {
-  align-items: flex-start;
 }
 .workspace-disclaimer {
   text-align: center;
@@ -1666,9 +1651,6 @@ p {
   .has-panel .conversation-input {
     padding: 20px 16px;
   }
-  .quick-examples {
-    gap: 10px;
-  }
 }
 @media (max-width: 760px) {
   .public-header {
@@ -1691,9 +1673,7 @@ p {
     letter-spacing: 1.4px;
   }
   .quick-examples {
-    grid-template-columns: repeat(2, 1fr);
-    column-gap: 28px;
-    row-gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .quick-examples svg {
     width: 40px;

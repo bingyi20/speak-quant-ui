@@ -11,7 +11,7 @@ usePageSeo(
   <section class="new-task-page">
     <div class="new-task-inner">
       <h1>{{ $t('research.title') }}</h1>
-      <ResearchEntry :show-hint="false" />
+      <ResearchEntry />
     </div>
     <p class="workspace-disclaimer">{{ $t('landing.footer') }}</p>
   </section>

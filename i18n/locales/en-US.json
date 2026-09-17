@@ -29,9 +29,9 @@
   },
   "landing": {
     "eyebrow": "TRADING RESEARCH WORKSPACE",
-    "title1": "Give every idea",
-    "title2": "a fair test",
-    "subtitle": "Start with a trading idea. Understand your strategy through historical evidence, and make a more informed next move.",
+    "title1": "3 minutes to ",
+    "title2": "test your trading idea",
+    "subtitle": "Trade Lab is an AI agent for quantitative strategy research. Describe your trading idea in natural language to design strategies, generate code, and analyze historical backtests through conversation.",
     "explore": "Explore the process",
     "methodTitle": "From an idea to evidence.",
     "methodIntro": "Keep the research in one conversation. Form a hypothesis, backtest the strategy, and keep asking questions.",

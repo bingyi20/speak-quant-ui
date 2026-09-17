@@ -34,9 +34,9 @@ test('public landing renders on the server and links into the workspace', async 
   })
   const response = await request.get('/')
   expect(response.ok()).toBeTruthy()
-  expect(await response.text()).toContain('让每一个想法')
+  expect(await response.text()).toContain('3 分钟')
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /让每一个想法，\s*经得起验证。/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /3 分钟，\s*验证你的交易想法。/ })).toBeVisible()
   await page.getByRole('link', { name: '进入工作台' }).first().click()
   await expect(page).toHaveURL(/\/new-task$/)
   await expect(page.getByRole('heading', { name: '今天，想验证什么？' })).toBeVisible()
@@ -105,7 +105,7 @@ test('all routes return 200, show the correct page, and have no horizontal overf
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   const routes = [
-    ['/', /让每一个想法，\s*经得起验证。/],
+    ['/', /3 分钟，\s*验证你的交易想法。/],
     ['/new-task', '今天，想验证什么？'],
     ['/login', '登录或注册'],
     ['/conversations/01K4ABCDE00000000000000001', null],

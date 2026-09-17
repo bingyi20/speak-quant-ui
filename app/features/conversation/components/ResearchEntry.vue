@@ -9,7 +9,7 @@ withDefaults(
     showExamples?: boolean
     placeholder?: string
   }>(),
-  { compact: false, showHint: true, placeholder: undefined, showExamples: undefined },
+  { compact: false, showHint: false, placeholder: undefined, showExamples: undefined },
 )
 const { draft, error, busy, intent, canEdit, blocked, submit, retry, dismiss } = useResearchEntry()
 const { t } = useI18n()

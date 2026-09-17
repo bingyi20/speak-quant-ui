@@ -29,9 +29,9 @@
   },
   "landing": {
     "eyebrow": "TRADING RESEARCH WORKSPACE",
-    "title1": "让每一个想法，",
-    "title2": "经得起验证",
-    "subtitle": "从一个交易想法出发，用历史数据理解策略，让下一步决定更有依据。",
+    "title1": "3 分钟，",
+    "title2": "验证你的交易想法",
+    "subtitle": "Trade Lab 是一个量化策略研究智能体，用户用自然语言描述交易想法，就能通过对话完成策略设计、代码生成和历史回测分析。",
     "explore": "了解研究流程",
     "methodTitle": "从想法，到看得懂的证据。",
     "methodIntro": "把研究留在同一段对话里。提出假设、回测策略，然后继续追问。",
