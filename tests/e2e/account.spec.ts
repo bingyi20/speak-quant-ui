@@ -21,6 +21,10 @@ test('account tabs keep the conversation and present unavailable billing honestl
   await (await settingsTrigger(page)).click()
   const dialog = page.getByRole('dialog', { name: /账户设置|Account settings/ })
   await expect(dialog.getByRole('heading', { name: '个人信息与偏好' })).toBeVisible()
+  await expect(page.locator('.app-modal-overlay').last()).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0.32)',
+  )
   await expect(dialog.getByText('tester@example.com', { exact: true })).toBeVisible()
   const accountTab = dialog.getByRole('tab', { name: '账户与偏好' })
   const planTab = dialog.getByRole('tab', { name: '订阅与积分' })

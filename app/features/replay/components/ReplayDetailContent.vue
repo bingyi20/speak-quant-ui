@@ -180,11 +180,13 @@ watch(scrollTop, async (value) => {
 })
 function select(time: number, markerId?: string) {
   const event = markerId ? events.value.find((e) => e.id === markerId) : null
-  if (event) selectEvent(event)
+  if (desktop.value && event?.kind === 'insight') props.state.inspectInsight(event.selection, time)
+  else if (event) selectEvent(event)
   else void props.state.selectCandle(time)
 }
 function selectEvent(event: ReplayEvent) {
-  void props.state.locate(event.selection)
+  if (desktop.value && event.kind === 'insight') void props.state.toggleInsight(event.selection)
+  else void props.state.locate(event.selection)
 }
 let rangeTimer: ReturnType<typeof setTimeout> | undefined
 function rangeChanged(range: { from: number; to: number }) {
@@ -237,8 +239,12 @@ function playbackKeydown(event: KeyboardEvent) {
   event.stopPropagation()
   if (!event.repeat) togglePlayback()
 }
+function resetChart() {
+  follow.value = true
+  chart.value?.reset()
+}
 function interact() {
-  props.state.pause()
+  if (!desktop.value) props.state.pause()
   follow.value = false
 }
 onBeforeUnmount(() => {
@@ -428,7 +434,7 @@ onBeforeUnmount(() => {
               ><button
                 class="detail-icon-button"
                 :aria-label="t('replay.resetChart')"
-                @click="chart?.reset()"
+                @click="resetChart"
               >
                 <UIcon :name="desktop ? 'i-lucide-rotate-ccw' : 'i-lucide-scan'" /></button
             ></UTooltip>
@@ -642,6 +648,7 @@ onBeforeUnmount(() => {
           :events="renderedEvents"
           :bars="state.axis.value"
           :evidence-range="selection?.range"
+          :selected-insight-id="selection?.insightId"
           :index="index"
           :disabled="initializing || !state.axis.value.length"
           @seek="state.seekTime"
@@ -651,6 +658,7 @@ onBeforeUnmount(() => {
         <ReplayEvidencePanel
           :state="state"
           :desktop="desktop"
+          @menu="emit('menu', $event)"
           @question="emit('question', $event)"
         />
       </template>

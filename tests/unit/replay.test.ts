@@ -153,15 +153,18 @@ describe('replay resources and identity', () => {
 })
 describe('replay evidence and context', () => {
   const bars = candles().map(toBar)
-  it('resolves singular/array evidence, exact fills and unanchored global insights', () => {
-    expect(
-      resolveSelection({ insightId: 'i-1' }, bars, replayTrades, replayInsights),
-    ).toMatchObject({ tradeId: 't-1', range: { from: bars[20]!.time, to: bars[50]!.time } })
-    expect(
-      resolveSelection({ insightId: 'i-2' }, bars, replayTrades, replayInsights),
-    ).toMatchObject({ tradeId: 't-2', fillId: 'f-4', candleId: 'c-100' })
+  it('keeps insight selection independent of related trades and fills', () => {
+    expect(resolveSelection({ insightId: 'i-1' }, bars, replayTrades, replayInsights)).toEqual({
+      insightId: 'i-1',
+      candleId: 'c-20',
+      range: { from: bars[20]!.time, to: bars[50]!.time },
+    })
+    expect(resolveSelection({ insightId: 'i-2' }, bars, replayTrades, replayInsights)).toEqual({
+      insightId: 'i-2',
+      candleId: 'c-100',
+    })
     expect(resolveSelection({ insightId: 'i-global' }, bars, replayTrades, replayInsights)).toEqual(
-      { insightId: 'i-global', tradeId: undefined, fillId: undefined, candleId: undefined },
+      { insightId: 'i-global' },
     )
     expect(
       resolveSelection({ tradeId: 't-1', fillId: 'f-4' }, bars, replayTrades, replayInsights),
@@ -169,6 +172,59 @@ describe('replay evidence and context', () => {
     expect(
       resolveSelection({ candleId: 'other-replay' }, bars, replayTrades, replayInsights),
     ).toBeNull()
+  })
+  it('preserves the insight anchor and explicit interval despite unrelated fill references', () => {
+    const insight = {
+      ...replayInsights[1]!,
+      candle_id: 'c-150',
+      evidence: {
+        trade_ids: ['t-2', 'not-loaded'],
+        fill_ids: ['f-4'],
+        entry_candle_id: 'c-120',
+        exit_candle_id: 'c-150',
+      },
+    }
+    const expected = {
+      insightId: insight.id,
+      candleId: 'c-150',
+      range: { from: bars[120]!.time, to: bars[150]!.time },
+    }
+    expect(
+      resolveSelection(
+        { insightId: insight.id, tradeId: 't-1', fillId: 'f-1' },
+        bars,
+        replayTrades,
+        [insight],
+      ),
+    ).toEqual(expected)
+    expect(resolveSelection({ insightId: insight.id }, bars, [], [insight])).toEqual(expected)
+  })
+  it.each([
+    null,
+    { summary: '这一根 K 线出现放量', volume_ratio: 2.3 },
+    { trade_ids: ['t-1'], fill_ids: ['f-4'] },
+    { trade_ids: ['not-loaded'], fill_ids: ['not-loaded'] },
+  ])(
+    'keeps fragmentary insights on their own candle without inferring a trade range: %j',
+    (evidence) => {
+      const insight = { ...replayInsights[1]!, candle_id: 'c-150', evidence }
+      expect(resolveSelection({ insightId: insight.id }, bars, replayTrades, [insight])).toEqual({
+        insightId: insight.id,
+        candleId: 'c-150',
+      })
+    },
+  )
+  it('still selects a trade and exact fill when explicitly requested', () => {
+    expect(resolveSelection({ tradeId: 't-1' }, bars, replayTrades, replayInsights)).toEqual({
+      tradeId: 't-1',
+      candleId: 'c-50',
+      range: { from: bars[20]!.time, to: bars[50]!.time },
+    })
+    expect(resolveSelection({ fillId: 'f-4' }, bars, replayTrades, replayInsights)).toEqual({
+      tradeId: 't-2',
+      fillId: 'f-4',
+      candleId: 'c-100',
+    })
   })
   it('orders fills before insights and only produces comparable result shortcuts once complete', () => {
     const events = buildReplayEvents(bars, replayTrades, replayInsights, true)

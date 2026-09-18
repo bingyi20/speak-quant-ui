@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import ReplayInsightContent from './ReplayInsightContent.vue'
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import type {
   ChartAdapter,
   ChartMarker,
   ChartMarkerHit,
   ChartRange,
+  ChartViewportRequest,
   ChartTheme,
 } from '~/lib/chart/adapter'
 import {
@@ -27,7 +29,7 @@ const props = defineProps<{
   timeframe: string
   playing: boolean
   follow: boolean
-  range: (ChartRange & { revision: number }) | null
+  range: (ChartViewportRequest & { revision: number }) | null
   volume: boolean
   symbol: string
 }>()
@@ -57,18 +59,25 @@ watch(fillElement, (element) => {
   fillResize = new ResizeObserver(measure)
   fillResize.observe(element)
 })
+const fillMaxHeight = computed(() => {
+  // Bottom-row insight markers must remain clickable even with long content.
+  if (hoveredTag.value && hoveredFills.value[0]?.kind === 'insight')
+    return Math.max(0, Math.floor(hoveredTag.value.top) - 12)
+  return Math.max(86, (host.value?.clientHeight ?? 300) - 44)
+})
 const fillPosition = computed(() => {
   const tag = hoveredTag.value
   if (!tag || !host.value) return null
-  return tradeTooltipPosition(tag, fillSize.value, {
-    width: host.value.clientWidth - 68,
-    height: host.value.clientHeight - 28,
-  })
+  return tradeTooltipPosition(
+    tag,
+    { ...fillSize.value, height: Math.min(fillSize.value.height, fillMaxHeight.value) },
+    { width: host.value.clientWidth - 68, height: host.value.clientHeight - 28 },
+  )
 })
 const fillStyle = computed(() => ({
   left: `${fillPosition.value?.left ?? 8}px`,
   top: `${fillPosition.value?.top ?? 8}px`,
-  maxHeight: `${Math.max(86, (host.value?.clientHeight ?? 300) - 44)}px`,
+  maxHeight: `${fillMaxHeight.value}px`,
 }))
 
 function interact() {
@@ -138,6 +147,7 @@ function theme(): ChartTheme {
     up: value(desktop() ? '--color-chart-candle-up' : '--color-chart-up'),
     buy: value('--color-chart-buy'),
     sell: value('--color-chart-sell'),
+    insight: value('--color-chart-insight'),
     tagText: value('--color-chart-tag-text'),
     down: value(desktop() ? '--color-chart-candle-down' : '--color-chart-down'),
     accent: value('--color-brand'),
@@ -150,7 +160,11 @@ function markers() {
   const bars = props.bars,
     grouped = new Map<string, { bar: ReplayBar; items: ReplayEvent[] }>()
   for (const event of props.events) {
-    if (event.kind !== 'fill') continue
+    if (
+      event.kind !== 'fill' &&
+      !(desktop() && event.kind === 'insight' && event.insight?.scope === 'runtime')
+    )
+      continue
     const time = event.fill ? Date.parse(event.fill.occurred_at) / 1000 : event.time
     let lo = 0,
       hi = bars.length - 1
@@ -164,7 +178,7 @@ function markers() {
     if (!bar) continue
     const end = bar.closeTime ?? nextBarTime(bar.time, props.timeframe)
     if (end && time > end) continue
-    const key = `${bar.time}:${event.fill?.side}`
+    const key = `${bar.time}:${event.kind}:${event.fill?.side}`
     const group = grouped.get(key) ?? { bar, items: [] }
     group.items.push(event)
     grouped.set(key, group)
@@ -182,10 +196,16 @@ function markers() {
       return {
         id: e.id,
         time: bar.time,
-        side: e.fill?.side === 'buy' ? 'buy' : 'sell',
+        side: e.kind === 'insight' ? 'insight' : e.fill?.side === 'buy' ? 'buy' : 'sell',
+        active: e.kind === 'insight' && e.selection.insightId === props.selection?.insightId,
         price: Number(e.fill?.price),
         edgePrice: bar.high,
-        label: `${e.fill?.side === 'buy' ? 'B' : 'S'}${items.length > 1 ? `×${items.length}` : ''}`,
+        label:
+          e.kind === 'insight'
+            ? items.length > 1
+              ? String(items.length)
+              : ''
+            : `${e.fill?.side === 'buy' ? 'B' : 'S'}${items.length > 1 ? `×${items.length}` : ''}`,
       }
     })
   adapter?.setMarkers(values)
@@ -240,9 +260,10 @@ function draw() {
   if (initial && rows.length) {
     const from = rows[Math.max(0, rows.length - 200)]!.time,
       to = rows.at(-1)!.time
-    if (to > from) adapter.setVisibleRange({ from, to })
+    if (desktop()) adapter.follow()
+    else if (to > from) adapter.setVisibleRange({ from, to })
     initial = false
-  } else if (saved && !props.follow) adapter.setVisibleRange(saved)
+  } else if (saved && !props.follow && !append) adapter.setVisibleRange(saved)
   if (props.follow && rows.length) adapter.follow()
   selected()
 }
@@ -259,6 +280,7 @@ async function mount() {
     adapter.onSelect((time, marker) => {
       const items = marker ? markerGroups.get(marker) : null
       if (desktop()) {
+        if (items?.[0]?.kind === 'insight') emit('select', time, marker)
         const bar = props.bars[nearestBar(props.bars, time)]
         hover.value = bar?.time === time ? bar : null
         return
@@ -282,7 +304,7 @@ async function mount() {
     })
     adapter.setVolume(props.volume)
     draw()
-    if (props.range) adapter.setVisibleRange(props.range)
+    if (props.range) applyRange(props.range)
   } catch {
     failure.value = true
   }
@@ -290,6 +312,11 @@ async function mount() {
 function chooseEvent(event: ReplayEvent) {
   emit('select', event.time, event.id)
   cluster.value = []
+}
+function applyRange(range: ChartViewportRequest) {
+  if (range.anchorTime !== undefined) adapter?.zoomAroundTime(range, range.anchorTime)
+  else if (desktop() && range.focusTime !== undefined) adapter?.seek(range.focusTime)
+  else adapter?.setVisibleRange(range)
 }
 function reset() {
   if (!adapter) return
@@ -300,7 +327,14 @@ watch(
   () => props.bars,
   () => {
     cluster.value = []
-    clearFill()
+    const cutoff = props.bars.at(-1)?.time ?? -Infinity
+    if (
+      !hoveredFills.value.length ||
+      hoveredFills.value.some(
+        (event) => event.time > cutoff || !props.events.some((visible) => visible.id === event.id),
+      )
+    )
+      clearFill()
     hover.value = null
     draw()
   },
@@ -309,7 +343,7 @@ watch([() => props.events, () => props.selection, () => props.trade, locale], se
 watch(
   () => props.range,
   (range) => {
-    if (range) adapter?.setVisibleRange(range)
+    if (range) applyRange(range)
   },
 )
 watch(
@@ -433,30 +467,38 @@ onBeforeUnmount(() => {
       v-if="hoveredTag && hoveredFills.length"
       ref="fillElement"
       class="replay-chart-local-fill"
+      :class="{ 'is-insight': hoveredFills[0]?.kind === 'insight' }"
       :data-placement="fillPosition?.placement"
       role="tooltip"
       :style="fillStyle"
       @pointerenter="enterFill"
       @pointerleave="leaveFill"
     >
-      <strong
-        >{{ formatDateTime(hoveredFills[0]?.fill?.occurred_at ?? '') }}
-        {{ t('replay.orderDetails') }}</strong
-      >
-      <div
-        v-for="event in hoveredFills"
-        :key="event.id"
-        class="replay-fill-tooltip-row"
-      >
-        <span :class="event.fill?.side === 'buy' ? 'is-buy' : 'is-sell'">{{
-          t(event.fill?.side === 'buy' ? 'replay.markerKinds.buy' : 'replay.markerKinds.sell')
-        }}</span>
-        <span
-          >{{ formatQuantity(event.fill?.quantity, locale) }}@{{
-            price(Number(event.fill?.price))
-          }}</span
+      <ReplayInsightContent
+        v-if="hoveredFills[0]?.kind === 'insight'"
+        :insights="hoveredFills.flatMap((event) => (event.insight ? [event.insight] : []))"
+        :time="hoveredFills[0]?.time"
+      />
+      <template v-else>
+        <strong
+          >{{ formatDateTime(hoveredFills[0]?.fill?.occurred_at ?? '') }}
+          {{ t('replay.orderDetails') }}</strong
         >
-      </div>
+        <div
+          v-for="event in hoveredFills"
+          :key="event.id"
+          class="replay-fill-tooltip-row"
+        >
+          <span :class="event.fill?.side === 'buy' ? 'is-buy' : 'is-sell'">{{
+            t(event.fill?.side === 'buy' ? 'replay.markerKinds.buy' : 'replay.markerKinds.sell')
+          }}</span>
+          <span
+            >{{ formatQuantity(event.fill?.quantity, locale) }}@{{
+              price(Number(event.fill?.price))
+            }}</span
+          >
+        </div>
+      </template>
     </div>
     <div
       ref="host"

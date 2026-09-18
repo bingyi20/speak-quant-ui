@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReplayInsightContent from './ReplayInsightContent.vue'
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { nearestBar } from '../normalize'
 import { fillActionKey, groupEvents } from '../events'
@@ -9,6 +10,7 @@ const props = defineProps<{
   end: string
   current: number | null
   evidenceRange?: { from: number; to: number }
+  selectedInsightId?: string
   events: ReplayEvent[]
   bars: readonly ReplayBar[]
   index: number
@@ -152,29 +154,48 @@ onBeforeUnmount(() => {
         >
           <span />
         </div>
-        <button
+        <UPopover
           v-for="(group, n) in groups"
           :key="n"
-          class="replay-track-marker"
-          :class="desktop ? `replay-marker-${kind(group.items[0]!)}` : undefined"
-          :data-event-id="desktop ? group.items[0]!.id : undefined"
-          :style="{ left: `${group.position * 100}%` }"
-          :aria-label="groupLabel(group.items)"
-          :title="groupLabel(group.items)"
-          :disabled="disabled"
-          @click="
-            group.items.length === 1
-              ? choose(group.items[0]!)
-              : ((selected = group.items), emit('pause'))
-          "
+          mode="hover"
+          :open="desktop && group.items[0]?.kind === 'insight' ? undefined : false"
+          :open-delay="120"
+          :close-delay="220"
+          :content="{ side: 'top', sideOffset: 6, collisionPadding: 12 }"
+          :ui="{ content: 'replay-insight-hover-surface' }"
         >
-          <span
-            v-for="value in kinds(group.items)"
-            :key="value"
-            class="replay-event-dot"
-            :class="`is-${value}`"
-          />
-        </button>
+          <button
+            class="replay-track-marker"
+            :class="desktop ? `replay-marker-${kind(group.items[0]!)}` : undefined"
+            :data-event-id="desktop ? group.items[0]!.id : undefined"
+            :style="{ left: `${group.position * 100}%` }"
+            :aria-label="groupLabel(group.items)"
+            :aria-pressed="
+              desktop && group.items[0]?.kind === 'insight'
+                ? group.items[0].selection.insightId === selectedInsightId
+                : undefined
+            "
+            :title="group.items[0]?.kind === 'insight' ? undefined : groupLabel(group.items)"
+            :disabled="disabled"
+            @click="
+              group.items.length === 1
+                ? choose(group.items[0]!)
+                : ((selected = group.items), emit('pause'))
+            "
+          >
+            <span
+              v-for="value in kinds(group.items)"
+              :key="value"
+              class="replay-event-dot"
+              :class="`is-${value}`"
+            />
+          </button>
+          <template #content
+            ><ReplayInsightContent
+              :insights="group.items.flatMap((event) => (event.insight ? [event.insight] : []))"
+              :time="group.items[0]?.time"
+          /></template>
+        </UPopover>
       </div>
       <input
         type="range"

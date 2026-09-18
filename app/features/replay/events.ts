@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js'
-import { decimal, evidenceIds } from './normalize'
+import { decimal } from './normalize'
 import type { ReplayBar, ReplayEvent, ReplayInsight, ReplaySelection, ReplayTrade } from './types'
 
 /** Position direction belongs to the trade; buy/sell alone cannot distinguish open/close. */
@@ -98,14 +98,15 @@ export function resolveSelection(
   insights: readonly ReplayInsight[],
 ): ReplaySelection | null {
   const byId = new Map(bars.map((c) => [c.id, c]))
-  const result = { ...selection }
-  const insight = result.insightId ? insights.find((i) => i.id === result.insightId) : undefined
-  if (result.insightId && !insight) return null
+  const insight = selection.insightId
+    ? insights.find((i) => i.id === selection.insightId)
+    : undefined
+  if (selection.insightId && !insight) return null
+  // Insight references describe evidence, not another selected entity. Resolve
+  // its own anchor/range afresh so linked fills cannot replace either of them.
+  const result: ReplaySelection = insight ? { insightId: insight.id } : { ...selection }
   if (insight) {
-    const ids = evidenceIds(insight.evidence)
-    result.tradeId ??= ids.trades.find((id) => trades.some((t) => t.id === id))
-    result.fillId ??= ids.fills.find((id) => trades.some((t) => t.fills.some((f) => f.id === id)))
-    result.candleId ??= insight.candle_id ?? undefined
+    if (insight.candle_id) result.candleId = insight.candle_id
     const e = insight.evidence
     if (!result.candleId && typeof e?.entry_candle_id === 'string')
       result.candleId = e.entry_candle_id

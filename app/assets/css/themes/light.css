@@ -39,7 +39,7 @@
   --color-chart-volume-down: #be756e30;
   --color-chart-evidence: #986b2c0d;
   --color-chart-evidence-edge: #986b2c50;
-  --color-overlay: rgb(35 35 30 / 30%);
+  --color-overlay: rgb(0 0 0 / 32%);
   --shadow-composer: 0 4px 20px rgb(48 49 46 / 3%);
   --shadow-composer-active: 0 4px 22px rgb(48 49 46 / 7%);
   --shadow-panel: 0 6px 30px rgb(48 49 46 / 5%);

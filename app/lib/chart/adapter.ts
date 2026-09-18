@@ -6,6 +6,7 @@ export interface ChartTheme {
   down: string
   buy: string
   sell: string
+  insight?: string
   tagText: string
   accent?: string
   volumeUp?: string
@@ -23,7 +24,8 @@ export interface ChartMarker {
   id: string
   time: number
   label: string
-  side: 'buy' | 'sell'
+  side: 'buy' | 'sell' | 'insight'
+  active?: boolean
   price: number
   edgePrice: number
 }
@@ -38,6 +40,12 @@ export interface ChartRange {
   from: number
   to: number
 }
+export interface ChartViewportRequest extends ChartRange {
+  /** Set for single-candle/default positioning; omitted to fit an evidence interval. */
+  focusTime?: number
+  /** Inspect an interval by zooming around this candle's current screen position. */
+  anchorTime?: number
+}
 export interface ChartSelection {
   range?: ChartRange
   prices?: Array<{ price: number; label: string }>
@@ -48,6 +56,7 @@ export interface ChartAdapter {
   seek(time: number): void
   follow(): void
   setVisibleRange(range: ChartRange): void
+  zoomAroundTime(range: ChartRange, time: number): void
   getViewState(): ChartRange | null
   setMarkers(markers: readonly ChartMarker[]): void
   setSelection(selection: ChartSelection | null): void

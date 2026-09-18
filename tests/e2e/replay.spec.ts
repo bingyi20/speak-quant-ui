@@ -8,6 +8,61 @@ async function open(page: import('@playwright/test').Page, ready = true) {
   await expect(page.locator('.replay-chart canvas').first()).toBeVisible()
   if (ready) await expect(page.getByRole('button', { name: '从头播放', exact: true })).toBeEnabled()
 }
+async function insightDots(chart: import('@playwright/test').Locator) {
+  return chart.evaluate((host) => {
+    const swatch = document.createElement('canvas').getContext('2d')!
+    swatch.fillStyle = getComputedStyle(host).getPropertyValue('--color-chart-insight').trim()
+    swatch.fillRect(0, 0, 1, 1)
+    const rgb = [...swatch.getImageData(0, 0, 1, 1).data].slice(0, 3)
+    for (const canvas of host.querySelectorAll('canvas')) {
+      const box = canvas.getBoundingClientRect(),
+        ratio = canvas.width / box.width
+      if (box.height < 100 || !ratio) continue
+      const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+      const matches = (x: number, y: number) => {
+        const at = (Math.round(y) * canvas.width + Math.round(x)) * 4
+        return rgb.every((v, i) => Math.abs(data[at + i]! - v) < 40) && data[at + 3]! > 240
+      }
+      const columns: number[] = []
+      for (let x = 0; x < canvas.width; x++)
+        for (let y = Math.max(0, Math.floor(canvas.height - 32 * ratio)); y < canvas.height; y++)
+          if (matches(x, y)) {
+            columns.push(x)
+            break
+          }
+      const groups: number[][] = []
+      for (const x of columns) {
+        if (!groups.length || x - groups.at(-1)!.at(-1)! > 2 * ratio) groups.push([])
+        groups.at(-1)!.push(x)
+      }
+      const result = groups
+        .filter((xs) => xs.at(-1)! - xs[0]! > 11 * ratio)
+        .map((xs) => {
+          const centerX = (xs[0]! + xs.at(-1)!) / 2
+          const centerY = canvas.height - 18 * ratio
+          return {
+            x: box.x + centerX / ratio,
+            y: box.y + centerY / ratio,
+            width: (xs.at(-1)! - xs[0]! + 1) / ratio,
+            active: matches(centerX + 5 * ratio, centerY + 1 * ratio),
+          }
+        })
+      if (result.length) return result
+    }
+    return []
+  })
+}
+async function openTradeDetails(page: import('@playwright/test').Page, id: string) {
+  await page.locator(`[data-trade-details="${id}"]`).click()
+  const dialog = page.getByRole('dialog', { name: '交易明细', exact: true })
+  await expect(dialog).toBeVisible()
+  return dialog
+}
+async function closeTradeDetails(page: import('@playwright/test').Page) {
+  const dialog = page.getByRole('dialog', { name: '交易明细', exact: true })
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(dialog).toBeHidden()
+}
 test('full-width chart, frozen strategy return, evidence, context retry and strategy download', async ({
   page,
   isMobile,
@@ -27,17 +82,26 @@ test('full-width chart, frozen strategy return, evidence, context retry and stra
   await expect(panel.getByText('历史设计', { exact: true })).toBeVisible()
   await panel.getByRole('button', { name: '返回回测', exact: true }).click()
   await expect(panel.getByRole('button', { name: '从头播放', exact: true })).toBeEnabled()
-  await panel.getByRole('tab', { name: /洞察/ }).click()
-  await panel.getByRole('button', { name: /趋势区间表现更好/ }).click()
-  await expect(panel.getByText('第一次交易验证趋势信号')).toBeVisible()
+  if (isMobile) {
+    await panel.getByRole('tab', { name: /洞察/ }).click()
+    await panel.getByRole('button', { name: /趋势区间表现更好/ }).click()
+    await expect(panel.getByText('第一次交易验证趋势信号')).toBeVisible()
+    await panel.getByRole('button', { name: '关联交易 #1', exact: true }).click()
+  } else {
+    await expect(panel.locator('.replay-overall-insight')).toHaveCount(0)
+    await panel.locator('[data-trade-id="t-1"]').click()
+  }
   await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
-  await panel.getByRole('button', { name: '关联交易 #1', exact: true }).click()
-  await expect(panel.locator('.replay-trade-detail')).toBeVisible()
-  await panel.getByRole('button', { name: '成交明细 · 2 次', exact: true }).click()
-  await expect(panel.locator('.replay-fill-row')).toHaveCount(2)
-  await panel.getByRole('button', { name: '询问 Agent', exact: true }).click()
+  const tradeDetail = isMobile ? panel : await openTradeDetails(page, 't-1')
+  if (isMobile) await panel.getByRole('button', { name: '成交明细 · 2 次', exact: true }).click()
+  await expect(tradeDetail.locator('.replay-fill-row')).toHaveCount(2)
+  await tradeDetail.getByRole('button', { name: '询问 Agent', exact: true }).click()
   await expect(page.locator('.replay-reference')).toContainText('BTC 均线验证')
-  if (!isMobile) await panel.getByRole('button', { name: '关闭', exact: true }).click()
+  if (!isMobile)
+    await panel
+      .locator('.asset-detail-header')
+      .getByRole('button', { name: '关闭', exact: true })
+      .click()
   await page.getByRole('textbox', { name: '交易想法' }).fill('解释这笔交易')
   await page.getByRole('button', { name: '发送研究想法', exact: true }).click()
   await expect(page.getByRole('button', { name: '重试', exact: true })).toBeVisible()
@@ -120,6 +184,7 @@ test('server timeframe switching, playback pause, event navigation, responsive f
 })
 test('old candle contract, partial failure retry, no trades and public notices', async ({
   page,
+  isMobile,
 }) => {
   await stubReplay(page, { empty: true, failCandles: true })
   await open(page, false)
@@ -129,7 +194,7 @@ test('old candle contract, partial failure retry, no trades and public notices',
     .getByRole('button', { name: '重试', exact: true })
     .click()
   await expect(page.locator('.replay-inline-error')).toHaveCount(0)
-  await page.getByRole('tab', { name: /交易/ }).click()
+  if (isMobile) await page.getByRole('tab', { name: /交易/ }).click()
   await expect(page.getByText('没有触发交易', { exact: true })).toBeVisible()
   await page.goto('/open-source')
   await expect(page.getByRole('heading', { name: '开源声明', exact: true })).toBeVisible()
@@ -230,7 +295,7 @@ test('large frozen history keeps the chart interactive and limits trade DOM', as
   await expect(page.getByRole('button', { name: '从头播放', exact: true })).toBeEnabled({
     timeout: 60_000,
   })
-  await page.getByRole('tab', { name: /洞察/ }).click()
+  if (info.project.name !== 'desktop') await page.getByRole('tab', { name: /洞察/ }).click()
   await expect(
     page.getByRole('button', {
       name: info.project.name === 'desktop' ? '结果定位' : '最大盈利交易',
@@ -241,8 +306,10 @@ test('large frozen history keeps the chart interactive and limits trade DOM', as
   })
   await page.locator('.replay-timeline input').press('End')
   await expect(page.getByRole('button', { name: '从头播放', exact: true })).toBeEnabled()
-  await page.getByRole('tab', { name: /交易/ }).click()
-  await expect(page.locator('.replay-trade-row')).toHaveCount(20)
+  if (info.project.name !== 'desktop') await page.getByRole('tab', { name: /交易/ }).click()
+  await expect(
+    page.locator(info.project.name === 'desktop' ? '.replay-trade-card' : '.replay-trade-row'),
+  ).toHaveCount(20)
   const canvas = page.locator('.replay-chart')
   await canvas.hover()
   const measured = await page.evaluate(async () => {
@@ -341,7 +408,7 @@ test('one historical cutoff controls candles, timeline, trades and insights whil
   await expect(chart).toHaveAttribute('data-visible-end', time(199))
   await expect(panel.getByText('最终结果', { exact: true })).toBeVisible()
   await expect(panel.locator('.replay-time-track')).toHaveCount(1)
-  await expect(panel.locator('.replay-track-marker')).toHaveCount(isMobile ? 4 : 5)
+  await expect(panel.locator('.replay-track-marker')).toHaveCount(isMobile ? 3 : 5)
   await expect(panel.locator('.replay-track-marker .is-buy')).toHaveCount(2)
   await expect(panel.locator('.replay-track-marker .is-sell')).toHaveCount(2)
   await expect(panel.locator('.replay-track-marker .is-insight')).toHaveCount(1)
@@ -364,7 +431,7 @@ test('one historical cutoff controls candles, timeline, trades and insights whil
   await slider.press('Home')
   await expect(chart).toHaveAttribute('data-visible-end', time(0))
   await expect(panel.locator('.replay-track-marker')).toHaveCount(0)
-  await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('0')
+  if (isMobile) await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('0')
   if (isMobile) {
     await expect(panel.locator('.replay-current-state')).toContainText('该 K 线收盘后')
     await expect(panel.locator('.replay-current-state')).toContainText('截至此时收益')
@@ -373,19 +440,25 @@ test('one historical cutoff controls candles, timeline, trades and insights whil
     await expect(panel.locator('.replay-result-label')).toHaveText('截至此时')
     await expect(panel.locator('.replay-summary-metrics dd').nth(2)).toHaveText('0')
   }
-  await panel.getByRole('tab', { name: /交易记录/ }).click()
+  if (isMobile) await panel.getByRole('tab', { name: /交易记录/ }).click()
   await expect(panel.getByText('截至此时暂无交易', { exact: true })).toBeVisible()
   // Native range keyboard seeks actual bars; all surfaces share the same cutoff.
   for (let i = 0; i < 20; i++) await slider.press('ArrowRight')
   await expect(chart).toHaveAttribute('data-visible-end', time(20))
-  await expect(panel.locator('.replay-trade-row')).toHaveCount(1)
-  await expect(panel.locator('.replay-trade-row')).toContainText('未平仓')
-  await expect(panel.locator('.replay-trade-row')).not.toContainText('+87')
-  await panel.locator('.replay-trade-row').click()
+  await expect(panel.locator(isMobile ? '.replay-trade-row' : '.replay-trade-card')).toHaveCount(1)
+  await expect(panel.locator(isMobile ? '.replay-trade-row' : '.replay-trade-card')).toContainText(
+    '未平仓',
+  )
+  await expect(
+    panel.locator(isMobile ? '.replay-trade-row' : '.replay-trade-card'),
+  ).not.toContainText('+87')
+  await panel.locator(isMobile ? '.replay-trade-row' : '.replay-trade-card').click()
   await expect(slider).toHaveValue(time(20))
-  await panel.getByRole('button', { name: '成交明细 · 1 次', exact: true }).click()
-  await expect(panel.locator('.replay-fill-row')).toHaveCount(1)
-  await expect(panel.locator('.replay-trade-detail')).not.toContainText('96,100')
+  const tradeDetail = isMobile ? panel : await openTradeDetails(page, 't-1')
+  if (isMobile) await panel.getByRole('button', { name: '成交明细 · 1 次', exact: true }).click()
+  await expect(tradeDetail.locator('.replay-fill-row')).toHaveCount(1)
+  await expect(tradeDetail).not.toContainText('96,100')
+  if (!isMobile) await closeTradeDetails(page)
   await chart.scrollIntoViewIfNeeded()
   const box = (await chart.boundingBox())!
   // Moving the viewport into the future never adds hidden candles.
@@ -399,24 +472,29 @@ test('one historical cutoff controls candles, timeline, trades and insights whil
   await panel.getByRole('button', { name: '暂停', exact: true }).click()
   const pausedAt = await slider.inputValue()
   await expect(chart).toHaveAttribute('data-visible-end', pausedAt)
-  await expect(panel.getByRole('tab')).toHaveCount(2)
-  await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('0')
+  await expect(panel.getByRole('tab')).toHaveCount(isMobile ? 2 : 0)
+  if (isMobile) await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('0')
   await expect(
     panel.locator(isMobile ? '.replay-speed option:checked' : '.replay-speed'),
   ).toContainText(isMobile ? '根/秒' : '1x')
   await slider.press('End')
   await expect(chart).toHaveAttribute('data-visible-end', time(199))
-  await expect(panel.locator('.replay-trade-row')).toHaveCount(2)
-  await expect(panel.locator('.replay-trade-row').first()).toContainText('+87')
-  await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('3')
+  await expect(panel.locator(isMobile ? '.replay-trade-row' : '.replay-trade-card')).toHaveCount(2)
+  await expect(
+    isMobile
+      ? panel.locator('.replay-trade-row').filter({ hasText: '#1' })
+      : panel.locator('[data-trade-id="t-1"]'),
+  ).toContainText('+87')
+  if (isMobile) await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('3')
   await expect(panel.locator('.replay-track-marker .is-insight')).toHaveCount(1)
   if (isMobile) await panel.getByRole('button', { name: '最大盈利交易', exact: true }).click()
   else {
-    await panel.getByRole('tab', { name: /交易记录/ }).click()
-    await panel.locator('.replay-trade-row').first().click()
+    if (isMobile) await panel.getByRole('tab', { name: /交易记录/ }).click()
+    await panel.locator('[data-trade-id="t-1"]').click()
   }
-  await expect(slider).toHaveValue(time(50))
-  await expect(panel.locator('.replay-trade-detail')).toBeVisible()
+  await expect(slider).toHaveValue(time(isMobile ? 50 : 199))
+  if (isMobile) await expect(panel.locator('.replay-trade-detail')).toBeVisible()
+  else await expect(panel.locator('[data-trade-id="t-1"]')).toHaveAttribute('aria-pressed', 'true')
   await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
   await page.screenshot({ path: test.info().outputPath('backtest-tags-and-trade.png') })
   await slider.press('Home')
@@ -520,14 +598,18 @@ test('timeline controls cutoff while desktop buy tags stay local', async ({ page
     await expect(chart).toHaveAttribute('data-visible-end', String(Date.parse(iso(50)) / 1000))
     await slider.press('Home')
     for (let i = 0; i < 20; i++) await slider.press('ArrowRight')
-    await panel.locator('.replay-trade-row').click()
-    await panel.getByRole('button', { name: '成交明细 · 1 次', exact: true }).click()
-    await panel.locator('.replay-fill-row').click()
+    await panel.locator('.replay-trade-card').click()
+    const dialog = await openTradeDetails(page, 't-1')
+    await dialog.locator('.replay-fill-row').click()
+    await expect(dialog).toBeHidden()
   }
   await expect(slider).toHaveValue(String(Date.parse(iso(20)) / 1000))
-  await expect(panel.locator('.replay-fill-row')).toHaveCount(1)
-  await expect(panel.locator('.replay-trade-row')).toContainText('未平仓')
-  await expect(panel.locator('.replay-fill-row')).toHaveAttribute('aria-expanded', 'true')
+  await expect(panel.locator('.replay-fill-row')).toHaveCount(isMobile ? 1 : 0)
+  await expect(panel.locator(isMobile ? '.replay-trade-row' : '.replay-trade-card')).toContainText(
+    '未平仓',
+  )
+  if (isMobile)
+    await expect(panel.locator('.replay-fill-row')).toHaveAttribute('aria-expanded', 'true')
   if (isMobile) await panel.locator('.replay-speed').selectOption('4')
   else {
     await panel.locator('.replay-speed').click()
@@ -555,8 +637,17 @@ test('timeline controls cutoff while desktop buy tags stay local', async ({ page
       .click()
   } else await expect(panel.locator('.replay-event-picker')).toHaveCount(0)
   await expect(slider).toHaveValue(String(Date.parse(iso(100)) / 1000))
-  await expect(panel.locator('.replay-insight-content')).toContainText('这次空头交易出现亏损')
-  await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('1')
+  if (isMobile) {
+    await expect(panel.locator('.replay-insight-content')).toContainText('这次空头交易出现亏损')
+    await expect(panel.getByRole('tab', { name: /洞察/ })).toContainText('1')
+  } else {
+    await marker.hover()
+    await expect(page.locator('.replay-insight-hover-surface')).toContainText(
+      '这次空头交易出现亏损',
+    )
+  }
+  await page.mouse.move(10, 10)
+  if (!isMobile) await expect(page.locator('.replay-insight-hover-surface')).toBeHidden()
   await slider.scrollIntoViewIfNeeded()
   const track = (await slider.boundingBox())!
   await page.mouse.click(track.x + 10 + (track.width - 20) * 0.15, track.y + 22)
@@ -680,11 +771,21 @@ test('desktop headline metrics follow cutoff while metadata and details stay com
     'rgba(0, 0, 0, 0)',
   )
   await expect(panel.locator('.replay-metrics-link')).toHaveCSS('padding-right', '0px')
-  const lastMetric = (await panel.locator('.replay-summary-metrics > div').last().boundingBox())!
-  const region = (await panel.locator('.replay-chart-region').boundingBox())!
-  expect(Math.abs(lastMetric.x + lastMetric.width - region.x - region.width)).toBeLessThan(2)
-  const details = (await panel.locator('.replay-metrics-link').boundingBox())!
-  expect(Math.abs(details.x + details.width - region.x - region.width)).toBeLessThan(2)
+  // Measure all edges in one frame; the panel may still be finishing its entrance.
+  await expect
+    .poll(() =>
+      panel.evaluate((root) => {
+        const right = (selector: string) =>
+          root.querySelector(selector)!.getBoundingClientRect().right
+        return Math.max(
+          Math.abs(
+            right('.replay-summary-metrics > div:last-child') - right('.replay-chart-region'),
+          ),
+          Math.abs(right('.replay-metrics-link') - right('.replay-chart-region')),
+        )
+      }),
+    )
+    .toBeLessThan(2)
   await expect(panel.locator('.replay-result-label .iconify')).toHaveCount(0)
   await expect(panel.locator('.replay-result-label')).toHaveCSS(
     'background-color',
@@ -853,7 +954,7 @@ test('desktop evidence navigation moves the chart without rewinding history', as
     await expect(chart).toHaveAttribute('data-visible-end', cutoff)
     await expect(panel.locator('.replay-summary-metrics dd')).toHaveText(metrics)
     await expect(panel.locator('.replay-track-marker')).toHaveCount(5)
-    await expect(panel.getByRole('tab', { name: /交易记录/ })).toContainText('2')
+    await expect(panel.locator('.replay-trade-card')).toHaveCount(2)
     await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
   }
   for (const index of [199, 150]) {
@@ -865,29 +966,22 @@ test('desktop evidence navigation moves the chart without rewinding history', as
     await expect(slider).toHaveValue(cutoff)
     await expect(panel.locator('.replay-summary-metrics dd').first()).not.toHaveText('—')
     const metrics = await panel.locator('.replay-summary-metrics dd').allTextContents()
-    await panel.getByRole('tab', { name: /洞察/ }).click()
-    if (index === 199) {
-      await panel.getByRole('button', { name: /趋势区间表现更好/ }).click()
-      await checkCutoff(cutoff, metrics)
-      await panel.getByRole('button', { name: '关联交易 #1', exact: true }).click()
-      await checkCutoff(cutoff, metrics)
-      await panel.getByRole('tab', { name: /洞察/ }).click()
-      await panel.getByRole('button', { name: /特定时刻/ }).click()
-    }
-    await panel.locator('.replay-insight-title').filter({ hasText: '反向信号触发止损' }).click()
-    await expect(panel.locator('.replay-insight-content')).toContainText('这次空头交易出现亏损')
+    await panel.locator('[data-event-id="insight:i-2"]').hover()
+    await expect(page.locator('.replay-insight-hover-surface')).toContainText(
+      '这次空头交易出现亏损',
+    )
+    await expect(slider).toHaveValue(cutoff)
+    await page.mouse.move(10, 10)
+    await panel.locator('[data-trade-id="t-1"]').click()
     await checkCutoff(cutoff, metrics)
-    await panel.getByRole('tab', { name: /交易记录/ }).click()
-    await panel.locator('.replay-trade-row').first().click()
-    await checkCutoff(cutoff, metrics)
-    await panel.getByRole('button', { name: '成交明细 · 2 次', exact: true }).click()
-    for (const fill of await panel.locator('.replay-fill-row').all()) {
-      await fill.click()
-      await expect(fill).toHaveAttribute('aria-expanded', 'true')
+    for (let index = 0; index < 2; index++) {
+      const dialog = await openTradeDetails(page, 't-1')
+      await dialog.locator('.replay-fill-row').nth(index).click()
+      await expect(dialog).toBeHidden()
       await checkCutoff(cutoff, metrics)
     }
     await panel.getByRole('button', { name: '4h', exact: true }).click()
-    await panel.locator('.replay-trade-row').last().click()
+    await panel.locator('[data-trade-id="t-2"]').click()
     await expect(chart).toHaveAttribute('aria-label', 'BTC/USDT 1h K 线图')
     await checkCutoff(cutoff, metrics)
   }
@@ -901,8 +995,7 @@ test('selected trade shade follows small chart pans without jumping or seeking',
   await stubReplay(page)
   await open(page)
   const panel = page.locator('.asset-detail-panel')
-  await panel.getByRole('tab', { name: /交易记录/ }).click()
-  await panel.locator('.replay-trade-row').first().click()
+  await panel.locator('[data-trade-id="t-1"]').click()
   const chart = panel.locator('.replay-chart')
   const shade = panel.locator('.replay-evidence-shade')
   const slider = panel.locator('.replay-timeline input')
@@ -1161,3 +1254,723 @@ for (const language of ['zh-CN', 'en-US']) {
     await expect(conditions).not.toContainText('UTC')
   })
 }
+
+test('desktop timeline seek and reset use the same viewport', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Desktop only')
+  const { iso } = await import('./replay-fixtures')
+  await stubReplay(page)
+  await open(page)
+  const panel = page.locator('.asset-detail-panel')
+  const slider = panel.locator('.replay-timeline input')
+  const canvas = panel.locator('.replay-chart canvas').first()
+  const readCanvas = async () => {
+    await page.mouse.move(10, 10)
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    )
+    return canvas.evaluate((c) => (c as HTMLCanvasElement).toDataURL())
+  }
+  for (const index of [199, 150, 80]) {
+    await slider.evaluate(
+      (input, value) => {
+        ;(input as HTMLInputElement).value = value
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      },
+      String(Date.parse(iso(index)) / 1000),
+    )
+    await expect(panel.locator('.replay-chart')).toHaveAttribute(
+      'data-visible-end',
+      String(Date.parse(iso(index)) / 1000),
+    )
+    // Wait until the asynchronous seek finishes and enables playback again.
+    await expect(
+      panel.getByRole('button', { name: index === 199 ? '从头播放' : '播放', exact: true }),
+    ).toBeEnabled()
+    const before = await readCanvas()
+    await panel.getByRole('button', { name: '重置视野', exact: true }).click()
+    await expect.poll(readCanvas).toBe(before)
+  }
+})
+
+test('replay scrollbar appearance preserves chart and timeline geometry', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop scrollbar layout')
+  await stubReplay(page)
+  await open(page)
+  const panel = page.locator('.asset-detail-panel')
+  await expect(panel.locator('.replay-detail-content')).toHaveCSS('scrollbar-gutter', 'stable')
+  for (const fullscreen of [false, true]) {
+    if (fullscreen) await panel.getByRole('button', { name: '全屏', exact: true }).click()
+    const result = await panel.locator('.replay-detail-content').evaluate((element) => {
+      const scroller = element as HTMLElement
+      const previous = scroller.style.cssText
+      // Force a real no-overflow -> overflow transition without relying on fixture content length.
+      scroller.style.flex = 'none'
+      scroller.style.maxHeight = 'none'
+      scroller.style.height = `${scroller.scrollHeight + 100}px`
+      const geometry = () =>
+        ['.replay-chart', '.replay-timeline input'].map((selector) => {
+          const rect = scroller.querySelector(selector)!.getBoundingClientRect()
+          return { x: rect.x, width: rect.width }
+        })
+      const before = geometry()
+      const initiallyOverflowing = scroller.scrollHeight > scroller.clientHeight
+      const spacer = document.createElement('div')
+      spacer.style.height = '3000px'
+      scroller.append(spacer)
+      const after = geometry()
+      const overflowing = scroller.scrollHeight > scroller.clientHeight
+      spacer.remove()
+      const restored = geometry()
+      scroller.style.cssText = previous
+      return { before, after, restored, initiallyOverflowing, overflowing }
+    })
+    expect(result.initiallyOverflowing).toBe(false)
+    expect(result.overflowing).toBe(true)
+    expect(result.after).toEqual(result.before)
+    expect(result.restored).toEqual(result.before)
+  }
+})
+
+test('desktop chart gestures keep playback running and reset restores following', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop interaction')
+  const { iso } = await import('./replay-fixtures')
+  await stubReplay(page)
+  await open(page)
+  const panel = page.locator('.asset-detail-panel')
+  const slider = panel.locator('.replay-timeline input')
+  const chart = panel.locator('.replay-chart')
+  await slider.evaluate(
+    (input, value) => {
+      ;(input as HTMLInputElement).value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+    String(Date.parse(iso(110)) / 1000),
+  )
+  await expect(panel.getByRole('button', { name: '播放', exact: true })).toBeEnabled()
+  await page.clock.install()
+  await panel.getByRole('button', { name: '播放', exact: true }).click()
+  await chart.scrollIntoViewIfNeeded()
+  const box = (await chart.boundingBox())!
+  const x = box.x + box.width / 2,
+    y = box.y + box.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + 10, y)
+  await page.mouse.move(x + 100, y, { steps: 10 })
+  await page.mouse.up()
+  await page.mouse.wheel(0, -120)
+  await page.clock.runFor(300)
+  await page.mouse.move(10, 10)
+  await page.clock.runFor(100)
+  const readAxis = () =>
+    chart.evaluate((host) => {
+      const bottom = host.getBoundingClientRect().bottom
+      const axis = [...host.querySelectorAll('canvas')].find((c) => {
+        const r = c.getBoundingClientRect()
+        return r.height > 0 && r.height < 40 && Math.abs(r.bottom - bottom) < 2
+      })!
+      return axis.toDataURL()
+    })
+  const before = await slider.inputValue()
+  const axis = await readAxis()
+  await page.clock.runFor(1000)
+  await expect(panel.getByRole('button', { name: '暂停', exact: true })).toBeVisible()
+  expect(Number(await slider.inputValue())).toBeGreaterThan(Number(before))
+  expect(await readAxis()).toBe(axis)
+  await panel.getByRole('button', { name: '重置视野', exact: true }).click()
+  await page.mouse.move(10, 10)
+  await page.clock.runFor(100)
+  const resetAxis = await readAxis()
+  expect(resetAxis).not.toBe(axis)
+  await page.clock.runFor(1000)
+  expect(await readAxis()).not.toBe(resetAxis)
+  await expect(panel.getByRole('button', { name: '暂停', exact: true })).toBeVisible()
+  await slider.press('ArrowLeft')
+  await expect(panel.getByRole('button', { name: '播放', exact: true })).toBeVisible()
+})
+
+test('single-candle events use reset framing while interval insights fit their evidence', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop viewport policy')
+  const { iso, replayInsights } = await import('./replay-fixtures')
+  const { envelope } = await import('./auth-fixtures')
+  await stubReplay(page)
+  await page.route(/\/api\/replays\/[^/?]+\/insights(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        items: replayInsights.map((insight) =>
+          insight.id === 'i-2'
+            ? {
+                ...insight,
+                evidence: { entry_candle_id: 'c-80', exit_candle_id: 'c-100' },
+              }
+            : insight,
+        ),
+        has_more: false,
+        next_cursor: null,
+      }),
+    }),
+  )
+  await open(page)
+  const panel = page.locator('.asset-detail-panel')
+  const slider = panel.locator('.replay-timeline input')
+  const chart = panel.locator('.replay-chart')
+  const readCanvas = async () => {
+    await page.mouse.move(10, 10)
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    )
+    return chart
+      .locator('canvas')
+      .first()
+      .evaluate((c) => (c as HTMLCanvasElement).toDataURL())
+  }
+  const toEnd = async () => {
+    await slider.evaluate(
+      (input, value) => {
+        ;(input as HTMLInputElement).value = value
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      },
+      String(Date.parse(iso(199)) / 1000),
+    )
+    await expect(chart).toHaveAttribute('data-visible-end', String(Date.parse(iso(199)) / 1000))
+    await expect(panel.getByRole('button', { name: '从头播放', exact: true })).toBeEnabled()
+  }
+  for (const event of ['fill:f-1', 'fill:f-2']) {
+    await toEnd()
+    await panel.locator(`[data-event-id="${event}"]`).click()
+    await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
+    const selected = await readCanvas()
+    await panel.getByRole('button', { name: '重置视野', exact: true }).click()
+    await expect.poll(readCanvas).toBe(selected)
+  }
+  await toEnd()
+  await panel.locator('[data-event-id="insight:i-2"]').click()
+  await expect(slider).toHaveValue(String(Date.parse(iso(100)) / 1000))
+  const shade = panel.locator('.replay-evidence-shade')
+  await expect(shade).toBeVisible()
+  expect((await shade.boundingBox())!.width).toBeGreaterThan(100)
+  const evidence = await readCanvas()
+  await panel.getByRole('button', { name: '重置视野', exact: true }).click()
+  await expect.poll(readCanvas).not.toBe(evidence)
+  await expect(shade).toBeVisible()
+})
+
+test('desktop insights hover in the chart and timeline while trades use newest-first cards', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop evidence presentation')
+  const { replayInsights, iso } = await import('./replay-fixtures')
+  const { envelope } = await import('./auth-fixtures')
+  await stubReplay(page)
+  const { replayTrades } = await import('./replay-fixtures')
+  await page.route(/\/api\/replays\/[^/?]+\/trades(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        items: replayTrades.map((trade) => ({
+          ...trade,
+          fills: trade.fills.map((fill, index) => ({
+            ...fill,
+            reason:
+              index === 0
+                ? 'Close broke above prior 10-bar high (Livermore key-point breakout), with volume confirming the entry signal and risk controls satisfied.'
+                : fill.reason,
+          })),
+        })),
+        page: 1,
+        size: 100,
+        total: 2,
+        total_pages: 1,
+      }),
+    }),
+  )
+  await page.route(/\/api\/replays\/[^/?]+\/insights(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        items: [
+          ...replayInsights,
+          ...[130, 160].map((index) => ({
+            ...replayInsights[1],
+            id: `i-${index}`,
+            candle_id: `c-${index}`,
+            evidence: {},
+            title: `洞察 ${index}`,
+            content: `纯文本洞察 ${index}\n第二行内容`,
+          })),
+        ],
+        has_more: false,
+        next_cursor: null,
+      }),
+    }),
+  )
+  await open(page)
+  const panel = page.locator('.asset-detail-panel')
+  const slider = panel.locator('.replay-timeline input')
+  const chart = panel.locator('.replay-chart')
+  const cards = panel.locator('.replay-trade-card')
+  await expect(cards).toHaveCount(2)
+  await expect(panel.locator('.replay-evidence').getByRole('combobox')).toHaveCount(0)
+  await expect(cards.first()).not.toContainText('#')
+  const compactCard = (await cards.first().boundingBox())!
+  expect(compactCard.width).toBeLessThan(190)
+  expect(compactCard.height).toBeLessThan(110)
+  await expect(cards.first()).toHaveAttribute('data-trade-id', 't-2')
+  await panel.getByRole('button', { name: '交易排序', exact: true }).click()
+  await expect(cards.first()).toHaveAttribute('data-trade-id', 't-1')
+  await cards.first().click()
+  await expect(panel.locator('.replay-trade-detail')).toHaveCount(0)
+  await expect(page.locator('.replay-trade-dialog')).toHaveCount(0)
+  const dialog = await openTradeDetails(page, 't-1')
+  await expect(dialog.locator('tbody tr')).toHaveCount(2)
+  await expect(dialog.locator('.replay-trade-dialog-metrics')).toContainText('1 天 6 小时')
+  await expect(dialog.locator('.replay-fill-reason').first()).toContainText(
+    'Close broke above prior 10-bar high',
+  )
+  await closeTradeDetails(page)
+  await page.screenshot({ path: test.info().outputPath('compact-trade-cards.png') })
+  await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
+  await panel.getByRole('button', { name: '重置视野', exact: true }).click()
+  await expect(panel.locator('[role="tab"]')).toHaveCount(0)
+  const marker = panel.locator('[data-event-id="insight:i-130"]')
+  await marker.hover()
+  await expect(page.locator('.replay-insight-hover-surface')).toContainText('纯文本洞察 130')
+  await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
+  await page.mouse.move(10, 10)
+  await expect(page.locator('.replay-insight-hover-surface')).toBeHidden()
+  await chart.scrollIntoViewIfNeeded()
+  const dots = () => insightDots(chart)
+  await expect.poll(async () => (await dots()).length).toBeGreaterThanOrEqual(2)
+  const positions = await dots()
+  expect(new Set(positions.map((p) => p.y)).size).toBe(1)
+  const bounds = (await chart.boundingBox())!
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(bounds.x + bounds.width / 2 + 8, bounds.y + bounds.height / 2)
+  await page.mouse.move(bounds.x + bounds.width / 2 + 24, bounds.y + bounds.height / 2)
+  await page.mouse.up()
+  await page.mouse.wheel(0, -30)
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+  const moved = await dots()
+  expect(moved.length).toBeGreaterThanOrEqual(2)
+  expect(moved.at(-1)!.y).toBeCloseTo(positions.at(-1)!.y, 0)
+  const dot = moved.at(-1)!
+  await page.mouse.move(dot.x, dot.y)
+  await expect(panel.locator('.replay-chart-local-fill.is-insight')).toContainText('纯文本洞察 160')
+  const tooltip = (await panel.locator('.replay-chart-local-fill.is-insight').boundingBox())!
+  await page.mouse.move(tooltip.x + 20, tooltip.y + 20, { steps: 6 })
+  await page.waitForTimeout(300)
+  await expect(panel.locator('.replay-chart-local-fill.is-insight')).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('insight-markers-and-trade-cards.png') })
+  await page.mouse.move(10, 10)
+  await expect(panel.locator('.replay-chart-local-fill')).toHaveCount(0)
+  await slider.evaluate(
+    (input, value) => {
+      ;(input as HTMLInputElement).value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+    String(Date.parse(iso(90)) / 1000),
+  )
+  await expect(panel.locator('.replay-marker-insight')).toHaveCount(0)
+  await expect(panel.locator('.replay-overall-insight')).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: '播放', exact: true })).toBeEnabled()
+  await page.clock.install()
+  await panel.getByRole('button', { name: '播放', exact: true }).click()
+  await page.clock.runFor(1000)
+  await expect(panel.locator('.replay-marker-insight')).toHaveCount(1)
+  await expect(panel.locator('.replay-chart-local-fill')).toHaveCount(0)
+  await expect(page.locator('.replay-insight-hover-surface')).toBeHidden()
+})
+
+test('desktop trade cards only locate the chart and independent dialogs show complete details', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'PC trade review')
+  const { replayTrades, iso } = await import('./replay-fixtures')
+  const { envelope } = await import('./auth-fixtures')
+  const { calls } = await stubReplay(page)
+  const returns = ['-0.0696', '-0.0520', '-0.1168', '-0.0564', '0.0365', '-0.1111', '0.1851']
+  const profits = ['-69.60', '-51.62', '-115.38', '-55.10', '35.39', '-108.26', '178.32']
+  const reason =
+    'Close broke above prior 10-bar high (Livermore key-point breakout), with volume confirming the entry signal and risk controls satisfied.'
+  const trades = returns.map((value, index) => {
+    const entry = 20 + index * 20,
+      exit = entry + 10
+    return {
+      ...replayTrades[0],
+      id: `review-${index}`,
+      sequence: index + 1,
+      entry_candle_id: `c-${entry}`,
+      exit_candle_id: `c-${exit}`,
+      entry_at: iso(entry),
+      exit_at: iso(exit),
+      return_rate: value,
+      net_pnl: profits[index],
+      holding_seconds: 6220799,
+      exit_reason: index === 6 ? 'end_of_test' : 'rule',
+      quantity: '0.01513059',
+      fills: replayTrades[0]!.fills.map((fill, i) => ({
+        ...fill,
+        id: `review-fill-${index}-${i}`,
+        sequence: index * 2 + i,
+        candle_id: `c-${i ? exit : entry}`,
+        occurred_at: iso(i ? exit : entry),
+        price: i ? '75606.66' : '63681.84',
+        quantity: '0.01513059',
+        fee: i ? '1.14397334' : '0.96354374',
+        position_before: i ? '0.01513059' : '0',
+        position_after: i ? '0' : '0.01513059',
+        reason: i ? 'end_of_test' : reason,
+      })),
+    }
+  })
+  await page.route(/\/api\/replays\/[^/?]+\/trades(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({ items: trades, page: 1, size: 100, total: 7, total_pages: 1 }),
+    }),
+  )
+  await page.setViewportSize({ width: 1600, height: 1000 })
+  await open(page)
+  const panel = page.locator('.asset-detail-panel')
+  await panel.getByRole('button', { name: '全屏', exact: true }).click()
+  await expect(panel.locator('.replay-trade-card')).toHaveCount(7)
+  await panel.locator('.replay-trade-card').first().click()
+  await expect(panel.locator('.replay-trade-detail')).toHaveCount(0)
+  await expect(page.locator('.replay-trade-dialog')).toHaveCount(0)
+  await expect(panel.locator('.replay-cards-heading h3')).toHaveText('交易 7')
+  const cutoff = await panel.locator('.replay-timeline input').inputValue()
+  const chart = panel.locator('.replay-chart')
+  const selected = panel.locator('[data-trade-id="review-6"]')
+  const rangeBefore = await panel.locator('.replay-evidence-shade').boundingBox()
+  const detailsEntry = panel.locator('[data-trade-details="review-5"]')
+  const textColor = await detailsEntry.evaluate((el) => getComputedStyle(el).color)
+  await detailsEntry.hover()
+  await expect(detailsEntry).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(detailsEntry).not.toHaveCSS('color', textColor)
+  const dialog = await openTradeDetails(page, 'review-5')
+  await expect(page.locator('.app-modal-overlay').last()).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0.32)',
+  )
+  await expect(selected).toHaveAttribute('aria-pressed', 'true')
+  await expect(panel.locator('.replay-timeline input')).toHaveValue(cutoff)
+  expect(await panel.locator('.replay-evidence-shade').boundingBox()).toEqual(rangeBefore)
+  await expect(dialog.locator('tbody tr')).toHaveCount(2)
+  await expect(dialog.locator('thead th')).toHaveCount(8)
+  await expect(dialog.locator('.replay-trade-dialog-metrics')).toContainText('-11.11%')
+  await expect(dialog.locator('.replay-trade-dialog-metrics')).toContainText('71 天 23 小时')
+  for (const label of ['毛利润', '手续费', '资金费用', '滑点成本'])
+    await expect(dialog.locator('.replay-trade-dialog-metrics')).toContainText(label)
+  await expect(dialog.locator('tbody tr').first()).toContainText('0.01513059')
+  await expect(dialog.locator('tbody tr').first()).toContainText('0.96354374')
+  await expect(dialog.locator('.replay-fill-reason').first()).toContainText(reason)
+  await expect(dialog.locator('.replay-trade-facts')).toHaveCSS('border-top-width', '0px')
+  const reasonCell = dialog.locator('.replay-fill-reason').first()
+  await expect(reasonCell).toHaveCSS('text-overflow', 'ellipsis')
+  expect(await reasonCell.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
+  for (const row of await dialog.locator('tbody tr').all())
+    expect((await row.boundingBox())!.height).toBeLessThan(52)
+  await reasonCell.hover()
+  const reasonTooltip = page.locator('.replay-fill-reason-tooltip')
+  await expect(reasonTooltip).toBeVisible()
+  await expect(reasonTooltip.locator('[data-slot="text"]')).toHaveText(reason)
+  await expect(reasonTooltip).toHaveCSS('z-index', '62')
+  await page.screenshot({
+    path: test.info().outputPath('trade-reason-hover.png'),
+    animations: 'disabled',
+  })
+  await dialog.getByRole('heading', { name: '交易明细', exact: true }).hover()
+  await expect(reasonTooltip).toBeHidden()
+  await reasonCell.focus()
+  await expect(reasonTooltip).toBeVisible()
+  await expect(reasonCell).toHaveAttribute('aria-describedby', /tooltip/)
+  await dialog.getByRole('button', { name: '关闭', exact: true }).focus()
+  await expect(reasonTooltip).toBeHidden()
+  await expect(dialog.getByRole('button', { name: /展开|费用/ })).toHaveCount(0)
+  const dialogBox = (await dialog.boundingBox())!
+  const closeBox = (await dialog.getByRole('button', { name: '关闭', exact: true }).boundingBox())!
+  expect(dialogBox.x + dialogBox.width - closeBox.x - closeBox.width).toBeLessThan(32)
+  await page.screenshot({
+    path: test.info().outputPath('trade-detail-dialog.png'),
+    animations: 'disabled',
+  })
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('[data-trade-details="review-5"]')).toBeFocused()
+  await expect(selected).toHaveAttribute('aria-pressed', 'true')
+  await expect(chart).toHaveAttribute('data-visible-end', cutoff)
+  expect(await panel.locator('.replay-evidence-shade').boundingBox()).toEqual(rangeBefore)
+  await panel
+    .locator('.replay-evidence')
+    .screenshot({ path: test.info().outputPath('trade-cards-only.png') })
+  await openTradeDetails(page, 'review-5')
+  await dialog.getByRole('button', { name: '询问 Agent', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(selected).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.replay-reference')).toContainText('#6')
+  await panel
+    .locator('.asset-detail-header')
+    .getByRole('button', { name: '关闭', exact: true })
+    .click()
+  await page.getByRole('textbox', { name: '交易想法' }).fill('解释这笔交易')
+  await page.getByRole('button', { name: '发送研究想法', exact: true }).click()
+  await expect.poll(() => calls.filter((call) => call.method === 'send').length).toBe(1)
+  expect(calls.find((call) => call.method === 'send')!.body.context).toMatchObject({
+    trade_id: 'review-5',
+  })
+})
+
+test('desktop insight inspection preserves its anchor and cutoff while the timeline seeks', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'PC insight selection')
+  const { replayInsights, iso } = await import('./replay-fixtures')
+  const { envelope } = await import('./auth-fixtures')
+  await stubReplay(page)
+  await page.route(/\/api\/replays\/[^/?]+\/insights(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        items: [
+          {
+            ...replayInsights[1],
+            id: 'interval',
+            candle_id: 'c-160',
+            evidence: {
+              entry_candle_id: 'c-130',
+              exit_candle_id: 'c-160',
+              trade_ids: ['t-2'],
+              fill_ids: ['f-4'],
+            },
+          },
+        ],
+      }),
+    }),
+  )
+  await open(page)
+  const panel = page.locator('.asset-detail-panel'),
+    chart = panel.locator('.replay-chart')
+  const timeline = panel.locator('[data-event-id="insight:interval"]')
+  const slider = panel.locator('.replay-timeline input')
+  await panel.locator('[data-trade-id="t-2"]').click()
+  await expect(panel.locator('[data-trade-id="t-2"]')).toHaveAttribute('aria-pressed', 'true')
+  await panel.getByRole('button', { name: '重置视野', exact: true }).click()
+  await chart.scrollIntoViewIfNeeded()
+  await expect.poll(async () => (await insightDots(chart)).length).toBe(1)
+  expect((await insightDots(chart))[0]!.active).toBe(false)
+  const dot = (await insightDots(chart))[0]!
+  expect(dot.width).toBeLessThanOrEqual(18)
+  await page.mouse.move(dot.x, dot.y)
+  await expect(panel.locator('.replay-chart-local-fill.is-insight')).toBeVisible()
+  await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
+  await page.mouse.click(dot.x, dot.y)
+  await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
+  await expect(timeline).toHaveAttribute('aria-pressed', 'true')
+  await expect(panel.locator('.replay-trade-card[aria-pressed="true"]')).toHaveCount(0)
+  await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(true)
+  const selectedRange = (await panel.locator('.replay-evidence-shade').boundingBox())!
+  const chartBox = (await chart.boundingBox())!
+  expect(Math.abs(selectedRange.x - chartBox.x)).toBeLessThan(2)
+  await expect.poll(async () => Math.abs((await insightDots(chart))[0]!.x - dot.x)).toBeLessThan(2)
+  await chart.screenshot({ path: test.info().outputPath('insight-anchored-interval.png') })
+  // Lightweight Charts suppresses a second mouse click within its 500ms double-click window.
+  await page.waitForTimeout(550)
+  const activeDot = (await insightDots(chart))[0]!
+  await page.mouse.move(activeDot.x, activeDot.y)
+  await page.mouse.click(activeDot.x, activeDot.y)
+  await expect(timeline).toHaveAttribute('aria-pressed', 'false')
+  await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+  await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(false)
+  await expect.poll(async () => Math.abs((await insightDots(chart))[0]!.x - dot.x)).toBeLessThan(2)
+  // Re-select in the chart, then seek the already-selected insight from the timeline.
+  await page.waitForTimeout(550)
+  await page.mouse.click(dot.x, dot.y)
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(true)
+  await timeline.click()
+  await expect(slider).toHaveValue(String(Date.parse(iso(160)) / 1000))
+  await expect(timeline).toHaveAttribute('aria-pressed', 'true')
+  await expect(panel.locator('.replay-trade-card[aria-pressed="true"]')).toHaveCount(0)
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(true)
+  expect((await panel.locator('.replay-evidence-shade').boundingBox())!.width).toBeGreaterThan(
+    selectedRange.width,
+  )
+  await timeline.click()
+  await expect(timeline).toHaveAttribute('aria-pressed', 'false')
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(false)
+  await timeline.click()
+  await slider.evaluate(
+    (input, value) => {
+      ;(input as HTMLInputElement).value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+    String(Date.parse(iso(140)) / 1000),
+  )
+  await expect(timeline).toHaveCount(0)
+  await expect.poll(async () => (await insightDots(chart)).length).toBe(0)
+  await slider.evaluate(
+    (input, value) => {
+      ;(input as HTMLInputElement).value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+    String(Date.parse(iso(199)) / 1000),
+  )
+  await chart.scrollIntoViewIfNeeded()
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(false)
+  await chart.screenshot({ path: test.info().outputPath('insight-hollow.png') })
+})
+
+test('fragmentary price and volume insights work without trades and single candles do not zoom', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'PC independent insight markers')
+  const { replayInsights, iso } = await import('./replay-fixtures')
+  const { envelope } = await import('./auth-fixtures')
+  await stubReplay(page, { empty: true })
+  await page.route(/\/api\/replays\/[^/?]+\/insights(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        items: [
+          {
+            ...replayInsights[1],
+            id: 'price',
+            candle_id: 'c-150',
+            title: '单根 K 线观察',
+            content: '这一根 K 线出现长下影线。',
+            evidence: null,
+          },
+          {
+            ...replayInsights[1],
+            id: 'volume',
+            candle_id: 'c-160',
+            title: '成交量观察',
+            content: '成交量高于近期均值。',
+            evidence: { summary: '当前成交量为近期均值的 2.3 倍', volume_ratio: 2.3 },
+          },
+        ],
+      }),
+    }),
+  )
+  await open(page)
+  const panel = page.locator('.asset-detail-panel'),
+    chart = panel.locator('.replay-chart')
+  const slider = panel.locator('.replay-timeline input')
+  await chart.scrollIntoViewIfNeeded()
+  await expect(panel.locator('.replay-trade-card')).toHaveCount(0)
+  await expect.poll(async () => (await insightDots(chart)).length).toBe(2)
+  const dots = await insightDots(chart)
+  for (const [n, id, content] of [
+    [0, 'price', '这一根 K 线出现长下影线。'],
+    [1, 'volume', '当前成交量为近期均值的 2.3 倍'],
+  ] as const) {
+    const dot = dots[n]!
+    await page.mouse.move(dot.x, dot.y)
+    const tooltip = panel.locator('.replay-chart-local-fill.is-insight')
+    await expect(tooltip).toContainText(content)
+    await expect
+      .poll(async () => {
+        const box = (await tooltip.boundingBox())!
+        return box.y + box.height
+      })
+      .toBeLessThan(dot.y - 10)
+    await page.mouse.click(dot.x, dot.y)
+    await expect(panel.locator(`[data-event-id="insight:${id}"]`)).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
+    const selectedRange = (await panel.locator('.replay-evidence-shade').boundingBox())!
+    expect(selectedRange.width).toBeLessThan(20)
+    for (const [i, position] of (await insightDots(chart)).entries())
+      expect(Math.abs(position.x - dots[i]!.x)).toBeLessThan(2)
+    await page.waitForTimeout(550)
+  }
+  await chart.screenshot({ path: test.info().outputPath('independent-volume-insight.png') })
+  await panel.locator('[data-event-id="insight:volume"]').click()
+  await expect(slider).toHaveValue(String(Date.parse(iso(160)) / 1000))
+  await expect(panel.locator('[data-event-id="insight:volume"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(panel.locator('.replay-trade-card')).toHaveCount(0)
+})
+
+test('desktop insight inspection and deselection keep playback running without moving its anchor', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'PC chart inspection')
+  const { replayInsights, iso } = await import('./replay-fixtures')
+  const { envelope } = await import('./auth-fixtures')
+  await stubReplay(page)
+  await page.route(/\/api\/replays\/[^/?]+\/insights(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      json: envelope({
+        items: [
+          {
+            ...replayInsights[1],
+            id: 'interval',
+            candle_id: 'c-100',
+            evidence: {
+              entry_candle_id: 'c-70',
+              exit_candle_id: 'c-100',
+            },
+          },
+        ],
+      }),
+    }),
+  )
+  await open(page)
+  const panel = page.locator('.asset-detail-panel'),
+    chart = panel.locator('.replay-chart')
+  const slider = panel.locator('.replay-timeline input')
+  await slider.evaluate(
+    (input, value) => {
+      ;(input as HTMLInputElement).value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+    String(Date.parse(iso(120)) / 1000),
+  )
+  await expect(panel.getByRole('button', { name: '播放', exact: true })).toBeEnabled()
+  await page.clock.install()
+  await panel.getByRole('button', { name: '播放', exact: true }).click()
+  await chart.scrollIntoViewIfNeeded()
+  await page.clock.runFor(100)
+  const before = Number(await slider.inputValue())
+  const dot = (await insightDots(chart))[0]!
+  await page.mouse.click(dot.x, dot.y)
+  await page.clock.runFor(100)
+  await expect(panel.getByRole('button', { name: '暂停', exact: true })).toBeVisible()
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(true)
+  expect(Number(await slider.inputValue())).toBeGreaterThanOrEqual(before)
+  await expect.poll(async () => Math.abs((await insightDots(chart))[0]!.x - dot.x)).toBeLessThan(2)
+  await page.clock.runFor(1200)
+  await expect.poll(async () => Number(await slider.inputValue())).toBeGreaterThan(before)
+  await expect.poll(async () => Math.abs((await insightDots(chart))[0]!.x - dot.x)).toBeLessThan(2)
+  const later = Number(await slider.inputValue())
+  await page.mouse.click(dot.x, dot.y)
+  await page.clock.runFor(100)
+  await expect.poll(async () => (await insightDots(chart))[0]?.active).toBe(false)
+  await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+  await page.clock.runFor(1200)
+  await expect.poll(async () => Number(await slider.inputValue())).toBeGreaterThan(later)
+  await expect(panel.getByRole('button', { name: '暂停', exact: true })).toBeVisible()
+  await panel.locator('[data-event-id="insight:interval"]').click()
+  await page.clock.runFor(100)
+  await expect(slider).toHaveValue(String(Date.parse(iso(100)) / 1000))
+  await expect(panel.getByRole('button', { name: '播放', exact: true })).toBeVisible()
+})

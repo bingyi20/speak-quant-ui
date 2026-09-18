@@ -220,6 +220,7 @@ export interface ReplayReport {
 export type ReplayListPage = Page<ReplaySummary>
 export interface ReplaySelection {
   candleId?: string
+  /** Only explicit trade/fill navigation sets these IDs; insight references stay in evidence. */
   tradeId?: string
   fillId?: string
   insightId?: string

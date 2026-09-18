@@ -1,3 +1,4 @@
+import { DEFAULT_CHART_VIEWPORT } from './viewport'
 import { formatDateTime } from '~/lib/format'
 import { TradeTags } from './trade-tags'
 import { TimeLabel } from './time-label'
@@ -49,7 +50,8 @@ export function createLightweightChart(
       borderColor: theme.grid,
       timeVisible: true,
       secondsVisible: false,
-      rightOffset: 8,
+      rightOffset: DEFAULT_CHART_VIEWPORT.right,
+      shiftVisibleRangeOnNewBar: !desktop(),
       tickMarkFormatter: desktop()
         ? (time: Time, type: TickMarkType) => {
             const text = formatDateTime(Number(time) * 1000)
@@ -104,7 +106,13 @@ export function createLightweightChart(
   let priceLines: IPriceLine[] = []
   let movingWindow = false,
     windowFrame = 0,
+    anchorFrame = 0,
     destroyed = false
+  function cancelAnchoredZoom() {
+    cancelAnimationFrame(anchorFrame)
+  }
+  element.addEventListener('pointerdown', cancelAnchoredZoom, { passive: true })
+  element.addEventListener('wheel', cancelAnchoredZoom, { passive: true })
   const MAX_VISIBLE = 4000,
     BUFFER = 500
   const rangeHandlers = new Set<(r: ChartRange) => void>(),
@@ -252,14 +260,12 @@ export function createLightweightChart(
     }
   })
   chart.subscribeClick((event) => {
-    const marker = currentMarkers.find((item) => item.id === event.hoveredObjectId)
+    const hit = event.point ? markers.markerAt(event.point.x, event.point.y) : undefined
+    const markerId =
+      hit?.id ?? (typeof event.hoveredObjectId === 'string' ? event.hoveredObjectId : undefined)
+    const marker = currentMarkers.find((item) => item.id === markerId)
     if (typeof event.time === 'number' || marker)
-      selectHandlers.forEach((h) =>
-        h(
-          marker?.time ?? (event.time as number),
-          typeof event.hoveredObjectId === 'string' ? event.hoveredObjectId : undefined,
-        ),
-      )
+      selectHandlers.forEach((h) => h(marker?.time ?? (event.time as number), markerId))
   })
   chart.subscribeCrosshairMove((event) => {
     const time = typeof event.time === 'number' ? event.time : null
@@ -268,6 +274,7 @@ export function createLightweightChart(
     crosshairHandlers.forEach((h) => h(time, hit))
   })
   function setVisibleRange(requested: ChartRange) {
+    cancelAnchoredZoom()
     if (!rows.length || requested.from >= requested.to) return
     const range = renderWindow(requested)
     if (range && range.to > range.from)
@@ -275,6 +282,59 @@ export function createLightweightChart(
         .timeScale()
         .setVisibleRange({ from: range.from as UTCTimestamp, to: range.to as UTCTimestamp })
     updateShade()
+  }
+  function focusDefaultViewport(time: number) {
+    cancelAnchoredZoom()
+    if (!rows.length) return
+    const index = lowerBound(rows, time)
+    renderWindow({
+      from: rows[Math.max(0, index - DEFAULT_CHART_VIEWPORT.history)]!.time,
+      to: rows[Math.min(rows.length - 1, index + DEFAULT_CHART_VIEWPORT.right)]!.time,
+    })
+    const target = lowerBound(plotted, time)
+    chart.timeScale().setVisibleLogicalRange({
+      from: Math.max(-1, target - DEFAULT_CHART_VIEWPORT.history),
+      to: target + (desktop() ? DEFAULT_CHART_VIEWPORT.right : 30),
+    })
+    updateShade()
+  }
+  function zoomAroundTime(requested: ChartRange, time: number) {
+    if (!rows.length || requested.from >= requested.to) return
+    cancelAnchoredZoom()
+    cancelAnimationFrame(windowFrame)
+    const scale = chart.timeScale()
+    const x = scale.timeToCoordinate(time as UTCTimestamp)
+    if (x === null || !scale.width()) return
+    const fraction = Math.max(0, Math.min(1, x / scale.width()))
+    const span = Math.max(
+      1,
+      Math.min(MAX_VISIBLE, lowerBound(rows, requested.to) - lowerBound(rows, requested.from)),
+    )
+    const index = lowerBound(rows, time)
+    // Load the viewport around the anchor, allowing evidence to extend off screen.
+    renderWindow({
+      from: rows[Math.max(0, Math.floor(index - fraction * span))]!.time,
+      to: rows[Math.min(rows.length - 1, Math.ceil(index + (1 - fraction) * span))]!.time,
+    })
+    const anchor = scale.timeToIndex(time as UTCTimestamp)
+    if (anchor === null) return
+    // Logical endpoints include both edge bars. Match the SDK's half-bar center
+    // and 1px axis inset; range setters are deferred, so do not read back yet.
+    const position = () => {
+      const from = anchor + 0.5 - ((x + 1) / scale.width()) * (span + 1)
+      scale.setVisibleLogicalRange({ from, to: from + span })
+    }
+    position()
+    // Autoscale may change price-label width during the next paint. Preserve
+    // the absolute x coordinate once that layout settles, not its old ratio.
+    const settle = (previousWidth: number, remaining: number) => {
+      anchorFrame = requestAnimationFrame(() => {
+        if (destroyed || scale.width() === previousWidth) return
+        position()
+        if (remaining > 0) settle(scale.width(), remaining - 1)
+      })
+    }
+    settle(scale.width(), 2)
   }
   return {
     setData(value) {
@@ -307,6 +367,7 @@ export function createLightweightChart(
       updateShade()
     },
     seek(time) {
+      if (desktop()) return focusDefaultViewport(time)
       const range = chart.timeScale().getVisibleRange()
       const span =
         range && typeof range.from === 'number' && typeof range.to === 'number'
@@ -315,14 +376,11 @@ export function createLightweightChart(
       setVisibleRange({ from: time - span / 2, to: time + span / 2 })
     },
     follow() {
-      if (!rows.length) return
-      renderWindow({ from: rows[Math.max(0, rows.length - 101)]!.time, to: rows.at(-1)!.time })
-      const to = plotted.length - 1,
-        from = Math.max(-1, to - 100)
-      chart.timeScale().setVisibleLogicalRange({ from, to: to + 30 })
-      updateShade()
+      const latest = rows.at(-1)
+      if (latest) focusDefaultViewport(latest.time)
     },
     setVisibleRange,
+    zoomAroundTime,
     getViewState: view,
     setMarkers,
     setSelection,
@@ -381,6 +439,9 @@ export function createLightweightChart(
     destroy() {
       destroyed = true
       cancelAnimationFrame(windowFrame)
+      cancelAnchoredZoom()
+      element.removeEventListener('pointerdown', cancelAnchoredZoom)
+      element.removeEventListener('wheel', cancelAnchoredZoom)
       rangeHandlers.clear()
       selectHandlers.clear()
       crosshairHandlers.clear()

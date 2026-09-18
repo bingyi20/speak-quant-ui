@@ -41,6 +41,53 @@ export class TradeTags implements ISeriesPrimitive<Time> {
         ctx.textBaseline = 'middle'
         for (const marker of this.markers) {
           const x = attached.chart.timeScale().timeToCoordinate(marker.time as UTCTimestamp)
+          if (marker.side === 'insight') {
+            if (x === null || x < 0 || x > mediaSize.width) continue
+            // Keep edge candles' insight controls visible and clickable after interval fitting.
+            const centerX = Math.max(12, Math.min(mediaSize.width - 12, x))
+            const y = mediaSize.height - 18
+            const color = this.theme.insight ?? this.theme.accent ?? this.theme.text
+            ctx.fillStyle = marker.active ? color : this.theme.background
+            ctx.strokeStyle = color
+            ctx.lineWidth = 1.5
+            ctx.beginPath()
+            ctx.arc(centerX, y, 8, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.stroke()
+            ctx.save()
+            ctx.fillStyle = marker.active ? this.theme.tagText : color
+            if (marker.label) {
+              ctx.font = '600 10px sans-serif'
+              ctx.fillText(marker.label, centerX, y)
+            } else {
+              // A small bulb conveys an insight without resembling an alert or info badge.
+              ctx.strokeStyle = ctx.fillStyle
+              ctx.lineWidth = 1.1
+              ctx.lineCap = 'round'
+              ctx.lineJoin = 'round'
+              ctx.beginPath()
+              ctx.moveTo(centerX - 1.5, y + 2.5)
+              ctx.lineTo(centerX - 1.5, y + 1.5)
+              ctx.bezierCurveTo(centerX - 1.5, y + 0.5, centerX - 3, y, centerX - 3, y - 1.7)
+              ctx.bezierCurveTo(centerX - 3, y - 5.5, centerX + 3, y - 5.5, centerX + 3, y - 1.7)
+              ctx.bezierCurveTo(centerX + 3, y, centerX + 1.5, y + 0.5, centerX + 1.5, y + 1.5)
+              ctx.lineTo(centerX + 1.5, y + 2.5)
+              ctx.closePath()
+              ctx.moveTo(centerX - 1, y + 4.5)
+              ctx.lineTo(centerX + 1, y + 4.5)
+              ctx.stroke()
+            }
+            ctx.restore()
+            // Preserve the comfortable hit area while reducing the visible circle.
+            this.hits.push({
+              id: marker.id,
+              left: centerX - 10,
+              top: y - 10,
+              width: 20,
+              height: 20,
+            })
+            continue
+          }
           const y = attached.series.priceToCoordinate(marker.price)
           const edge = attached.series.priceToCoordinate(marker.edgePrice)
           if (

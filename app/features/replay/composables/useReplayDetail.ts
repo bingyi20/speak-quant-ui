@@ -1,3 +1,5 @@
+import type { ChartViewportRequest } from '~/lib/chart/adapter'
+import { defaultViewportRange, evidenceViewportRange } from '~/lib/chart/viewport'
 import { historicalResult } from '../historical-result'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useNuxtApp } from '#app'
@@ -5,7 +7,7 @@ import { useAuthStore } from '~/features/auth'
 import { createReplayApi } from '../api'
 import { createReplayDataState } from '../data-state'
 import { buildReplayEvents, resolveSelection } from '../events'
-import { nearestBar, nextBarTime, normalizeState } from '../normalize'
+import { evidenceIds, nearestBar, nextBarTime, normalizeState } from '../normalize'
 import { advancePlayback } from '../playback-state'
 import { closedBars, revealTrades } from '../visibility'
 import type {
@@ -37,7 +39,7 @@ export function useReplayDetail(
   const tab = ref<'insights' | 'trades'>('insights'),
     expanded = ref(false)
   const viewRange = shallowRef<{ from: number; to: number } | null>(null)
-  const requestedRange = shallowRef<{ from: number; to: number; revision: number } | null>(null)
+  const requestedRange = shallowRef<(ChartViewportRequest & { revision: number }) | null>(null)
   const follow = ref(true),
     scrollTop = ref(0)
   const snapshots = new Map<string, ReplayViewSnapshot>()
@@ -136,6 +138,16 @@ export function useReplayDetail(
   const selectedInsight = computed(
     () => visibleInsights.value.find((i) => i.id === selection.value?.insightId) ?? null,
   )
+  // Explicit navigation links may use related trades without selecting them.
+  const relatedInsightTrade = computed(() => {
+    const ids = evidenceIds(selectedInsight.value?.evidence ?? null)
+    return (
+      visibleTrades.value.find(
+        (trade) =>
+          ids.trades.includes(trade.id) || trade.fills.some((fill) => ids.fills.includes(fill.id)),
+      ) ?? null
+    )
+  })
   let frame = 0,
     intent = 0,
     seekGeneration = 0,
@@ -173,7 +185,7 @@ export function useReplayDetail(
     })
     while (snapshots.size > 10) snapshots.delete(snapshots.keys().next().value!)
   }
-  function requestRange(range: { from: number; to: number }) {
+  function requestRange(range: ChartViewportRequest) {
     if (!(range.to > range.from)) return
     requestedRange.value = { ...range, revision: ++rangeRevision }
   }
@@ -187,17 +199,29 @@ export function useReplayDetail(
     if (!resolved?.range || resolved.range.to > (currentBar.value?.time ?? -Infinity)) return
     pause()
     follow.value = false
-    locateRange(resolved)
+    focusEvidenceViewport(resolved)
   }
-  function locateRange(target: ReplaySelection) {
+  function focusEvidenceViewport(target: ReplaySelection, anchorTime?: number) {
     const bar = target.candleId ? data.axis.value[data.indexById.get(target.candleId) ?? -1] : null
     const step =
       data.axis.value.length > 1
         ? Math.max(1, data.axis.value[1]!.time - data.axis.value[0]!.time)
         : 3600
-    if (target.range) {
-      const margin = Math.max(step * 8, (target.range.to - target.range.from) * 0.1)
-      requestRange({ from: target.range.from - margin, to: target.range.to + margin })
+    const isDesktop = window.matchMedia('(min-width: 761px)').matches
+    const isInterval =
+      target.range &&
+      nearestBar(data.axis.value, target.range.from) !==
+        nearestBar(data.axis.value, target.range.to)
+    const pointTime = bar?.time ?? target.range?.from
+    if (anchorTime !== undefined) {
+      if (isInterval && target.range)
+        requestRange({ ...evidenceViewportRange(target.range, step), anchorTime })
+      return
+    }
+    if (isDesktop && !isInterval && pointTime !== undefined) {
+      requestRange({ ...defaultViewportRange(pointTime, step), focusTime: pointTime })
+    } else if (target.range) {
+      requestRange(evidenceViewportRange(target.range, step))
     } else if (bar) requestRange({ from: bar.time - step * 50, to: bar.time + step * 50 })
   }
   async function readAt(next: number, ticket: number) {
@@ -227,6 +251,19 @@ export function useReplayDetail(
       if (ticket === seekGeneration) currentLoading.value = false
     }
   }
+  function currentViewportRange() {
+    const bar = data.axis.value[index.value]
+    if (!bar) return null
+    const step =
+      (nextBarTime(bar.time, data.detail.value!.strategy.execution_timeframe) ?? bar.time + 3600) -
+      bar.time
+    return defaultViewportRange(bar.time, step, window.matchMedia('(min-width: 761px)').matches)
+  }
+  function focusCurrentViewport() {
+    const range = currentViewportRange()
+    if (range) requestRange({ ...range, focusTime: data.axis.value[index.value]?.time })
+    follow.value = true
+  }
   async function seek(next: number) {
     pause()
     selection.value = null
@@ -238,11 +275,7 @@ export function useReplayDetail(
     const bounded = Math.max(0, Math.min(data.axis.value.length - 1, next))
     if (!data.axis.value[bounded]) return
     index.value = bounded
-    const bar = data.axis.value[bounded]!
-    const step =
-      (nextBarTime(bar.time, data.detail.value!.strategy.execution_timeframe) ?? bar.time + 3600) -
-      bar.time
-    const range = { from: bar.time - step * 50, to: bar.time + step * 8 }
+    const range = currentViewportRange()!
     await Promise.all([
       readAt(bounded, ticket),
       data.displayTimeframe.value !== data.detail.value?.strategy.execution_timeframe
@@ -250,8 +283,7 @@ export function useReplayDetail(
         : Promise.resolve(),
     ])
     if (ticket !== seekGeneration) return
-    requestRange(range)
-    follow.value = true
+    focusCurrentViewport()
   }
   async function seekTime(time: number) {
     pause()
@@ -279,6 +311,9 @@ export function useReplayDetail(
     }
     await seek(n)
   }
+  function resolveVisibleSelection(target: ReplaySelection) {
+    return resolveSelection(target, data.axis.value, visibleTrades.value, visibleInsights.value)
+  }
   async function locate(target: ReplaySelection, movePlayhead = true) {
     pause()
     const ticket = seekGeneration
@@ -287,12 +322,7 @@ export function useReplayDetail(
     if (movePlayhead) gapTime.value = null
     await data.setTimeframe(data.detail.value?.strategy.execution_timeframe ?? '')
     if (ticket !== seekGeneration) return
-    const resolved = resolveSelection(
-      target,
-      data.axis.value,
-      visibleTrades.value,
-      visibleInsights.value,
-    )
+    const resolved = resolveVisibleSelection(target)
     if (!resolved) {
       if (target.insightId && data.insights.value.some((i) => i.id === target.insightId)) {
         selection.value = { insightId: target.insightId }
@@ -339,7 +369,39 @@ export function useReplayDetail(
         },
       }
     if (ticket !== seekGeneration) return
-    locateRange(selection.value ?? resolved)
+    focusEvidenceViewport(selection.value ?? resolved)
+  }
+  async function toggleInsight(target: ReplaySelection) {
+    // A chart inspection can select an earlier insight without seeking. Clicking its
+    // timeline point must still navigate; only a repeat at that time deselects it.
+    if (
+      target.insightId &&
+      selection.value?.insightId === target.insightId &&
+      currentBar.value?.id === target.candleId
+    ) {
+      pause()
+      selection.value = null
+      return
+    }
+    await locate(target)
+  }
+  function inspectInsight(target: ReplaySelection, anchorTime: number) {
+    // Like pan/zoom, inspection detaches the viewport but never interrupts playback.
+    follow.value = false
+    if (target.insightId && selection.value?.insightId === target.insightId) {
+      selection.value = null
+      return
+    }
+    const resolved = resolveVisibleSelection(target)
+    if (!resolved) return
+    if (resolved.range && currentBar.value)
+      resolved.range = {
+        from: resolved.range.from,
+        to: Math.min(resolved.range.to, currentBar.value.time),
+      }
+    locateError.value = ''
+    selection.value = resolved
+    focusEvidenceViewport(resolved, anchorTime)
   }
   async function selectCandle(time: number) {
     pause()
@@ -460,10 +522,12 @@ export function useReplayDetail(
       if (range) requestRange(range)
     }
   }
-  function question(): ReplayQuestionReference | null {
+  function question(target?: ReplaySelection): ReplayQuestionReference | null {
     if (!data.detail.value) return null
     pause()
-    const s = selection.value
+    const s = target ?? selection.value
+    const trade = visibleTrades.value.find((trade) => trade.id === s?.tradeId)
+    const insight = visibleInsights.value.find((insight) => insight.id === s?.insightId)
     return {
       context: {
         replay_id: data.detail.value.id,
@@ -475,10 +539,8 @@ export function useReplayDetail(
           : {}),
       },
       label:
-        selectedInsight.value?.title ||
-        (selectedTrade.value
-          ? `#${selectedTrade.value.sequence} · ${data.detail.value.name}`
-          : data.detail.value.name),
+        insight?.title ||
+        (trade ? `#${trade.sequence} · ${data.detail.value.name}` : data.detail.value.name),
     }
   }
   function schedulePoll() {
@@ -657,11 +719,14 @@ export function useReplayDetail(
     renderedEvents,
     selectedTrade,
     selectedInsight,
+    relatedInsightTrade,
     pause,
     previewResult,
     play,
     start,
     locate,
+    toggleInsight,
+    inspectInsight,
     selectCandle,
     seek,
     seekTime,

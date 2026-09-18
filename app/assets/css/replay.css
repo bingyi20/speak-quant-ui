@@ -1,3 +1,7 @@
+.replay-detail-content {
+  scrollbar-gutter: stable;
+}
+
 .replay-workspace {
   position: relative;
   padding: 12px 20px 20px;
@@ -76,10 +80,12 @@
 .replay-summary-metrics > div:first-child dd {
   font-size: 24px;
 }
-.replay-workspace .is-positive {
+.replay-workspace .is-positive,
+.replay-trade-dialog .is-positive {
   color: var(--color-chart-up);
 }
-.replay-workspace .is-negative {
+.replay-workspace .is-negative,
+.replay-trade-dialog .is-negative {
   color: var(--color-chart-down);
 }
 .replay-chart-toolbar {
@@ -1184,4 +1190,332 @@
     align-items: baseline;
     gap: 7px;
   }
+}
+
+.replay-insight-popover {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+.replay-insight-popover time {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+.replay-insight-popover h4 {
+  margin: 6px 0 8px;
+  font-weight: 600;
+}
+.replay-insight-popover h5 {
+  margin: 10px 0 4px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.replay-insight-popover p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.replay-insight-popover article + article {
+  margin-top: 14px;
+  border-top: 1px solid var(--color-border-default);
+  padding-top: 8px;
+}
+.replay-insight-hover-surface {
+  width: min(340px, calc(100vw - 24px));
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-chart-tooltip);
+}
+@media (min-width: 761px) {
+  .replay-chart-local-fill.is-insight {
+    width: min(340px, calc(100% - 84px));
+    max-height: 300px;
+  }
+  .replay-cards-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+  }
+  .replay-cards-heading h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .replay-cards-heading h3 span {
+    margin-left: 6px;
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+  .replay-trade-cards {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 0 0 10px;
+    scroll-snap-type: x proximity;
+  }
+  .replay-trade-cards > div {
+    flex: 0 0 168px;
+    scroll-snap-align: start;
+  }
+  .replay-trade-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--color-border-default);
+    border-radius: 8px;
+    background: var(--color-bg-surface);
+    color: var(--color-text-primary);
+    text-align: left;
+  }
+  .replay-trade-card:hover {
+    background: var(--color-bg-subtle);
+  }
+  .replay-trade-card.is-selected {
+    border-color: var(--color-brand);
+    background: var(--color-bg-subtle);
+  }
+  .replay-card-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+  }
+  .replay-card-heading > span:last-child {
+    color: var(--color-text-muted);
+  }
+  .replay-card-pnl {
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+  .replay-card-pnl small {
+    font-size: 12px;
+    margin-left: 8px;
+  }
+  .replay-card-time {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .replay-trade-item {
+    position: relative;
+  }
+  .replay-card-heading {
+    padding-right: 44px;
+  }
+  .replay-trade-details-trigger {
+    position: absolute;
+    top: 4px;
+    right: 5px;
+    padding: 6px;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    line-height: 18px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .replay-trade-details-trigger:hover {
+    color: var(--color-text-secondary);
+  }
+}
+.replay-insight-evidence {
+  padding-top: 8px;
+  color: var(--color-text-secondary);
+}
+@media (min-width: 761px) {
+  .replay-cards-heading {
+    flex-wrap: wrap;
+  }
+  .replay-cards-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: auto;
+  }
+}
+
+.replay-trade-dialog {
+  width: 100%;
+  max-width: min(1180px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+/* Results lead; position facts and always-visible costs remain secondary. */
+.replay-trade-dialog-metrics {
+  margin-bottom: 22px;
+}
+.replay-trade-dialog-close {
+  margin-left: auto;
+  align-self: flex-start;
+}
+.replay-trade-result,
+.replay-trade-facts {
+  display: grid;
+  grid-template-columns: 1.1fr 1.1fr 1fr 1fr;
+  gap: 16px 28px;
+  margin: 0;
+}
+.replay-trade-result {
+  align-items: start;
+  margin-bottom: 22px;
+}
+.replay-trade-facts {
+  padding-bottom: 18px;
+}
+.replay-trade-dialog-metrics dt {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.replay-trade-dialog-metrics dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.replay-trade-result .is-return dd {
+  font-size: 28px;
+  line-height: 34px;
+}
+.replay-trade-result dd {
+  line-height: 34px;
+}
+.replay-trade-result .is-profit dd {
+  font-size: 20px;
+  line-height: 34px;
+}
+.replay-trade-costs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--color-bg-canvas);
+}
+.replay-trade-costs > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.replay-trade-costs dt {
+  margin: 0;
+}
+.replay-trade-costs dd {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--color-text-secondary);
+}
+.replay-dialog-fills-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.replay-dialog-fills-heading h3 {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0;
+}
+.replay-dialog-fills-heading .text-button {
+  font-size: 12px;
+  min-height: 28px;
+  padding: 4px 0;
+}
+.replay-trade-dialog .replay-table-scroll {
+  overflow-x: auto;
+}
+.replay-trade-dialog table {
+  width: 100%;
+  min-width: 1100px;
+  table-layout: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.replay-trade-dialog th {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-default);
+  padding: 10px;
+  white-space: nowrap;
+}
+.replay-trade-dialog td {
+  padding: 14px 10px;
+  vertical-align: middle;
+  line-height: 20px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-default);
+  font-variant-numeric: tabular-nums;
+}
+.replay-trade-dialog th:first-child,
+.replay-trade-dialog td:first-child {
+  padding-left: 0;
+}
+.replay-trade-dialog th:last-child,
+.replay-trade-dialog td:last-child {
+  padding-right: 0;
+}
+.replay-trade-dialog .is-numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+.replay-trade-dialog td:last-child {
+  min-width: 160px;
+  max-width: 0;
+}
+.replay-fill-reason {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  transition: color var(--motion-fast) ease;
+}
+.replay-fill-reason:hover,
+.replay-fill-reason:focus-visible {
+  color: var(--color-text-secondary);
+}
+.replay-fill-reason-tooltip {
+  z-index: 62;
+  height: auto;
+  max-width: 320px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-menu);
+  font-size: 12px;
+  line-height: 20px;
+}
+.replay-fill-reason-text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.replay-trade-dialog .replay-fill-row {
+  padding: 0;
+  border: 0;
+  width: auto;
+  font-size: 12px;
+  line-height: 20px;
+  min-height: 20px;
+  white-space: nowrap;
+}
+.replay-trade-dialog tr.is-selected {
+  background: var(--color-bg-subtle);
 }

@@ -30,6 +30,9 @@
   scrollbar-width: thin;
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
+.app-modal-overlay {
+  background: var(--color-overlay);
+}
 /* Native scrollbar colors override WebKit thumb hover styles in Chromium. */
 @supports selector(::-webkit-scrollbar) {
   * {

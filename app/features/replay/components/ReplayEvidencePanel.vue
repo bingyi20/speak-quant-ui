@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch, useTemplateRef } from 'vue'
 import { formatDate, formatDecimal, formatRatio } from '~/lib/format'
+import ReplayTradeDialog from './ReplayTradeDialog.vue'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
 import { fillActionKey } from '../events'
 import type { ReplayQuestionReference, ReplaySelection } from '../types'
 const props = defineProps<{ state: ReplayDetailState; desktop?: boolean }>()
-const emit = defineEmits<{ question: [reference: ReplayQuestionReference] }>()
+const emit = defineEmits<{
+  question: [reference: ReplayQuestionReference]
+  menu: [open: boolean]
+}>()
 const { t, locale } = useI18n()
 const {
   detail,
@@ -19,10 +23,53 @@ const {
   errors,
   visibleInsights,
   selectedInsight,
+  relatedInsightTrade,
   selectedTrade,
   selection,
   tradesComplete,
 } = props.state
+const cardsElement = useTemplateRef<HTMLElement>('cardsElement')
+const newestFirst = ref(true)
+const detailsTradeId = ref<string | null>(null)
+const detailsTrade = computed(
+  () => trades.value.find((trade) => trade.id === detailsTradeId.value) ?? null,
+)
+const detailsOpen = computed({
+  get: () => !!detailsTrade.value,
+  set: (value: boolean) => {
+    if (!value) detailsTradeId.value = null
+  },
+})
+watch(detailsOpen, (value) => emit('menu', value))
+let detailsTrigger: HTMLElement | null = null
+function openDetails(id: string, event: Event) {
+  props.state.pause()
+  detailsTrigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  detailsTradeId.value = id
+}
+function restoreDetailsFocus() {
+  if (detailsTrigger?.isConnected) detailsTrigger.focus({ preventScroll: true })
+}
+function locateDetailsFill(fillId: string) {
+  const tradeId = detailsTrade.value?.id
+  detailsTradeId.value = null
+  if (tradeId) locate({ tradeId, fillId })
+}
+function askDetails() {
+  const tradeId = detailsTrade.value?.id
+  if (!tradeId) return
+  const reference = props.state.question({ tradeId })
+  detailsTrigger = null
+  detailsTradeId.value = null
+  if (reference) emit('question', reference)
+}
+watch(
+  () => props.desktop,
+  (value) => {
+    if (!value) detailsTradeId.value = null
+  },
+)
+const displayTab = computed(() => (props.desktop ? 'trades' : tab.value))
 const scope = ref<'global' | 'runtime'>('global'),
   direction = ref('all'),
   exitReason = ref('all'),
@@ -39,13 +86,16 @@ const filteredInsights = computed(() =>
   visibleInsights.value.filter((i) => i.scope === scope.value),
 )
 const filteredTrades = computed(() =>
-  trades.value.filter(
-    (v) =>
-      (direction.value === 'all' || v.direction === direction.value) &&
-      (exitReason.value === 'all' || v.exit_reason === exitReason.value),
-  ),
+  [...trades.value]
+    .sort((a, b) => (props.desktop && newestFirst.value ? -1 : 1) * (a.sequence - b.sequence))
+    .filter(
+      (v) =>
+        (props.desktop || direction.value === 'all' || v.direction === direction.value) &&
+        (props.desktop || exitReason.value === 'all' || v.exit_reason === exitReason.value),
+    ),
 )
-const rows = computed(() => filteredTrades.value.slice((page.value - 1) * 20, page.value * 20))
+const cardRows = computed(() => filteredTrades.value.slice((page.value - 1) * 20, page.value * 20))
+const rows = computed(() => (props.desktop ? [] : cardRows.value))
 const tradePages = computed(() => Math.max(1, Math.ceil(filteredTrades.value.length / 20)))
 const exitReasons = computed(() => [
   { label: t('replay.allExits'), value: 'all' },
@@ -102,7 +152,7 @@ watch(
 watch(exitReasons, (items) => {
   if (!items.some((item) => item.value === exitReason.value)) exitReason.value = 'all'
 })
-watch([direction, exitReason], () => {
+watch([direction, exitReason, newestFirst], () => {
   page.value = 1
 })
 watch(selection, async (value, previous) => {
@@ -125,6 +175,19 @@ watch(selection, async (value, previous) => {
     if (selection.value !== value) return
     const n = filteredTrades.value.findIndex((t) => t.id === value.tradeId)
     if (n >= 0) page.value = Math.floor(n / 20) + 1
+    await nextTick()
+    const strip = cardsElement.value
+    const card = strip
+      ? [...strip.querySelectorAll<HTMLElement>('[data-trade-id]')].find(
+          (element) => element.dataset.tradeId === value.tradeId,
+        )
+      : undefined
+    if (strip && card) {
+      const bounds = strip.getBoundingClientRect(),
+        selected = card.getBoundingClientRect()
+      if (selected.left < bounds.left || selected.right > bounds.right)
+        strip.scrollTo({ left: strip.scrollLeft + selected.left - bounds.left, behavior: 'smooth' })
+    }
   }
 })
 watch(
@@ -134,6 +197,8 @@ watch(
     exitReason.value = 'all'
     page.value = 1
     insightLimit.value = 20
+    newestFirst.value = true
+    detailsTradeId.value = null
   },
 )
 const pnlClass = (value: string | null) =>
@@ -142,9 +207,88 @@ const pnlClass = (value: string | null) =>
 <template>
   <section
     class="replay-evidence"
+    :class="{ 'is-desktop-cards': desktop }"
     :aria-label="t('replay.evidence')"
   >
+    <template v-if="desktop">
+      <div
+        v-if="errors.insights"
+        class="replay-inline-error"
+        role="alert"
+      >
+        <span>{{ t(errors.insights) }}</span
+        ><button
+          class="text-button"
+          @click="state.retry('insights')"
+        >
+          {{ t('common.retry') }}
+        </button>
+      </div>
+      <div class="replay-cards-heading">
+        <h3>
+          {{ t('replay.tradesTitle') }} <span>{{ trades.length }}</span>
+        </h3>
+        <div class="replay-cards-tools">
+          <button
+            class="text-button"
+            :aria-label="t('replay.tradeOrder')"
+            @click="newestFirst = !newestFirst"
+          >
+            <UIcon
+              :name="
+                newestFirst ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-wide-narrow'
+              "
+            />{{ t(newestFirst ? 'replay.newestFirst' : 'replay.oldestFirst') }}
+          </button>
+        </div>
+      </div>
+      <div
+        ref="cardsElement"
+        class="replay-trade-cards"
+        role="list"
+        :aria-label="t('replay.tradesTitle')"
+      >
+        <div
+          v-for="trade in cardRows"
+          :key="trade.id"
+          role="listitem"
+          class="replay-trade-item"
+        >
+          <button
+            class="replay-trade-card"
+            :class="{ 'is-selected': selectedTrade?.id === trade.id }"
+            :data-trade-id="trade.id"
+            :aria-pressed="selectedTrade?.id === trade.id"
+            @click="locate({ tradeId: trade.id })"
+          >
+            <span class="replay-card-heading">{{ t(`replay.direction.${trade.direction}`) }}</span>
+            <span
+              class="replay-card-pnl"
+              :class="pnlClass(trade.net_pnl)"
+              ><span>{{ formatRatio(trade.return_rate, locale) }}</span
+              ><small
+                >{{ Number(trade.net_pnl) > 0 ? '+' : ''
+                }}{{ formatDecimal(trade.net_pnl, locale) }}</small
+              ></span
+            >
+            <span class="replay-card-time"
+              >{{ trade.entry_at.slice(0, 10).replaceAll('-', '/') }} →
+              {{ trade.exit_at?.slice(5, 10).replace('-', '/') || t('replay.unclosed') }}</span
+            >
+          </button>
+          <button
+            class="replay-trade-details-trigger"
+            :data-trade-details="trade.id"
+            :aria-label="t('replay.viewTradeDetails')"
+            @click.stop="openDetails(trade.id, $event)"
+          >
+            {{ t('replay.detailsEntry') }}
+          </button>
+        </div>
+      </div>
+    </template>
     <div
+      v-if="!desktop"
       class="replay-evidence-tabs"
       role="tablist"
       :aria-label="t('replay.evidence')"
@@ -179,23 +323,26 @@ const pnlClass = (value: string | null) =>
     <div
       id="replay-evidence-content"
       role="tabpanel"
-      :aria-labelledby="tab === 'insights' ? 'replay-insights-tab' : 'replay-trades-tab'"
+      :aria-labelledby="
+        desktop ? undefined : tab === 'insights' ? 'replay-insights-tab' : 'replay-trades-tab'
+      "
+      :aria-label="desktop ? t('replay.tradeRecords') : undefined"
     >
       <div
-        v-if="errors[tab]"
+        v-if="errors[displayTab]"
         class="replay-inline-error"
         role="alert"
       >
-        <span>{{ t(errors[tab]) }}</span
+        <span>{{ t(errors[displayTab]) }}</span
         ><button
           class="text-button"
-          @click="state.retry(tab)"
+          @click="state.retry(displayTab)"
         >
           {{ t('common.retry') }}
         </button>
       </div>
       <div
-        v-if="!expanded"
+        v-if="!desktop && !expanded"
         class="replay-event-summary"
       >
         <span class="replay-summary-text">{{
@@ -208,7 +355,7 @@ const pnlClass = (value: string | null) =>
           {{ t('replay.expand') }}<UIcon name="i-lucide-chevron-down" />
         </button>
       </div>
-      <template v-else-if="tab === 'insights'">
+      <template v-else-if="displayTab === 'insights'">
         <div class="replay-evidence-filter">
           <button
             v-for="value in (atEnd ? ['global', 'runtime'] : ['runtime']) as Array<
@@ -280,11 +427,11 @@ const pnlClass = (value: string | null) =>
             /></template>
             <div class="replay-evidence-actions">
               <button
-                v-if="selectedTrade"
+                v-if="relatedInsightTrade"
                 class="text-button"
-                @click="locate({ tradeId: selectedTrade.id })"
+                @click="locate({ tradeId: relatedInsightTrade.id })"
               >
-                {{ t('replay.relatedTrade', { number: selectedTrade.sequence }) }}</button
+                {{ t('replay.relatedTrade', { number: relatedInsightTrade.sequence }) }}</button
               ><button
                 class="text-button"
                 @click="ask"
@@ -304,7 +451,7 @@ const pnlClass = (value: string | null) =>
       </template>
       <template v-else>
         <div
-          v-if="trades.length"
+          v-if="trades.length && !desktop"
           class="replay-trade-filters"
         >
           <USelect
@@ -327,7 +474,7 @@ const pnlClass = (value: string | null) =>
           {{ t('replay.loadingTrades') }}
         </p>
         <p
-          v-if="!rows.length && phases.trades !== 'loading'"
+          v-if="!filteredTrades.length && phases.trades !== 'loading'"
           class="replay-muted"
         >
           {{ t(atEnd ? 'replay.noTrades' : 'replay.noTradesYet') }}
@@ -339,6 +486,7 @@ const pnlClass = (value: string | null) =>
           :class="{ 'is-selected': selectedTrade?.id === trade.id }"
         >
           <button
+            v-if="!desktop"
             class="replay-trade-row"
             :aria-expanded="selectedTrade?.id === trade.id"
             @click="locate({ tradeId: trade.id })"
@@ -356,7 +504,7 @@ const pnlClass = (value: string | null) =>
             >
           </button>
           <div
-            v-if="selectedTrade?.id === trade.id"
+            v-if="!desktop && selectedTrade?.id === trade.id"
             class="replay-trade-detail"
           >
             <dl class="replay-trade-prices">
@@ -480,5 +628,17 @@ const pnlClass = (value: string | null) =>
         </div>
       </template>
     </div>
+    <ReplayTradeDialog
+      v-if="desktop"
+      v-model:open="detailsOpen"
+      :trade="detailsTrade"
+      :exit-label="
+        detailsTrade?.isComplete ? reason(detailsTrade.exit_reason) : t('replay.unclosed')
+      "
+      :selected-fill="selection?.fillId"
+      @closed="restoreDetailsFocus"
+      @locate="locateDetailsFill"
+      @ask="askDetails"
+    />
   </section>
 </template>
