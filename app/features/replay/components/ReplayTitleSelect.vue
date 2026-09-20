@@ -19,16 +19,15 @@ const rows = ref<ReplaySummary[]>([]),
   page = ref(0),
   hasMore = ref(true)
 let request: AbortController | undefined
-const items = computed(() => [
-  ...(props.id ? [{ id: props.id, label: props.name }] : []),
-  ...rows.value
-    .filter((r) => r.id !== props.id)
+const items = computed(() =>
+  [...rows.value]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     .map((r) => ({
       id: r.id,
       label: r.name,
       description: `${r.symbol} · ${r.execution_timeframe} · ${r.start_at.slice(0, 10)}`,
     })),
-])
+)
 function reset() {
   request?.abort()
   rows.value = []

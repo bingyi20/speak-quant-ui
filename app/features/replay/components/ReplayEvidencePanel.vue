@@ -5,6 +5,7 @@ import ReplayTradeDialog from './ReplayTradeDialog.vue'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
 import { fillActionKey } from '../events'
+import { useReplayTradeStrip } from '../composables/useReplayTradeStrip'
 import type { ReplayQuestionReference, ReplaySelection } from '../types'
 const props = defineProps<{ state: ReplayDetailState; desktop?: boolean }>()
 const emit = defineEmits<{
@@ -29,7 +30,6 @@ const {
   tradesComplete,
 } = props.state
 const cardsElement = useTemplateRef<HTMLElement>('cardsElement')
-const newestFirst = ref(true)
 const detailsTradeId = ref<string | null>(null)
 const detailsTrade = computed(
   () => trades.value.find((trade) => trade.id === detailsTradeId.value) ?? null,
@@ -87,15 +87,23 @@ const filteredInsights = computed(() =>
 )
 const filteredTrades = computed(() =>
   [...trades.value]
-    .sort((a, b) => (props.desktop && newestFirst.value ? -1 : 1) * (a.sequence - b.sequence))
+    .sort((a, b) => a.sequence - b.sequence)
     .filter(
       (v) =>
         (props.desktop || direction.value === 'all' || v.direction === direction.value) &&
         (props.desktop || exitReason.value === 'all' || v.exit_reason === exitReason.value),
     ),
 )
-const cardRows = computed(() => filteredTrades.value.slice((page.value - 1) * 20, page.value * 20))
-const rows = computed(() => (props.desktop ? [] : cardRows.value))
+const strip = useReplayTradeStrip(
+  cardsElement,
+  () => filteredTrades.value.length,
+  () => detail.value?.id,
+)
+const { trackStyle, canReturn } = strip
+const cardRows = computed(() => filteredTrades.value.slice(strip.start.value, strip.end.value))
+const rows = computed(() =>
+  props.desktop ? [] : filteredTrades.value.slice((page.value - 1) * 20, page.value * 20),
+)
 const tradePages = computed(() => Math.max(1, Math.ceil(filteredTrades.value.length / 20)))
 const exitReasons = computed(() => [
   { label: t('replay.allExits'), value: 'all' },
@@ -152,7 +160,7 @@ watch(
 watch(exitReasons, (items) => {
   if (!items.some((item) => item.value === exitReason.value)) exitReason.value = 'all'
 })
-watch([direction, exitReason, newestFirst], () => {
+watch([direction, exitReason], () => {
   page.value = 1
 })
 watch(selection, async (value, previous) => {
@@ -174,20 +182,8 @@ watch(selection, async (value, previous) => {
     await nextTick()
     if (selection.value !== value) return
     const n = filteredTrades.value.findIndex((t) => t.id === value.tradeId)
-    if (n >= 0) page.value = Math.floor(n / 20) + 1
-    await nextTick()
-    const strip = cardsElement.value
-    const card = strip
-      ? [...strip.querySelectorAll<HTMLElement>('[data-trade-id]')].find(
-          (element) => element.dataset.tradeId === value.tradeId,
-        )
-      : undefined
-    if (strip && card) {
-      const bounds = strip.getBoundingClientRect(),
-        selected = card.getBoundingClientRect()
-      if (selected.left < bounds.left || selected.right > bounds.right)
-        strip.scrollTo({ left: strip.scrollLeft + selected.left - bounds.left, behavior: 'smooth' })
-    }
+    if (props.desktop) strip.reveal(n)
+    else if (n >= 0) page.value = Math.floor(n / 20) + 1
   }
 })
 watch(
@@ -197,7 +193,6 @@ watch(
     exitReason.value = 'all'
     page.value = 1
     insightLimit.value = 20
-    newestFirst.value = true
     detailsTradeId.value = null
   },
 )
@@ -228,62 +223,70 @@ const pnlClass = (value: string | null) =>
         <h3>
           {{ t('replay.tradesTitle') }} <span>{{ trades.length }}</span>
         </h3>
-        <div class="replay-cards-tools">
-          <button
-            class="text-button"
-            :aria-label="t('replay.tradeOrder')"
-            @click="newestFirst = !newestFirst"
-          >
-            <UIcon
-              :name="
-                newestFirst ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-wide-narrow'
-              "
-            />{{ t(newestFirst ? 'replay.newestFirst' : 'replay.oldestFirst') }}
-          </button>
-        </div>
+        <button
+          v-if="canReturn"
+          class="text-button replay-trades-follow"
+          :aria-label="t('replay.followLatestTrades')"
+          @click="strip.returnToLatest"
+        >
+          {{ t('replay.followLatest') }}<UIcon name="i-lucide-chevrons-right" />
+        </button>
       </div>
       <div
         ref="cardsElement"
         class="replay-trade-cards"
-        role="list"
+        tabindex="0"
+        role="region"
         :aria-label="t('replay.tradesTitle')"
+        @scroll.passive="strip.onScroll"
+        @wheel.passive="strip.interruptReturn"
+        @pointerdown="strip.interruptReturn"
+        @keydown="strip.interruptReturn"
       >
         <div
-          v-for="trade in cardRows"
-          :key="trade.id"
-          role="listitem"
-          class="replay-trade-item"
+          class="replay-trade-track"
+          role="list"
+          :style="trackStyle"
         >
-          <button
-            class="replay-trade-card"
-            :class="{ 'is-selected': selectedTrade?.id === trade.id }"
-            :data-trade-id="trade.id"
-            :aria-pressed="selectedTrade?.id === trade.id"
-            @click="locate({ tradeId: trade.id })"
+          <div
+            v-for="trade in cardRows"
+            :key="trade.id"
+            role="listitem"
+            class="replay-trade-item"
           >
-            <span class="replay-card-heading">{{ t(`replay.direction.${trade.direction}`) }}</span>
-            <span
-              class="replay-card-pnl"
-              :class="pnlClass(trade.net_pnl)"
-              ><span>{{ formatRatio(trade.return_rate, locale) }}</span
-              ><small
-                >{{ Number(trade.net_pnl) > 0 ? '+' : ''
-                }}{{ formatDecimal(trade.net_pnl, locale) }}</small
-              ></span
+            <button
+              class="replay-trade-card"
+              :class="{ 'is-selected': selectedTrade?.id === trade.id }"
+              :data-trade-id="trade.id"
+              :aria-pressed="selectedTrade?.id === trade.id"
+              @click="state.toggleTrade(trade.id)"
             >
-            <span class="replay-card-time"
-              >{{ trade.entry_at.slice(0, 10).replaceAll('-', '/') }} →
-              {{ trade.exit_at?.slice(5, 10).replace('-', '/') || t('replay.unclosed') }}</span
+              <span class="replay-card-heading">{{
+                t(`replay.direction.${trade.direction}`)
+              }}</span>
+              <span
+                class="replay-card-pnl"
+                :class="pnlClass(trade.net_pnl)"
+                ><span>{{ formatRatio(trade.return_rate, locale) }}</span
+                ><small
+                  >{{ Number(trade.net_pnl) > 0 ? '+' : ''
+                  }}{{ formatDecimal(trade.net_pnl, locale) }}</small
+                ></span
+              >
+              <span class="replay-card-time"
+                >{{ trade.entry_at.slice(0, 10).replaceAll('-', '/') }} →
+                {{ trade.exit_at?.slice(5, 10).replace('-', '/') || t('replay.unclosed') }}</span
+              >
+            </button>
+            <button
+              class="replay-trade-details-trigger"
+              :data-trade-details="trade.id"
+              :aria-label="t('replay.viewTradeDetails')"
+              @click.stop="openDetails(trade.id, $event)"
             >
-          </button>
-          <button
-            class="replay-trade-details-trigger"
-            :data-trade-details="trade.id"
-            :aria-label="t('replay.viewTradeDetails')"
-            @click.stop="openDetails(trade.id, $event)"
-          >
-            {{ t('replay.detailsEntry') }}
-          </button>
+              {{ t('replay.detailsEntry') }}
+            </button>
+          </div>
         </div>
       </div>
     </template>
@@ -608,7 +611,7 @@ const pnlClass = (value: string | null) =>
           </div>
         </div>
         <div
-          v-if="tradePages > 1"
+          v-if="!desktop && tradePages > 1"
           class="replay-pagination"
         >
           <button

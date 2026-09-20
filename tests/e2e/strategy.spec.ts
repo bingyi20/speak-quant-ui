@@ -215,6 +215,8 @@ test('header controls stay inside the header, menus handle Escape, layouts fit a
   await expect(page.getByRole('listbox')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(selector).toBeFocused()
+  await expect(selector).toHaveCSS('outline-style', 'none')
+  await expect(selector).toHaveCSS('box-shadow', 'none')
   for (const label of ['全屏', '关闭']) {
     const button = panel.getByRole('button', { name: label, exact: true })
     const bounds = (await button.boundingBox())!
@@ -330,6 +332,9 @@ test('fullscreen covers the viewport for strategy and Replay while preserving th
     },
   })
   await page.goto(`/conversations/${conversationId}`)
+  const returnedCard = page.locator('.message-list-shell .message-card').last()
+  await expect(returnedCard).toBeVisible()
+  const normalCardBorder = await returnedCard.evaluate((el) => getComputedStyle(el).borderColor)
   await page.locator('.message-list-shell .message-card').first().click()
   const panel = page.locator('.asset-detail-panel')
   await expect(panel.locator('.strategy-document')).toContainText('当前设计')
@@ -381,6 +386,7 @@ test('fullscreen covers the viewport for strategy and Replay while preserving th
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()
   await expect(panel).toBeVisible()
+  await expect(panel).toHaveClass(/is-fullscreen/)
   await panel.getByRole('tab', { name: '设计' }).click()
   const documentBounds = (await panel.locator('.strategy-document').boundingBox())!
   expect(documentBounds.width).toBeLessThanOrEqual(660)
@@ -399,10 +405,31 @@ test('fullscreen covers the viewport for strategy and Replay while preserving th
   expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, ...page.viewportSize()! })
   await panel.getByRole('button', { name: '返回策略' }).click()
   await expect(panel.getByRole('button', { name: '仅看所选版本' })).toBeVisible()
-  await panel.getByRole('button', { name: '退出全屏', exact: true }).click()
+  await panel.getByRole('button', { name: '退出全屏', exact: true }).focus()
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeVisible()
   await expect(panel).not.toHaveClass(/is-fullscreen/)
   expect((await panel.boundingBox())!.width).toBeCloseTo(initial.width, 0)
-  await panel.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(panel.getByRole('button', { name: '全屏', exact: true })).toBeFocused()
+  await expect(panel.getByRole('button', { name: '全屏', exact: true })).toHaveCSS(
+    'outline-style',
+    'none',
+  )
+  await expect(panel.getByRole('button', { name: '全屏', exact: true })).toHaveCSS(
+    'box-shadow',
+    'none',
+  )
+  await expect(panel.getByRole('button', { name: '全屏', exact: true })).toHaveCSS(
+    'border-width',
+    '0px',
+  )
+  await panel.locator('.asset-detail-header').screenshot({
+    animations: 'disabled',
+    path: test.info().outputPath('header-after-escape.png'),
+  })
+  await expect(panel.getByRole('button', { name: '仅看所选版本' })).toBeVisible()
+  await expect(page.locator('.workspace-shell')).not.toHaveAttribute('inert', '')
+  await page.keyboard.press('Escape')
   await expect(panel).toBeHidden()
   await page.locator('.message-list-shell .message-card').last().click()
   await expect(panel.locator('.replay-summary-metrics')).toBeVisible()
@@ -413,9 +440,42 @@ test('fullscreen covers the viewport for strategy and Replay while preserving th
     animations: 'disabled',
     path: test.info().outputPath('replay-fullscreen.png'),
   })
+  await panel.getByRole('button', { name: '退出全屏', exact: true }).focus()
+  await page.keyboard.press('Escape')
+  const fullscreenButton = panel.getByRole('button', { name: '全屏', exact: true })
+  await expect(fullscreenButton).toBeFocused()
+  await expect(fullscreenButton).toHaveCSS('outline-style', 'none')
+  await expect(fullscreenButton).toHaveCSS('border-width', '0px')
+  await expect(fullscreenButton).toHaveCSS('box-shadow', 'none')
+  await panel.locator('.asset-detail-header').screenshot({
+    animations: 'disabled',
+    path: test.info().outputPath('replay-header-after-escape.png'),
+  })
+  await page.keyboard.press('Enter')
+  await expect(panel).toHaveClass(/is-fullscreen/)
+  // The document handler must obey the same hierarchy when chart interaction left no focus.
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  await page.keyboard.down('Escape')
+  await expect(panel).toBeVisible()
+  await expect(panel).not.toHaveClass(/is-fullscreen/)
+  expect((await panel.boundingBox())!.width).toBeCloseTo(initial.width, 0)
+  await expect(panel.locator('.replay-summary-metrics')).toBeVisible()
+  await page.keyboard.down('Escape')
+  await expect(panel).toBeVisible()
+  await page.keyboard.up('Escape')
   await page.keyboard.press('Escape')
   await expect(panel).toBeHidden()
-  await expect(page.locator('.message-list-shell .message-card').last()).toBeFocused()
+  await expect(returnedCard).toBeFocused()
+  await expect(returnedCard).toHaveCSS('outline-style', 'none')
+  await expect(returnedCard).toHaveCSS('border-width', '1px')
+  await expect(returnedCard).toHaveCSS('border-color', normalCardBorder)
+  await expect(returnedCard).toHaveCSS('box-shadow', 'none')
+  await returnedCard.screenshot({
+    animations: 'disabled',
+    path: test.info().outputPath('card-after-escape.png'),
+  })
 })
 
 test('replay rows stay compact and centered on wide screens when revealing their versions', async ({

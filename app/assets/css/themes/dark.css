@@ -15,7 +15,7 @@
   --color-text-secondary: #bcbbb0;
   --color-text-muted: #a5a69a;
   --color-border-default: #3f4137;
-  --color-border-focus: #c69a58;
+  --color-border-focus: var(--color-text-muted);
   --color-success: #8fc5af;
   --color-danger: #dfa096;
   --color-code-keyword: #c3a4df;

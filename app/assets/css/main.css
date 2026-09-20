@@ -111,7 +111,10 @@ select {
     border-color var(--motion-fast);
 }
 button:focus-visible,
-a:focus-visible,
+a:focus-visible {
+  /* Restored focus must not add a frame to buttons, links, or cards. */
+  outline: none;
+}
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
@@ -138,6 +141,10 @@ p {
 }
 .icon-button:hover:not(:disabled) {
   background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+.icon-button:focus-visible,
+.text-button:focus-visible {
   color: var(--color-text-primary);
 }
 .icon-button .iconify {

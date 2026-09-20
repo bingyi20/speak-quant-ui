@@ -1,6 +1,13 @@
 import Decimal from 'decimal.js'
 import { decimal } from './normalize'
-import type { ReplayBar, ReplayEvent, ReplayInsight, ReplaySelection, ReplayTrade } from './types'
+import type {
+  ReplayBar,
+  ReplayEvent,
+  ReplayInsight,
+  ReplaySelection,
+  ReplayTrade,
+  ReplayDrawdownRange,
+} from './types'
 
 /** Position direction belongs to the trade; buy/sell alone cannot distinguish open/close. */
 export function fillActionKey(action: string, direction?: string) {
@@ -10,12 +17,33 @@ export function fillActionKey(action: string, direction?: string) {
     : `replay.actions.${knownAction ? action : 'trade'}`
 }
 
+export function buildDrawdownEvent(
+  drawdown: ReplayDrawdownRange | null,
+  indexes: ReadonlyMap<string, number>,
+): ReplayEvent | null {
+  const candleId = drawdown?.trough.candleId
+  const index = candleId ? indexes.get(candleId) : undefined
+  if (!drawdown || !candleId || index === undefined) return null
+  return {
+    id: 'drawdown',
+    kind: 'drawdown',
+    index,
+    time: drawdown.to,
+    sequence: 0,
+    selection: {
+      candleId,
+      range: { from: drawdown.from, to: drawdown.to },
+      drawdown,
+    },
+  }
+}
+
 export function buildReplayEvents(
   bars: readonly ReplayBar[],
   trades: readonly ReplayTrade[],
   insights: readonly ReplayInsight[],
   complete: boolean,
-  drawdown: { from: number; to: number } | null = null,
+  drawdown: ReplayDrawdownRange | null = null,
 ): ReplayEvent[] {
   const indexes = new Map(bars.map((c, i) => [c.id, i]))
   const events: ReplayEvent[] = []
@@ -69,18 +97,8 @@ export function buildReplayEvents(
           selection: { tradeId: trade.id },
         })
     }
-    if (drawdown) {
-      const index = bars.findIndex((c) => c.time === drawdown.to)
-      if (index >= 0)
-        events.push({
-          id: 'drawdown',
-          kind: 'drawdown',
-          index,
-          time: drawdown.to,
-          sequence: 0,
-          selection: { candleId: bars[index]!.id, range: drawdown },
-        })
-    }
+    const event = buildDrawdownEvent(drawdown, indexes)
+    if (event) events.push(event)
   }
   const order = { fill: 0, insight: 1, best: 2, worst: 3, drawdown: 4 }
   return events.sort(

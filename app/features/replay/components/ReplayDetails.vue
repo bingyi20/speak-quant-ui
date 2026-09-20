@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { formatDate, formatDecimal, formatRatio } from '~/lib/format'
+import { formatDate, formatDateTime, formatDecimal, formatRatio } from '~/lib/format'
+import { decimal } from '../normalize'
+import { EQUITY_RATE_DIGITS } from '../historical-result'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
 import CopyButton from '~/components/ui/CopyButton.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
@@ -54,10 +56,14 @@ const rows = computed<Array<[string, string]>>(() => {
             [
               t('replay.positionSizing'),
               a.position_sizing.type === 'equity_percent'
-                ? t('replay.equityPercent', {
-                    value: formatRatio(a.position_sizing.value, locale.value),
-                  })
-                : `${t('replay.fixedSize')} ${a.position_sizing.value}`,
+                ? decimal(a.position_sizing.value) === '1'
+                  ? t('replay.fullEquityCompounding')
+                  : t('replay.equityPercent', {
+                      value: formatRatio(a.position_sizing.value, locale.value),
+                    })
+                : a.position_sizing.type === 'fixed_amount'
+                  ? `${t('replay.fixedSize')} ${a.position_sizing.value}`
+                  : `${a.position_sizing.type} · ${a.position_sizing.value}`,
             ],
             [t('replay.commission'), formatRatio(a.commission_rate, locale.value)],
             [t('replay.slippage'), formatRatio(a.slippage_rate, locale.value)],
@@ -96,18 +102,30 @@ const rows = computed<Array<[string, string]>>(() => {
     const r = props.state.summaryResult.value
     const s = props.state.currentLoading.value ? null : currentState.value
     return [
-      [t('replay.netReturn'), formatRatio(r?.net_return_rate ?? null, locale.value)],
-      [t('replay.drawdown'), formatRatio(r?.max_drawdown_rate ?? null, locale.value)],
+      [
+        t('replay.netReturn'),
+        formatRatio(r?.net_return_rate ?? null, locale.value, EQUITY_RATE_DIGITS),
+      ],
+      [
+        t('replay.drawdown'),
+        formatRatio(r?.max_drawdown_rate ?? null, locale.value, EQUITY_RATE_DIGITS),
+      ],
       [t('replay.tradeTotal'), r ? String(r.trade_count) : '—'],
       [t('replay.winRate'), formatRatio(r?.win_rate ?? null, locale.value)],
       [t('replay.profitFactor'), formatDecimal(r?.profit_factor, locale.value)],
       [t('replay.netProfit'), formatDecimal(r?.net_profit, locale.value)],
+      [t('replay.equity'), formatDecimal(s?.equity, locale.value)],
+      [t('replay.cash'), formatDecimal(s?.cash, locale.value)],
       [
         t('replay.positionStatus'),
         s?.direction ? t(`replay.holdingDirection.${s.direction}`) : '—',
       ],
       [t('replay.unrealized'), formatDecimal(s?.unrealized, locale.value)],
-      [t('replay.currentDrawdown'), formatRatio(s?.drawdown ?? null, locale.value)],
+      [
+        t('replay.currentDrawdown'),
+        formatRatio(s?.drawdown ?? null, locale.value, EQUITY_RATE_DIGITS),
+      ],
+      ...drawdownRows.value,
     ]
   }
   const r = d.result
@@ -129,16 +147,34 @@ const rows = computed<Array<[string, string]>>(() => {
     ['slippageCost', r.total_slippage_cost],
     ['liquidations', r.liquidation_count],
   ]
-  return values
-    .filter(([, v]) => v !== undefined)
-    .map(([key, value, ratio]) => [
-      t(`replay.${key}`),
-      typeof value === 'number'
-        ? String(value)
-        : ratio
-          ? formatRatio(value ?? null, locale.value)
-          : formatDecimal(value, locale.value),
-    ])
+  return [
+    ...values
+      .filter(([, v]) => v !== undefined)
+      .map(
+        ([key, value, ratio]) =>
+          [
+            t(`replay.${key}`),
+            typeof value === 'number'
+              ? String(value)
+              : ratio
+                ? formatRatio(
+                    value ?? null,
+                    locale.value,
+                    ['netReturn', 'grossReturn', 'drawdown'].includes(key) ? EQUITY_RATE_DIGITS : 2,
+                  )
+                : formatDecimal(value, locale.value),
+          ] as [string, string],
+      ),
+    ...drawdownRows.value,
+  ]
+})
+const drawdownRows = computed<Array<[string, string]>>(() => {
+  const range = props.state.currentDrawdownRange.value
+  if (!range) return []
+  return (['peak', 'trough'] as const).map((key) => [
+    t(`replay.drawdownEquity.${key}`),
+    `${formatDecimal(range[key].equity, locale.value)} · ${formatDateTime(range[key].closeTime * 1000)}`,
+  ])
 })
 const warnings = computed(
   () =>

@@ -1,6 +1,16 @@
 import Decimal from 'decimal.js'
 import type { ReplayBar, ReplayCandle, ReplayCandleState, ReplayEvidence } from './types'
 
+export const ReplayDecimal = Decimal.clone({ precision: 40 })
+
+export function equityPerformance(equity: string | null | undefined, capital: string) {
+  const value = decimal(equity),
+    initial = decimal(capital)
+  if (value === null || initial === null || new ReplayDecimal(initial).lte(0)) return null
+  const profit = new ReplayDecimal(value).minus(initial)
+  return { profit: profit.toString(), rate: profit.div(initial).toString() }
+}
+
 export function decimal(value: unknown): string | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null
   try {
@@ -48,16 +58,11 @@ export function normalizeState(state: ReplayCandleState | null | undefined, capi
         : new Decimal(quantity).isPositive()
           ? 'long'
           : 'short'
-  let cumulative = decimal(state.cumulative_return_rate)
-  const initial = decimal(capital)
-  if (cumulative === null && initial !== null && new Decimal(initial).greaterThan(0))
-    cumulative = new Decimal(equity).div(initial).minus(1).toString()
   return {
     direction,
     quantity,
     equity,
-    cumulative,
-    drawdown: decimal(state.drawdown_rate),
+    cumulative: equityPerformance(equity, capital)?.rate ?? null,
     unrealized: decimal(state.unrealized_pnl),
     realized: decimal(state.realized_pnl),
     cash: decimal(state.cash),

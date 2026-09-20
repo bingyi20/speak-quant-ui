@@ -24,6 +24,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
+  escape: []
   closed: []
   fullscreen: []
   menu: [open: boolean]
@@ -149,9 +150,10 @@ function setMenu(open: boolean) {
   menuOpen.value = open
 }
 function escape(event: KeyboardEvent) {
-  if (menuOpen.value || layerOpen.value || event.defaultPrevented) return
+  if (menuOpen.value || layerOpen.value || downloadOpen.value || event.defaultPrevented) return
+  event.preventDefault()
   event.stopPropagation()
-  emit('close')
+  if (!event.repeat) emit('escape')
 }
 </script>
 <template>

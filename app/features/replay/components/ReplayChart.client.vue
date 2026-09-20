@@ -37,12 +37,14 @@ const emit = defineEmits<{
   select: [time: number, markerId?: string]
   range: [value: ChartRange]
   interact: []
+  follow: []
   hover: [time: number | null]
 }>()
 const { t, locale } = useI18n()
 const host = useTemplateRef<HTMLElement>('host'),
   hover = ref<ReplayBar | null>(null),
-  failure = ref(false)
+  failure = ref(false),
+  canReturn = ref(false)
 const cluster = ref<ReplayEvent[]>([])
 const hoveredTag = ref<ChartMarkerHit | null>(null)
 const hoveredFills = ref<ReplayEvent[]>([])
@@ -260,11 +262,11 @@ function draw() {
   if (initial && rows.length) {
     const from = rows[Math.max(0, rows.length - 200)]!.time,
       to = rows.at(-1)!.time
-    if (desktop()) adapter.follow()
+    if (desktop()) adapter.resetView()
     else if (to > from) adapter.setVisibleRange({ from, to })
     initial = false
-  } else if (saved && !props.follow && !append) adapter.setVisibleRange(saved)
-  if (props.follow && rows.length) adapter.follow()
+  } else if (props.follow && rows.length) adapter.follow()
+  else if (saved && !append) adapter.setVisibleRange(saved)
   selected()
 }
 async function mount() {
@@ -277,6 +279,9 @@ async function mount() {
     initial = true
     previous = []
     adapter.onRangeChange((range) => emit('range', range))
+    adapter.onReturnVisibilityChange((visible) => {
+      canReturn.value = visible
+    })
     adapter.onSelect((time, marker) => {
       const items = marker ? markerGroups.get(marker) : null
       if (desktop()) {
@@ -314,15 +319,17 @@ function chooseEvent(event: ReplayEvent) {
   cluster.value = []
 }
 function applyRange(range: ChartViewportRequest) {
-  if (range.anchorTime !== undefined) adapter?.zoomAroundTime(range, range.anchorTime)
-  else if (desktop() && range.focusTime !== undefined) adapter?.seek(range.focusTime)
+  if ('revealTime' in range) adapter?.revealTime(range.revealTime)
+  else if ('seekTime' in range) adapter?.seek(range.seekTime)
+  else if (desktop() && range.focusTime !== undefined) adapter?.resetView(range.focusTime)
   else adapter?.setVisibleRange(range)
 }
-function reset() {
+function followLatest() {
   if (!adapter) return
-  adapter.follow()
+  clearFill()
+  emit('follow')
+  adapter.follow(true)
 }
-defineExpose({ reset })
 watch(
   () => props.bars,
   () => {
@@ -511,6 +518,19 @@ onBeforeUnmount(() => {
       @wheel.passive="interact"
       @pointerleave="scheduleFillClose"
     />
+    <UTooltip
+      v-if="canReturn && bars.length && !failure"
+      :text="t('replay.followLatest')"
+      :delay-duration="400"
+    >
+      <button
+        class="replay-follow-latest"
+        :aria-label="t('replay.followLatest')"
+        @click="followLatest"
+      >
+        <UIcon name="i-lucide-chevrons-right" />
+      </button>
+    </UTooltip>
     <div
       v-if="failure"
       class="replay-chart-failure"

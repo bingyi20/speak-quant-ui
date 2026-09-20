@@ -306,11 +306,15 @@ function afterDetailClosed() {
   selected.value = null
   selectedAsset.value = null
 }
+function dismissTopPanel() {
+  if (detailOpen.value && fullscreen.value) fullscreen.value = false
+  else close()
+}
 function keydown(event: KeyboardEvent) {
   if (!open.value || event.defaultPrevented || detailMenuOpen.value) return
   if (event.key === 'Escape') {
     event.preventDefault()
-    close()
+    if (!event.repeat) dismissTopPanel()
     return
   }
   if (event.key !== 'Tab' || !modal.value) return
@@ -587,6 +591,7 @@ onBeforeUnmount(() => {
           :fullscreen="fullscreen"
           :modal="detailModal"
           @close="close"
+          @escape="dismissTopPanel"
           @closed="afterDetailClosed"
           @menu="detailMenuOpen = $event"
           @question="askFromReplay"

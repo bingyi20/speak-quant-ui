@@ -6,8 +6,9 @@ import ReplayTimeline from './ReplayTimeline.vue'
 import ReplayEvidencePanel from './ReplayEvidencePanel.vue'
 import ReplayDetails from './ReplayDetails.vue'
 import { resolveSelection } from '../events'
+import { EQUITY_RATE_DIGITS } from '../historical-result'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
-import type { ReplayEvent, ReplayQuestionReference } from '../types'
+import type { ReplayQuestionReference } from '../types'
 const props = defineProps<{ state: ReplayDetailState; active: boolean }>()
 const emit = defineEmits<{
   question: [reference: ReplayQuestionReference]
@@ -66,8 +67,7 @@ const speedOptions = computed(() =>
       }))
     : speeds.value.map((value) => ({ value, label: t('replay.barsPerSecond', { count: value }) })),
 )
-const body = useTemplateRef<HTMLElement>('body'),
-  chart = useTemplateRef<InstanceType<typeof ReplayChart>>('chart')
+const body = useTemplateRef<HTMLElement>('body')
 const reading = ref<'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | null>(null),
   volume = ref(false)
 const complete = computed(() => detail.value?.status === 'completed')
@@ -117,10 +117,14 @@ const metrics = computed(() => {
     ? [
         {
           key: 'netReturn',
-          value: formatRatio(r.net_return_rate, locale.value),
+          value: formatRatio(r.net_return_rate, locale.value, EQUITY_RATE_DIGITS),
           sign: Number(r.net_return_rate),
         },
-        { key: 'drawdown', value: formatRatio(r.max_drawdown_rate, locale.value), sign: 0 },
+        {
+          key: 'drawdown',
+          value: formatRatio(r.max_drawdown_rate, locale.value, EQUITY_RATE_DIGITS),
+          sign: 0,
+        },
         { key: 'trades', value: r.trade_count === null ? '—' : String(r.trade_count), sign: 0 },
         { key: 'winRate', value: formatRatio(r.win_rate, locale.value), sign: 0 },
         { key: 'profitFactor', value: formatDecimal(r.profit_factor, locale.value), sign: 0 },
@@ -180,13 +184,9 @@ watch(scrollTop, async (value) => {
 })
 function select(time: number, markerId?: string) {
   const event = markerId ? events.value.find((e) => e.id === markerId) : null
-  if (desktop.value && event?.kind === 'insight') props.state.inspectInsight(event.selection, time)
-  else if (event) selectEvent(event)
+  if (desktop.value && event?.kind === 'insight') props.state.inspectInsight(event.selection)
+  else if (event) void props.state.locate(event.selection)
   else void props.state.selectCandle(time)
-}
-function selectEvent(event: ReplayEvent) {
-  if (desktop.value && event.kind === 'insight') void props.state.toggleInsight(event.selection)
-  else void props.state.locate(event.selection)
 }
 let rangeTimer: ReturnType<typeof setTimeout> | undefined
 function rangeChanged(range: { from: number; to: number }) {
@@ -239,13 +239,9 @@ function playbackKeydown(event: KeyboardEvent) {
   event.stopPropagation()
   if (!event.repeat) togglePlayback()
 }
-function resetChart() {
-  follow.value = true
-  chart.value?.reset()
-}
 function interact() {
   if (!desktop.value) props.state.pause()
-  follow.value = false
+  follow.value = desktop.value
 }
 onBeforeUnmount(() => {
   clearTimeout(rangeTimer)
@@ -428,16 +424,6 @@ onBeforeUnmount(() => {
               >
                 <UIcon name="i-lucide-chart-no-axes-column-increasing" /></button
             ></UTooltip>
-            <UTooltip
-              :text="t('replay.resetChart')"
-              :delay-duration="400"
-              ><button
-                class="detail-icon-button"
-                :aria-label="t('replay.resetChart')"
-                @click="resetChart"
-              >
-                <UIcon :name="desktop ? 'i-lucide-rotate-ccw' : 'i-lucide-scan'" /></button
-            ></UTooltip>
           </div>
           <div
             v-if="displayError"
@@ -448,7 +434,6 @@ onBeforeUnmount(() => {
           </div>
           <ClientOnly>
             <ReplayChart
-              ref="chart"
               :bars="renderedBars"
               :events="renderedEvents"
               :selection="selection"
@@ -462,6 +447,7 @@ onBeforeUnmount(() => {
               @select="select"
               @range="rangeChanged"
               @interact="interact"
+              @follow="follow = true"
             />
             <template #fallback><div class="replay-chart" /></template>
           </ClientOnly>
@@ -510,12 +496,14 @@ onBeforeUnmount(() => {
             {{
               currentLoading || gapTime
                 ? '—'
-                : formatRatio(currentState?.cumulative ?? null, locale)
+                : formatRatio(currentState?.cumulative ?? null, locale, EQUITY_RATE_DIGITS)
             }}</span
           ><span class="replay-current-extra"
             >{{ t('replay.currentDrawdown') }}
             {{
-              currentLoading || gapTime ? '—' : formatRatio(currentState?.drawdown ?? null, locale)
+              currentLoading || gapTime
+                ? '—'
+                : formatRatio(currentState?.drawdown ?? null, locale, EQUITY_RATE_DIGITS)
             }}</span
           ><span class="replay-current-extra"
             >{{ t('replay.unrealized') }}
@@ -648,11 +636,9 @@ onBeforeUnmount(() => {
           :events="renderedEvents"
           :bars="state.axis.value"
           :evidence-range="selection?.range"
-          :selected-insight-id="selection?.insightId"
           :index="index"
           :disabled="initializing || !state.axis.value.length"
           @seek="state.seekTime"
-          @select="selectEvent"
           @pause="state.pause"
         />
         <ReplayEvidencePanel

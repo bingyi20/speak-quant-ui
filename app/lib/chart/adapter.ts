@@ -40,12 +40,15 @@ export interface ChartRange {
   from: number
   to: number
 }
-export interface ChartViewportRequest extends ChartRange {
-  /** Set for single-candle/default positioning; omitted to fit an evidence interval. */
-  focusTime?: number
-  /** Inspect an interval by zooming around this candle's current screen position. */
-  anchorTime?: number
-}
+export type ChartViewportRequest =
+  | (ChartRange & {
+      /** Set for single-candle/default positioning; omitted to fit an evidence interval. */
+      focusTime?: number
+    })
+  /** Reveal an off-screen endpoint without changing the user's candle spacing. */
+  | { revealTime: number }
+  /** Move the historical cutoff to the playback anchor, preserving candle spacing. */
+  | { seekTime: number }
 export interface ChartSelection {
   range?: ChartRange
   prices?: Array<{ price: number; label: string }>
@@ -54,15 +57,17 @@ export interface ChartAdapter {
   setData(candles: readonly Candle[]): void
   appendData(candles: readonly Candle[]): void
   seek(time: number): void
-  follow(): void
+  follow(animated?: boolean): void
+  resetView(time?: number): void
   setVisibleRange(range: ChartRange): void
-  zoomAroundTime(range: ChartRange, time: number): void
+  revealTime(time: number): void
   getViewState(): ChartRange | null
   setMarkers(markers: readonly ChartMarker[]): void
   setSelection(selection: ChartSelection | null): void
   setVolume(visible: boolean): void
   applyTheme(theme: ChartTheme): void
   resize(width: number, height: number): void
+  onReturnVisibilityChange(handler: (visible: boolean) => void): () => void
   onRangeChange(handler: (range: ChartRange) => void): () => void
   onSelect(handler: (time: number, markerId?: string) => void): () => void
   onCrosshair(handler: (time: number | null, marker?: ChartMarkerHit) => void): () => void

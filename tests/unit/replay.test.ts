@@ -256,3 +256,108 @@ describe('replay evidence and context', () => {
       expect(isReplayMessageContext(value)).toBe(false)
   })
 })
+
+describe('canonical equity prefixes', () => {
+  it('uses initial capital and the same prefix range for current and verified complete drawdown', async () => {
+    const { api, state, raw } = setup()
+    const detail = {
+      ...replayDetail,
+      conditions: { ...replayDetail.conditions, initial_capital: '10000' },
+      result: { ...replayDetail.result!, max_drawdown_rate: '0.4' },
+    }
+    vi.mocked(api.detail).mockResolvedValue(detail)
+    const values = ['9900', '12000', '15000', '13000', '9000', '14000']
+    raw.forEach((c, i) => {
+      c.state!.equity = values[i]!
+    })
+    await state.load('replay-1')
+    await vi.waitFor(() => expect(state.candlesComplete.value).toBe(true))
+    expect(state.equityHistory.get('c-0')?.range?.peak.candleId).toBeNull()
+    expect(state.equityHistory.get('c-0')?.maximumDrawdown).toBe('0.01')
+    expect(state.equityHistory.get('c-3')?.maximumDrawdown).toMatch(/^0\.133333/)
+    expect(state.equityHistory.get('c-3')?.range?.trough.candleId).toBe('c-3')
+    expect(state.drawdownRange.value).toEqual(state.equityHistory.get('c-5')?.range)
+    expect(state.drawdownRange.value).toMatchObject({
+      peak: { candleId: 'c-2' },
+      trough: { candleId: 'c-4' },
+      rate: '0.4',
+    })
+    const event = buildReplayEvents(state.axis.value, [], [], true, state.drawdownRange.value)[0]!
+    expect(event.selection).toMatchObject({ candleId: 'c-4', drawdown: { rate: '0.4' } })
+    expect(event.time).toBe(Date.parse(raw[4]!.time) / 1000)
+  })
+  it('does not mix preview or auxiliary states into prefixes and resumes failed pages from the last valid peak', async () => {
+    const { api, state, raw } = setup()
+    raw.forEach((c, i) => {
+      c.state!.equity = ['10000', '15000', '13000', '9000', '14000', '14000'][i]!
+    })
+    let failing = true
+    vi.mocked(api.candles).mockImplementation(async (_id, q) => {
+      if (q.cursor && failing) throw new Error('missing page')
+      return {
+        timeframe: q.timeframe ?? '1h',
+        available_timeframes: ['1h', '4h'],
+        items:
+          q.from || q.timeframe === '4h'
+            ? [{ ...raw[4]!, state: null }]
+            : q.cursor
+              ? raw.slice(3)
+              : raw.slice(0, 3),
+        has_more: !q.from && !q.timeframe && !q.cursor,
+        next_cursor: !q.from && !q.timeframe && !q.cursor ? 'next' : null,
+      }
+    })
+    await state.load('replay-1')
+    await vi.waitFor(() => expect(state.phases.candles).toBe('error'))
+    expect(state.equityHistory.get('c-4')).toBeUndefined()
+    const prefix = state.equityHistory.get('c-2')
+    expect(prefix?.peak.equity).toBe('15000')
+    failing = false
+    await state.retry('candles')
+    expect(state.equityHistory.get('c-4')?.maximumDrawdown).toBe('0.4')
+    expect(await state.setTimeframe('4h')).toBe(true)
+    expect(state.equityHistory.get('c-2')).toBe(prefix)
+    expect(state.equityHistory.get('c-4')?.maximumDrawdown).toBe('0.4')
+  })
+  it('leaves invalid prefixes unavailable and old final results intact; a corrected reload recomputes the whole prefix', async () => {
+    const { api, state, raw } = setup()
+    const final = { ...replayDetail.result!, max_drawdown_rate: '0.01' }
+    vi.mocked(api.detail).mockResolvedValue({ ...replayDetail, result: final })
+    raw[1]!.state = null
+    raw[2]!.state!.equity = '9000'
+    await state.load('replay-1')
+    await vi.waitFor(() => expect(state.candlesComplete.value).toBe(true))
+    expect(state.equityHistory.get('c-0')).not.toBeNull()
+    expect(state.equityHistory.get('c-2')).toBeNull()
+    expect(state.equityHistory.get('c-5')).toBeNull()
+    expect(state.drawdownRange.value).toBeNull()
+    raw[1]!.state = { position: 'flat', equity: '10000' }
+    await state.load('replay-1')
+    await vi.waitFor(() => expect(state.candlesComplete.value).toBe(true))
+    expect(state.equityHistory.get('c-5')?.maximumDrawdown).toBe('0.1')
+    expect(state.drawdownRange.value).toBeNull()
+    expect(state.detail.value?.result).toEqual(final)
+  })
+  it('rejects a truncated final page and recomputes when retry supplies the missing prefix', async () => {
+    const { api, state, raw } = setup()
+    vi.mocked(api.detail).mockResolvedValue({
+      ...replayDetail,
+      counts: { candles: 6, trades: 2, insights: 2 },
+    })
+    let truncated = true
+    vi.mocked(api.candles).mockImplementation(async () => ({
+      timeframe: '1h',
+      items: truncated ? raw.slice(0, 3) : raw,
+      has_more: false,
+      next_cursor: null,
+    }))
+    await state.load('replay-1')
+    await vi.waitFor(() => expect(state.phases.candles).toBe('error'))
+    expect(state.candlesComplete.value).toBe(false)
+    expect(state.equityHistory.get('c-5')).toBeUndefined()
+    truncated = false
+    await state.retry('candles')
+    expect(state.candlesComplete.value).toBe(true)
+    expect(state.equityHistory.get('c-5')?.maximumDrawdown).toBe('0')
+  })
+})

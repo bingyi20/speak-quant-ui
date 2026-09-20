@@ -1,19 +1,20 @@
-import { createDrawdownHistory } from './historical-result'
+import { createDrawdownHistory, verifiedDrawdownRange } from './historical-result'
 import { computed, reactive, ref, shallowRef } from 'vue'
 import { BoundedCache } from '~/lib/chart/cache'
 import type { ReplayApi } from './api'
-import { decimal, timeframeSeconds, toBar } from './normalize'
+import { timeframeSeconds, toBar } from './normalize'
 import type {
   CandleQuery,
   ReplayBar,
   ReplayCandle,
   ReplayCandlePage,
   ReplayDetail,
+  ReplayDrawdownRange,
+  ReplayEquityHistory,
   ReplayInsight,
   ReplayReport,
   ReplayTrade,
 } from './types'
-import Decimal from 'decimal.js'
 
 type Resource = 'candles' | 'trades' | 'insights' | 'report'
 type Phase = 'idle' | 'loading' | 'ready' | 'error'
@@ -52,9 +53,9 @@ export function createReplayDataState(api: ReplayApi) {
     displayLoading = ref(false),
     displayError = ref('')
   const displayBars = shallowRef<ReplayBar[]>([])
-  const drawdownRange = shallowRef<{ from: number; to: number } | null>(null)
-  const historicalDrawdowns = new Map<string, string | null>()
-  let appendDrawdown = createDrawdownHistory()
+  const drawdownRange = shallowRef<ReplayDrawdownRange | null>(null)
+  const equityHistory = new Map<string, ReplayEquityHistory | null>()
+  let appendDrawdown: ReturnType<typeof createDrawdownHistory> | null = null
   const indexById = new Map<string, number>()
   const pageById = new Map<string, number>(),
     pages: CandlePageIndex[] = []
@@ -82,12 +83,7 @@ export function createReplayDataState(api: ReplayApi) {
     tradePage = 1
   let scanning = false,
     trading = false
-  let drawdownValid = true
   const displayWindow = shallowRef<{ timeframe: string; from: number; to: number } | null>(null)
-  let peak: Decimal | null = null,
-    peakTime = 0,
-    largestDrawdown = new Decimal(0),
-    worstRange: { from: number; to: number } | null = null
   const valid = (g: number) => g === generation && !controller.signal.aborted
   function cancel() {
     generation++
@@ -117,8 +113,8 @@ export function createReplayDataState(api: ReplayApi) {
     availableTimeframes.value = []
     displayTimeframe.value = ''
     displayError.value = ''
-    historicalDrawdowns.clear()
-    appendDrawdown = createDrawdownHistory()
+    equityHistory.clear()
+    appendDrawdown = null
     indexById.clear()
     pageById.clear()
     pages.length = 0
@@ -128,13 +124,8 @@ export function createReplayDataState(api: ReplayApi) {
     tradesComplete.value = false
     drawdownRange.value = null
     displayWindow.value = null
-    drawdownValid = true
     nextCursor = undefined
     tradePage = 1
-    peak = null
-    peakTime = 0
-    largestDrawdown = new Decimal(0)
-    worstRange = null
   }
   // Two candle requests at most; user seeks/window changes precede queued scan work.
   let activeRequests = 0
@@ -232,28 +223,6 @@ export function createReplayDataState(api: ReplayApi) {
       /* The canonical scan has its own visible retry state. */
     }
   }
-  function collectDrawdown(c: ReplayCandle) {
-    const equity = decimal(c.state?.equity)
-    if (equity === null) {
-      drawdownValid = false
-      worstRange = null
-      peak = null
-      return
-    }
-    const value = new Decimal(equity),
-      time = Date.parse(c.time) / 1000
-    if (!peak || value.greaterThan(peak)) {
-      peak = value
-      peakTime = time
-    }
-    if (peak.greaterThan(0)) {
-      const dd = peak.minus(value).div(peak)
-      if (dd.greaterThan(largestDrawdown)) {
-        largestDrawdown = dd
-        worstRange = { from: peakTime, to: time }
-      }
-    }
-  }
   async function loadCandles() {
     if (scanning || candlesComplete.value || detail.value?.status !== 'completed') return
     const g = generation
@@ -290,14 +259,7 @@ export function createReplayDataState(api: ReplayApi) {
           const c = rows[i]!
           indexById.set(c.id, axis.value.length + i)
           pageById.set(c.id, pageIndex)
-          collectDrawdown(result.items[i]!)
-          historicalDrawdowns.set(
-            c.id,
-            appendDrawdown(
-              result.items[i]!.state?.equity,
-              detail.value!.conditions.initial_capital,
-            ),
-          )
+          equityHistory.set(c.id, appendDrawdown?.(result.items[i]!) ?? null)
         }
         pages.push({ cursor, ids: rows.map((c) => c.id) })
         rawCache.set(pageIndex, result.items)
@@ -305,16 +267,16 @@ export function createReplayDataState(api: ReplayApi) {
         nextCursor = result.next_cursor ?? undefined
         if (nextCursor) seen.add(nextCursor)
         if (!result.has_more) {
+          const count = detail.value?.counts?.candles
+          if (count !== undefined && count !== axis.value.length)
+            throw new Error('Incomplete candle history')
           candlesComplete.value = true
           preview.value = []
           phases.candles = 'ready'
-          const expected = decimal(detail.value?.result?.max_drawdown_rate)
-          if (
-            drawdownValid &&
-            expected !== null &&
-            largestDrawdown.minus(new Decimal(expected).abs()).abs().lessThan('0.0001')
+          drawdownRange.value = verifiedDrawdownRange(
+            equityHistory.get(axis.value.at(-1)?.id ?? '') ?? null,
+            detail.value?.result?.max_drawdown_rate,
           )
-            drawdownRange.value = worstRange
           break
         }
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -432,6 +394,11 @@ export function createReplayDataState(api: ReplayApi) {
       const previousStatus = detail.value?.status
       detail.value = result
       if (result.status === 'completed' && previousStatus !== 'completed') {
+        appendDrawdown = createDrawdownHistory(
+          result.conditions.initial_capital,
+          result.conditions.start_at,
+          result.strategy.execution_timeframe,
+        )
         displayTimeframe.value = result.strategy.execution_timeframe
         availableTimeframes.value = [result.strategy.execution_timeframe]
         void loadPreview(atStart)
@@ -512,6 +479,29 @@ export function createReplayDataState(api: ReplayApi) {
     }
   }
   function retry(resource: Resource) {
+    // A failed final-page/count check has no resumable cursor. Rebuild the
+    // canonical prefix instead of appending page one onto a truncated history.
+    if (
+      resource === 'candles' &&
+      !scanning &&
+      !nextCursor &&
+      axis.value.length &&
+      phases.candles === 'error'
+    ) {
+      axis.value = []
+      indexById.clear()
+      pageById.clear()
+      pages.length = 0
+      rawCache.clear()
+      equityHistory.clear()
+      drawdownRange.value = null
+      const d = detail.value!
+      appendDrawdown = createDrawdownHistory(
+        d.conditions.initial_capital,
+        d.conditions.start_at,
+        d.strategy.execution_timeframe,
+      )
+    }
     return { candles: loadCandles, trades: loadTrades, insights: loadInsights, report: loadReport }[
       resource
     ]()
@@ -536,7 +526,7 @@ export function createReplayDataState(api: ReplayApi) {
     displayLoading,
     displayError,
     drawdownRange,
-    historicalDrawdowns,
+    equityHistory,
     displayWindow,
     load,
     reset,

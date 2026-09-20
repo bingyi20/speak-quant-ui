@@ -120,6 +120,26 @@ export interface ReplayCandle {
   volume: string
   state: ReplayCandleState | null
 }
+/** Equity is sampled at closeTime; chart anchors use the producing candle's open time. */
+export interface ReplayEquityPoint {
+  candleId: string | null
+  time: number
+  closeTime: number
+  equity: string
+}
+export interface ReplayDrawdownRange {
+  from: number
+  to: number
+  peak: ReplayEquityPoint
+  trough: ReplayEquityPoint
+  rate: string
+}
+export interface ReplayEquityHistory {
+  peak: ReplayEquityPoint
+  currentDrawdown: string
+  maximumDrawdown: string
+  range: ReplayDrawdownRange | null
+}
 export interface ReplayCandlePage {
   timeframe: string
   execution_timeframe?: string
@@ -225,6 +245,7 @@ export interface ReplaySelection {
   fillId?: string
   insightId?: string
   range?: { from: number; to: number }
+  drawdown?: ReplayDrawdownRange
 }
 export interface ReplayMessageContext {
   replay_id: string

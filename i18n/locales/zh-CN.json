@@ -370,9 +370,7 @@
     "detailsEntry": "明细",
     "fillTime": "时间",
     "fillAction": "操作",
-    "tradeOrder": "交易排序",
-    "newestFirst": "最新在前",
-    "oldestFirst": "最早在前",
+    "followLatestTrades": "回到最新交易",
     "orderDetails": "订单明细",
     "fillPrice": "成交价",
     "conditions": "条件",
@@ -390,7 +388,7 @@
     "viewTimeframe": "查看周期",
     "execution": "策略周期 {timeframe}",
     "volume": "成交量",
-    "resetChart": "重置视野",
+    "followLatest": "回到最新",
     "noCandles": "暂无行情数据",
     "afterClose": "该 K 线收盘后",
     "starting": "起点",
@@ -566,6 +564,11 @@
       "liquidation_count": "强平次数"
     },
     "currentDrawdown": "当前回撤",
+    "fullEquityCompounding": "全仓 · 连续复投",
+    "drawdownEquity": {
+      "peak": "回撤峰值权益",
+      "trough": "回撤谷值权益"
+    },
     "equityPercent": "权益的 {value}",
     "fixedSize": "固定仓位",
     "assumptions": {

@@ -6,7 +6,7 @@ import { useNuxtApp } from '#app'
 import { useAuthStore } from '~/features/auth'
 import { createReplayApi } from '../api'
 import { createReplayDataState } from '../data-state'
-import { buildReplayEvents, resolveSelection } from '../events'
+import { buildDrawdownEvent, buildReplayEvents, resolveSelection } from '../events'
 import { evidenceIds, nearestBar, nextBarTime, normalizeState } from '../normalize'
 import { advancePlayback } from '../playback-state'
 import { closedBars, revealTrades } from '../visibility'
@@ -44,17 +44,21 @@ export function useReplayDetail(
     scrollTop = ref(0)
   const snapshots = new Map<string, ReplayViewSnapshot>()
   const consumedAutoKeys = new Set<string>()
-  const events = computed(() =>
+  const eventCatalog = computed(() =>
     buildReplayEvents(
       data.axis.value,
       data.trades.value,
       data.insights.value,
       data.candlesComplete.value && data.tradesComplete.value,
-      data.drawdownRange.value,
     ),
   )
+  // Moving the equity trough must not rebuild the full candle/fill index.
+  const events = computed(() => {
+    const drawdown = buildDrawdownEvent(currentDrawdownRange.value, data.indexById)
+    return drawdown ? [...eventCatalog.value, drawdown] : eventCatalog.value
+  })
   const processEvents = computed(() =>
-    events.value.filter((e) => e.kind === 'fill' || e.kind === 'insight'),
+    eventCatalog.value.filter((e) => e.kind === 'fill' || e.kind === 'insight'),
   )
   const currentBar = computed(() => data.axis.value[index.value] ?? null)
   const atEnd = computed(
@@ -71,12 +75,27 @@ export function useReplayDetail(
       : -Infinity,
   )
   const visibleTrades = computed(() => revealTrades(data.trades.value, data.indexById, index.value))
-  const currentState = computed(() =>
-    normalizeState(
+  const currentHistory = computed(() =>
+    initializing.value || gapTime.value !== null || !currentBar.value
+      ? null
+      : (data.equityHistory.get(currentBar.value.id) ?? null),
+  )
+  const currentDrawdownRange = computed(() =>
+    atEnd.value ? data.drawdownRange.value : (currentHistory.value?.range ?? null),
+  )
+  const currentState = computed(() => {
+    if (
+      !currentHistory.value ||
+      currentLoading.value ||
+      currentCandle.value?.id !== currentBar.value?.id
+    )
+      return null
+    const state = normalizeState(
       currentCandle.value?.state,
       data.detail.value?.conditions.initial_capital ?? '0',
-    ),
-  )
+    )
+    return state ? { ...state, drawdown: currentHistory.value.currentDrawdown } : null
+  })
   const summaryResult = computed(() => {
     if (atEnd.value) return data.detail.value?.result ?? null
     // Do not retain the previous candle's equity while the next state is loading.
@@ -85,15 +104,15 @@ export function useReplayDetail(
       !data.tradesComplete.value ||
       currentLoading.value ||
       gapTime.value ||
-      !currentBar.value
+      !currentBar.value ||
+      !currentHistory.value
     )
       return null
     return historicalResult(
       visibleTrades.value,
-      currentState.value?.cumulative ?? null,
       currentState.value?.equity ?? null,
       data.detail.value?.conditions.initial_capital ?? '0',
-      data.historicalDrawdowns.get(currentBar.value.id) ?? null,
+      currentHistory.value.maximumDrawdown,
     )
   })
   const playing = computed(() => status.value !== 'paused')
@@ -151,6 +170,7 @@ export function useReplayDetail(
   let frame = 0,
     intent = 0,
     seekGeneration = 0,
+    evidenceGeneration = 0,
     lastFrame = 0,
     accumulator = 0,
     lastAdvance = 0,
@@ -165,6 +185,7 @@ export function useReplayDetail(
   function pause() {
     intent++
     seekGeneration++
+    evidenceGeneration++
     cancelAnimationFrame(frame)
     status.value = 'paused'
     currentLoading.value = false
@@ -186,7 +207,14 @@ export function useReplayDetail(
     while (snapshots.size > 10) snapshots.delete(snapshots.keys().next().value!)
   }
   function requestRange(range: ChartViewportRequest) {
-    if (!(range.to > range.from)) return
+    if (
+      'revealTime' in range
+        ? !Number.isFinite(range.revealTime)
+        : 'seekTime' in range
+          ? !Number.isFinite(range.seekTime)
+          : !(range.to > range.from)
+    )
+      return
     requestedRange.value = { ...range, revision: ++rangeRevision }
   }
   function previewResult(target: ReplaySelection) {
@@ -197,12 +225,17 @@ export function useReplayDetail(
       data.insights.value,
     )
     if (!resolved?.range || resolved.range.to > (currentBar.value?.time ?? -Infinity)) return
-    pause()
-    follow.value = false
-    focusEvidenceViewport(resolved)
+    // Result shortcuts inspect the same evidence as trade cards. Keep one
+    // selection/reveal path so neither entry resets the scale or replay clock.
+    return locate(resolved, false)
   }
-  function focusEvidenceViewport(target: ReplaySelection, anchorTime?: number) {
+  function focusEvidenceViewport(target: ReplaySelection, mode: 'fit' | 'reveal' = 'fit') {
     const bar = target.candleId ? data.axis.value[data.indexById.get(target.candleId) ?? -1] : null
+    if (mode === 'reveal') {
+      const time = target.range?.to ?? bar?.time
+      if (time !== undefined) requestRange({ revealTime: time })
+      return
+    }
     const step =
       data.axis.value.length > 1
         ? Math.max(1, data.axis.value[1]!.time - data.axis.value[0]!.time)
@@ -213,11 +246,6 @@ export function useReplayDetail(
       nearestBar(data.axis.value, target.range.from) !==
         nearestBar(data.axis.value, target.range.to)
     const pointTime = bar?.time ?? target.range?.from
-    if (anchorTime !== undefined) {
-      if (isInterval && target.range)
-        requestRange({ ...evidenceViewportRange(target.range, step), anchorTime })
-      return
-    }
     if (isDesktop && !isInterval && pointTime !== undefined) {
       requestRange({ ...defaultViewportRange(pointTime, step), focusTime: pointTime })
     } else if (target.range) {
@@ -260,13 +288,13 @@ export function useReplayDetail(
     return defaultViewportRange(bar.time, step, window.matchMedia('(min-width: 761px)').matches)
   }
   function focusCurrentViewport() {
-    const range = currentViewportRange()
-    if (range) requestRange({ ...range, focusTime: data.axis.value[index.value]?.time })
-    follow.value = true
+    const time = renderedBars.value.at(-1)?.time
+    if (time !== undefined) requestRange({ seekTime: time })
   }
   async function seek(next: number) {
     pause()
     selection.value = null
+    follow.value = true
     locateError.value = ''
     const ticket = seekGeneration
     gapTime.value = null
@@ -275,6 +303,9 @@ export function useReplayDetail(
     const bounded = Math.max(0, Math.min(data.axis.value.length - 1, next))
     if (!data.axis.value[bounded]) return
     index.value = bounded
+    // Navigation is immediate; a delayed account-state response must not move
+    // the viewport again after the user has already panned, zoomed or reset it.
+    focusCurrentViewport()
     const range = currentViewportRange()!
     await Promise.all([
       readAt(bounded, ticket),
@@ -282,8 +313,6 @@ export function useReplayDetail(
         ? data.setTimeframe(data.displayTimeframe.value, range)
         : Promise.resolve(),
     ])
-    if (ticket !== seekGeneration) return
-    focusCurrentViewport()
   }
   async function seekTime(time: number) {
     pause()
@@ -304,6 +333,7 @@ export function useReplayDetail(
       )
       if (expected && time >= expected && time < bars[prior + 1]!.time) {
         gapTime.value = time
+        follow.value = true
         index.value = prior
         currentCandle.value = null
         return
@@ -315,13 +345,15 @@ export function useReplayDetail(
     return resolveSelection(target, data.axis.value, visibleTrades.value, visibleInsights.value)
   }
   async function locate(target: ReplaySelection, movePlayhead = true) {
-    pause()
+    // Evidence inspection changes the viewport, not the playback clock.
+    if (movePlayhead) pause()
+    const evidenceTicket = ++evidenceGeneration
     const ticket = seekGeneration
     locateError.value = ''
     follow.value = movePlayhead
     if (movePlayhead) gapTime.value = null
     await data.setTimeframe(data.detail.value?.strategy.execution_timeframe ?? '')
-    if (ticket !== seekGeneration) return
+    if (ticket !== seekGeneration || evidenceTicket !== evidenceGeneration) return
     const resolved = resolveVisibleSelection(target)
     if (!resolved) {
       if (target.insightId && data.insights.value.some((i) => i.id === target.insightId)) {
@@ -359,7 +391,7 @@ export function useReplayDetail(
       currentCandle.value = null
       await readAt(n, ticket)
     }
-    if (ticket !== seekGeneration) return
+    if (ticket !== seekGeneration || evidenceTicket !== evidenceGeneration) return
     if (resolved.range && currentBar.value)
       selection.value = {
         ...resolved,
@@ -368,24 +400,21 @@ export function useReplayDetail(
           to: Math.min(resolved.range.to, currentBar.value.time),
         },
       }
-    if (ticket !== seekGeneration) return
-    focusEvidenceViewport(selection.value ?? resolved)
+    if (ticket !== seekGeneration || evidenceTicket !== evidenceGeneration) return
+    focusEvidenceViewport(selection.value ?? resolved, movePlayhead ? 'fit' : 'reveal')
   }
-  async function toggleInsight(target: ReplaySelection) {
-    // A chart inspection can select an earlier insight without seeking. Clicking its
-    // timeline point must still navigate; only a repeat at that time deselects it.
-    if (
-      target.insightId &&
-      selection.value?.insightId === target.insightId &&
-      currentBar.value?.id === target.candleId
-    ) {
-      pause()
+  function toggleTrade(tradeId: string) {
+    if (selection.value?.tradeId === tradeId) {
+      // Deselect locally; do not seek, change timeframe or resume chart following.
+      evidenceGeneration++
       selection.value = null
+      locateError.value = ''
       return
     }
-    await locate(target)
+    return locate({ tradeId }, false)
   }
-  function inspectInsight(target: ReplaySelection, anchorTime: number) {
+  function inspectInsight(target: ReplaySelection) {
+    evidenceGeneration++
     // Like pan/zoom, inspection detaches the viewport but never interrupts playback.
     follow.value = false
     if (target.insightId && selection.value?.insightId === target.insightId) {
@@ -401,8 +430,30 @@ export function useReplayDetail(
       }
     locateError.value = ''
     selection.value = resolved
-    focusEvidenceViewport(resolved, anchorTime)
   }
+  watch(currentBar, (bar) => {
+    const target = selection.value
+    if (!bar || !target?.tradeId || target.fillId || target.insightId) return
+    // An inspected position can still be open while playback advances. Extend
+    // its shade until the exit is revealed, without issuing a viewport request.
+    const resolved = resolveVisibleSelection({ tradeId: target.tradeId })
+    if (!resolved?.range) return
+    const range = selectedTrade.value?.isComplete
+      ? resolved.range
+      : { ...resolved.range, to: bar.time }
+    if (range.from !== target.range?.from || range.to !== target.range?.to)
+      selection.value = { ...resolved, range }
+  })
+  watch(currentDrawdownRange, (range) => {
+    if (!selection.value?.drawdown) return
+    selection.value = range
+      ? {
+          candleId: range.trough.candleId ?? undefined,
+          range: { from: range.from, to: range.to },
+          drawdown: range,
+        }
+      : null
+  })
   async function selectCandle(time: number) {
     pause()
     const selected = renderedBars.value.find((bar) => bar.time === time)
@@ -501,7 +552,7 @@ export function useReplayDetail(
     lastAdvance = 0
     holdUntil = 0
     accumulator = 0
-    follow.value = true
+    // Resume the existing viewport policy; a pause is not a navigation request.
     const token = intent
     frame = requestAnimationFrame((t) => {
       void tick(t, token)
@@ -699,6 +750,7 @@ export function useReplayDetail(
     currentCandle,
     currentBar,
     currentState,
+    currentDrawdownRange,
     summaryResult,
     currentLoading,
     currentError,
@@ -725,7 +777,7 @@ export function useReplayDetail(
     play,
     start,
     locate,
-    toggleInsight,
+    toggleTrade,
     inspectInsight,
     selectCandle,
     seek,

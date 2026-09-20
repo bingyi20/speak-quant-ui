@@ -1,4 +1,12 @@
-import { DEFAULT_CHART_VIEWPORT } from './viewport'
+import {
+  canReturnToLatest,
+  playbackViewportPolicy,
+  playbackViewportPosition,
+  type PlaybackViewportPolicy,
+  DEFAULT_CHART_VIEWPORT,
+  EVIDENCE_REVEAL_POSITION,
+  PLAYBACK_VIEWPORT_POSITION,
+} from './viewport'
 import { formatDateTime } from '~/lib/format'
 import { TradeTags } from './trade-tags'
 import { TimeLabel } from './time-label'
@@ -10,6 +18,7 @@ import {
   TickMarkType,
   createChart,
   type IPriceLine,
+  type Logical,
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts'
@@ -106,13 +115,15 @@ export function createLightweightChart(
   let priceLines: IPriceLine[] = []
   let movingWindow = false,
     windowFrame = 0,
-    anchorFrame = 0,
+    positionFrame = 0,
+    followFrame = 0,
+    gestureFrame = 0,
     destroyed = false
-  function cancelAnchoredZoom() {
-    cancelAnimationFrame(anchorFrame)
-  }
-  element.addEventListener('pointerdown', cancelAnchoredZoom, { passive: true })
-  element.addEventListener('wheel', cancelAnchoredZoom, { passive: true })
+  let policy: PlaybackViewportPolicy = { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
+  let gesturing = false
+  let gestureStart: { right: number; spacing: number } | null = null
+  let gestureTimer: ReturnType<typeof setTimeout> | undefined
+  const returnHandlers = new Set<(visible: boolean) => void>()
   const MAX_VISIBLE = 4000,
     BUFFER = 500
   const rangeHandlers = new Set<(r: ChartRange) => void>(),
@@ -230,8 +241,66 @@ export function createLightweightChart(
         )
     updateShade()
   }
-  // Time ranges round to candle boundaries; logical ranges also track fractional pans.
-  chart.timeScale().subscribeVisibleLogicalRangeChange(updateShade)
+  function geometry() {
+    if (!rows.length || !plotted.length) return null
+    const scale = chart.timeScale()
+    const width = scale.width(),
+      spacing = scale.options().barSpacing
+    const first = lowerBound(rows, plotted[0]!.time)
+    const x = scale.logicalToCoordinate((rows.length - 1 - first) as Logical)
+    if (x === null || width <= 0) return null
+    return { x, width, spacing, right: first + plotted.length - 1 + scale.scrollPosition() }
+  }
+  function publishReturnVisibility() {
+    const g = geometry()
+    const visible =
+      !!g && !followFrame && canReturnToLatest(g.x, g.width, g.spacing, rows.length - 1)
+    returnHandlers.forEach((handler) => handler(visible))
+  }
+  function adoptGesture() {
+    const g = geometry()
+    if (
+      g &&
+      gestureStart &&
+      (Math.abs(g.right - gestureStart.right) > 1e-6 ||
+        Math.abs(g.spacing - gestureStart.spacing) > 1e-6)
+    )
+      policy = playbackViewportPolicy(g.x, g.width, g.spacing)
+  }
+  function beginGesture() {
+    cancelMovement()
+    cancelAnimationFrame(gestureFrame)
+    clearTimeout(gestureTimer)
+    if (!gesturing) gestureStart = geometry()
+    gesturing = true
+  }
+  function endGesture() {
+    if (!gesturing) return
+    cancelAnimationFrame(gestureFrame)
+    gestureFrame = requestAnimationFrame(() => {
+      adoptGesture()
+      gesturing = false
+      gestureStart = null
+      publishReturnVisibility()
+    })
+  }
+  function wheelGesture() {
+    beginGesture()
+    gestureTimer = setTimeout(endGesture, 120)
+  }
+  function cancelGesture() {
+    clearTimeout(gestureTimer)
+    cancelAnimationFrame(gestureFrame)
+    gesturing = false
+    gestureStart = null
+  }
+  // Logical ranges include fractional pans; button visibility follows geometry,
+  // not pointer-down, hover, or the playback/evidence selection state.
+  chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+    updateShade()
+    if (gesturing && !movingWindow) adoptGesture()
+    publishReturnVisibility()
+  })
   chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
     if (
       movingWindow ||
@@ -243,7 +312,7 @@ export function createLightweightChart(
       return
     const value = { from: range.from as number, to: range.to as number }
     rangeHandlers.forEach((h) => h(value))
-    if (!rows.length || !plotted.length) return
+    if (!rows.length || !plotted.length || followFrame) return
     const from = lowerBound(rows, value.from),
       to = lowerBound(rows, value.to)
     const left = lowerBound(rows, plotted[0]!.time),
@@ -274,7 +343,8 @@ export function createLightweightChart(
     crosshairHandlers.forEach((h) => h(time, hit))
   })
   function setVisibleRange(requested: ChartRange) {
-    cancelAnchoredZoom()
+    cancelMovement()
+    policy = { mode: 'detached' }
     if (!rows.length || requested.from >= requested.to) return
     const range = renderWindow(requested)
     if (range && range.to > range.from)
@@ -282,9 +352,14 @@ export function createLightweightChart(
         .timeScale()
         .setVisibleRange({ from: range.from as UTCTimestamp, to: range.to as UTCTimestamp })
     updateShade()
+    positionFrame = requestAnimationFrame(() => {
+      const g = geometry()
+      if (g) policy = playbackViewportPolicy(g.x, g.width, g.spacing)
+      publishReturnVisibility()
+    })
   }
   function focusDefaultViewport(time: number) {
-    cancelAnchoredZoom()
+    cancelMovement()
     if (!rows.length) return
     const index = lowerBound(rows, time)
     renderWindow({
@@ -292,52 +367,131 @@ export function createLightweightChart(
       to: rows[Math.min(rows.length - 1, index + DEFAULT_CHART_VIEWPORT.right)]!.time,
     })
     const target = lowerBound(plotted, time)
-    chart.timeScale().setVisibleLogicalRange({
-      from: Math.max(-1, target - DEFAULT_CHART_VIEWPORT.history),
-      to: target + (desktop() ? DEFAULT_CHART_VIEWPORT.right : 30),
+    const scale = chart.timeScale()
+    const span =
+      DEFAULT_CHART_VIEWPORT.history + (desktop() ? DEFAULT_CHART_VIEWPORT.right : 30) + 1
+    const spacing = scale.width() / span
+    const position = desktop()
+      ? playbackViewportPosition(index, scale.width(), spacing)
+      : PLAYBACK_VIEWPORT_POSITION
+    policy =
+      position < PLAYBACK_VIEWPORT_POSITION
+        ? { mode: 'filling' }
+        : { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
+    const right = target - 0.5 + (scale.width() * (1 - position) - 1) / spacing
+    scale.setVisibleLogicalRange({ from: right - span + 1, to: right })
+    positionFrame = requestAnimationFrame(() => {
+      positionTime(time, desktop() ? 'playback' : PLAYBACK_VIEWPORT_POSITION)
     })
     updateShade()
   }
-  function zoomAroundTime(requested: ChartRange, time: number) {
-    if (!rows.length || requested.from >= requested.to) return
-    cancelAnchoredZoom()
+  function positionTime(time: number, position: number | 'playback', onlyIfHidden = false) {
+    cancelMovement()
+    if (!rows.length || !plotted.length) return
+    const scale = chart.timeScale()
+    const width = scale.width()
+    const first = lowerBound(rows, plotted[0]!.time)
+    const index = lowerBound(rows, time)
+    const x = scale.logicalToCoordinate((index - first) as Logical)
+    // Use candle positions within the actual plot bounds, excluding the price axis.
+    // Evidence inspection leaves visible endpoints alone; playback navigation
+    // uses the revealed history length and the user's current candle spacing.
+    if (x === null || !width || (onlyIfHidden && x >= 0 && x < width)) return
+    cancelAnimationFrame(windowFrame)
+    const barSpacing = scale.options().barSpacing
+    const anchor =
+      position === 'playback' ? playbackViewportPosition(index, width, barSpacing) : position
+    if (position === 'playback')
+      policy =
+        anchor < PLAYBACK_VIEWPORT_POSITION
+          ? { mode: 'filling' }
+          : { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
+    const destination = width * anchor
+    const right =
+      first + plotted.length - 1 + scale.scrollPosition() + (x - destination) / barSpacing
+    const offset = moveRight(right, barSpacing)
+    // New prices can resize the price axis on the next draw. Align once that
+    // layout settles, unless another gesture has already changed the viewport.
+    positionFrame = requestAnimationFrame(() => {
+      if (
+        !destroyed &&
+        scale.width() !== width &&
+        Math.abs(scale.scrollPosition() - offset) < 1e-6 &&
+        Math.abs(scale.options().barSpacing - barSpacing) < 1e-6
+      )
+        positionTime(time, position)
+      publishReturnVisibility()
+    })
+    updateShade()
+  }
+  function cancelMovement() {
+    cancelAnimationFrame(windowFrame)
+    cancelAnimationFrame(followFrame)
+    cancelAnimationFrame(positionFrame)
+    followFrame = 0
+  }
+  // Translate in global logical indices so a long pan can cross data buffers
+  // without resetting the user's candle spacing.
+  function moveRight(right: number, barSpacing: number) {
+    const scale = chart.timeScale()
+    const at = (index: number) => rows[Math.max(0, Math.min(rows.length - 1, index))]!.time
+    renderWindow({
+      from: at(Math.floor(right - scale.width() / barSpacing)),
+      to: at(Math.ceil(right)),
+    })
+    scale.applyOptions({ barSpacing })
+    const offset = right - lowerBound(rows, plotted.at(-1)!.time)
+    scale.scrollToPosition(offset, false)
+    return offset
+  }
+  function follow(animated = false) {
+    if (!rows.length || !plotted.length || (!animated && (followFrame || gesturing))) return
+    const latest = () => rows.at(-1)!.time
+    if (!animated) {
+      const g = geometry()
+      if (policy.mode === 'filling' && g && g.x >= g.width * PLAYBACK_VIEWPORT_POSITION)
+        policy = { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
+      if (policy.mode === 'following') positionTime(latest(), policy.position)
+      publishReturnVisibility()
+      return
+    }
+    cancelGesture()
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      positionTime(latest(), 'playback')
+      return
+    }
+    cancelMovement()
     cancelAnimationFrame(windowFrame)
     const scale = chart.timeScale()
-    const x = scale.timeToCoordinate(time as UTCTimestamp)
-    if (x === null || !scale.width()) return
-    const fraction = Math.max(0, Math.min(1, x / scale.width()))
-    const span = Math.max(
-      1,
-      Math.min(MAX_VISIBLE, lowerBound(rows, requested.to) - lowerBound(rows, requested.from)),
-    )
-    const index = lowerBound(rows, time)
-    // Load the viewport around the anchor, allowing evidence to extend off screen.
-    renderWindow({
-      from: rows[Math.max(0, Math.floor(index - fraction * span))]!.time,
-      to: rows[Math.min(rows.length - 1, Math.ceil(index + (1 - fraction) * span))]!.time,
-    })
-    const anchor = scale.timeToIndex(time as UTCTimestamp)
-    if (anchor === null) return
-    // Logical endpoints include both edge bars. Match the SDK's half-bar center
-    // and 1px axis inset; range setters are deferred, so do not read back yet.
-    const position = () => {
-      const from = anchor + 0.5 - ((x + 1) / scale.width()) * (span + 1)
-      scale.setVisibleLogicalRange({ from, to: from + span })
+    const barSpacing = scale.options().barSpacing
+    const startRight = lowerBound(rows, plotted.at(-1)!.time) + scale.scrollPosition()
+    const start = performance.now()
+    const step = (now: number) => {
+      if (destroyed) return
+      const progress = Math.min(1, (now - start) / 260)
+      if (progress === 1) {
+        positionTime(latest(), 'playback')
+        return
+      }
+      // Playback may append bars during the animation. Retarget to its current
+      // cutoff, never to unrevealed history, without restarting the transition.
+      const position = playbackViewportPosition(rows.length - 1, scale.width(), barSpacing)
+      const target = rows.length - 1 + (scale.width() * (1 - position) - 1) / barSpacing - 0.5
+      moveRight(startRight + (target - startRight) * (1 - (1 - progress) ** 3), barSpacing)
+      followFrame = requestAnimationFrame(step)
     }
-    position()
-    // Autoscale may change price-label width during the next paint. Preserve
-    // the absolute x coordinate once that layout settles, not its old ratio.
-    const settle = (previousWidth: number, remaining: number) => {
-      anchorFrame = requestAnimationFrame(() => {
-        if (destroyed || scale.width() === previousWidth) return
-        position()
-        if (remaining > 0) settle(scale.width(), remaining - 1)
-      })
-    }
-    settle(scale.width(), 2)
+    followFrame = requestAnimationFrame(step)
+    publishReturnVisibility()
   }
+  // A manual gesture takes ownership immediately; no pending pan can snap back.
+  element.addEventListener('pointerdown', beginGesture, { capture: true })
+  element.addEventListener('wheel', wheelGesture, { capture: true, passive: true })
+  window.addEventListener('pointerup', endGesture)
+  window.addEventListener('pointercancel', endGesture)
   return {
     setData(value) {
+      cancelMovement()
+      cancelGesture()
       const saved = view()
       rows = value
       const price = value[0]?.close
@@ -365,22 +519,18 @@ export function createLightweightChart(
         }
       }
       updateShade()
+      publishReturnVisibility()
     },
     seek(time) {
-      if (desktop()) return focusDefaultViewport(time)
-      const range = chart.timeScale().getVisibleRange()
-      const span =
-        range && typeof range.from === 'number' && typeof range.to === 'number'
-          ? range.to - range.from
-          : 3600 * 100
-      setVisibleRange({ from: time - span / 2, to: time + span / 2 })
+      cancelGesture()
+      positionTime(time, 'playback')
     },
-    follow() {
-      const latest = rows.at(-1)
-      if (latest) focusDefaultViewport(latest.time)
+    follow,
+    resetView(time = rows.at(-1)?.time) {
+      if (time !== undefined) focusDefaultViewport(time)
     },
     setVisibleRange,
-    zoomAroundTime,
+    revealTime: (time) => positionTime(time, EVIDENCE_REVEAL_POSITION, true),
     getViewState: view,
     setMarkers,
     setSelection,
@@ -418,6 +568,13 @@ export function createLightweightChart(
         updateShade()
       }
     },
+    onReturnVisibilityChange(handler) {
+      returnHandlers.add(handler)
+      publishReturnVisibility()
+      return () => {
+        returnHandlers.delete(handler)
+      }
+    },
     onRangeChange(handler) {
       rangeHandlers.add(handler)
       return () => {
@@ -439,9 +596,13 @@ export function createLightweightChart(
     destroy() {
       destroyed = true
       cancelAnimationFrame(windowFrame)
-      cancelAnchoredZoom()
-      element.removeEventListener('pointerdown', cancelAnchoredZoom)
-      element.removeEventListener('wheel', cancelAnchoredZoom)
+      cancelMovement()
+      cancelGesture()
+      element.removeEventListener('pointerdown', beginGesture, true)
+      element.removeEventListener('wheel', wheelGesture, true)
+      window.removeEventListener('pointerup', endGesture)
+      window.removeEventListener('pointercancel', endGesture)
+      returnHandlers.clear()
       rangeHandlers.clear()
       selectHandlers.clear()
       crosshairHandlers.clear()

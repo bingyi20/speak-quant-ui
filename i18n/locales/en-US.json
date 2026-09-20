@@ -370,9 +370,7 @@
     "detailsEntry": "Details",
     "fillTime": "Time",
     "fillAction": "Action",
-    "tradeOrder": "Trade order",
-    "newestFirst": "Newest first",
-    "oldestFirst": "Oldest first",
+    "followLatestTrades": "Follow latest trades",
     "orderDetails": "Order details",
     "fillPrice": "Fill price",
     "conditions": "Conditions",
@@ -390,7 +388,7 @@
     "viewTimeframe": "Chart timeframe",
     "execution": "Strategy timeframe {timeframe}",
     "volume": "Volume",
-    "resetChart": "Reset view",
+    "followLatest": "Follow latest",
     "noCandles": "No market data",
     "afterClose": "After this candle closes",
     "starting": "Start",
@@ -566,6 +564,11 @@
       "liquidation_count": "Liquidations"
     },
     "currentDrawdown": "Current drawdown",
+    "fullEquityCompounding": "Full equity · Compounding",
+    "drawdownEquity": {
+      "peak": "Drawdown peak equity",
+      "trough": "Drawdown trough equity"
+    },
     "equityPercent": "{value} of equity",
     "fixedSize": "Fixed size",
     "assumptions": {

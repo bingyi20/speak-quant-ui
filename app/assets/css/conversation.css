@@ -159,6 +159,9 @@ button.message-card {
     color: var(--color-text-primary);
   }
 }
+button.message-card:focus-visible .card-open-arrow {
+  color: var(--color-text-primary);
+}
 @media (prefers-reduced-motion: reduce) {
   button.message-card {
     transition: none;
