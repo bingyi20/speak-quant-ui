@@ -8,6 +8,9 @@ import {
   stubGoogle,
 } from './auth-fixtures'
 test.beforeEach(async ({ page }) => {
+  await page
+    .context()
+    .addCookies([{ name: 'trade-locale-manual', value: 'zh-CN', url: 'http://localhost:6002' }])
   await stubHistory(page)
   await stubGoogle(page)
   await page.route('**/api/auth/google/config', (route) =>
@@ -25,6 +28,7 @@ test.beforeEach(async ({ page }) => {
 test('public landing renders on the server and links into the workspace', async ({
   page,
   request,
+  isMobile,
 }) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -32,14 +36,51 @@ test('public landing renders on the server and links into the workspace', async 
     if (message.type() === 'warning' && /hydration/i.test(message.text()))
       errors.push(message.text())
   })
-  const response = await request.get('/')
+  const response = await request.get('/zh-CN')
   expect(response.ok()).toBeTruthy()
   expect(await response.text()).toContain('3 分钟')
-  await page.goto('/')
+  await page.goto('/zh-CN')
   await expect(page.getByRole('heading', { name: /3 分钟，\s*验证你的交易想法。/ })).toBeVisible()
-  await page.getByRole('link', { name: '进入工作台' }).first().click()
+  await expect(page.locator('.process-steps > li')).toHaveCount(3)
+  const landingInput = (await page.locator('.research-composer').boundingBox())!
+  const process = (await page.locator('.landing-process').boundingBox())!
+  expect(process.x + process.width / 2).toBeCloseTo(landingInput.x + landingInput.width / 2, 0)
+  if (!isMobile) {
+    expect(landingInput.width).toBe(736)
+    expect(process.width).toBe(960)
+  }
+  const hypothesis = page.locator('.process-hypothesis')
+  await hypothesis.scrollIntoViewIfNeeded()
+  await expect(hypothesis).toHaveClass(/is-visible/)
+  const seed = (await hypothesis.boundingBox())!
+  const build = (await page.locator('.process-steps > li').first().boundingBox())!
+  const learn = (await page.locator('.process-steps > li').last().boundingBox())!
+  const returnLine = (await page.locator('.process-return-line').boundingBox())!
+  expect(seed.y + seed.height).toBeLessThan(build.y)
+  if (isMobile) {
+    expect(returnLine.y).toBeGreaterThan(build.y)
+    expect(returnLine.y).toBeLessThan(build.y + build.height)
+  } else {
+    expect(returnLine.y).toBeGreaterThan(build.y + build.height)
+    expect(returnLine.x).toBeCloseTo(build.x + build.width / 2, 0)
+    expect(returnLine.x + returnLine.width).toBeCloseTo(learn.x + learn.width / 2, 0)
+  }
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(page.locator('.process-idea-spark svg')).toHaveCSS('animation-name', 'none')
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  if (isMobile) await page.getByRole('button', { name: '菜单', exact: true }).click()
+  await page.getByRole('link', { name: '工作台', exact: true }).first().click()
   await expect(page).toHaveURL(/\/new-task$/)
   await expect(page.getByRole('heading', { name: '今天，想验证什么？' })).toBeVisible()
+  if (!isMobile) expect((await page.locator('.research-composer').boundingBox())!.width).toBe(736)
+  await page.screenshot({
+    path: `/tmp/trade-entry-new-task-${isMobile ? 'mobile' : 'desktop'}.png`,
+    fullPage: true,
+  })
+  await page.goto('/conversations/01K4ABCDE00000000000000001')
+  await expect(page.locator('.chat-input .research-composer')).toBeVisible()
+  if (!isMobile)
+    expect((await page.locator('.chat-input .research-composer').boundingBox())!.width).toBe(736)
   expect(errors).toEqual([])
 })
 
@@ -105,7 +146,7 @@ test('all routes return 200, show the correct page, and have no horizontal overf
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   const routes = [
-    ['/', /3 分钟，\s*验证你的交易想法。/],
+    ['/zh-CN', /3 分钟，\s*验证你的交易想法。/],
     ['/new-task', '今天，想验证什么？'],
     ['/login', '登录或注册'],
     ['/conversations/01K4ABCDE00000000000000001', null],

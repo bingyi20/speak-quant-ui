@@ -24,12 +24,16 @@ export default defineNuxtConfig({
       apiBase: process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:6001/api',
       apiEnabled: true,
       enableDarkTheme: false,
+      enableRunnerDownload: false,
       termsUrl: '',
       privacyUrl: '',
-      siteUrl: 'http://localhost:6002',
+      siteUrl: 'https://speakquant.com',
+      operatorName: '',
+      supportEmail: '',
     },
   },
   routeRules: {
+    '/': { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } },
     '/new-task': {
       ssr: false,
       headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' },
@@ -41,8 +45,8 @@ export default defineNuxtConfig({
     '/login': { headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' } },
   },
   i18n: {
-    strategy: 'no_prefix',
-    defaultLocale: 'zh-CN',
+    strategy: 'prefix_except_default',
+    defaultLocale: 'en-US',
     detectBrowserLanguage: false,
     vueI18n: './i18n.config.ts',
     locales: [

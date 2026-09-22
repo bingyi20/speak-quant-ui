@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatDecimal } from '~/lib/format'
 import type { CheckoutSelection, PricingPlan } from '../catalog'
-const props = defineProps<{ plan: PricingPlan; current: boolean }>()
+const props = defineProps<{ plan: PricingPlan; current: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ select: [selection: CheckoutSelection] }>()
 const { t, locale } = useI18n()
 const number = (value: number, digits = 0) => formatDecimal(String(value), locale.value, digits)
@@ -62,7 +62,7 @@ function select() {
     <button
       type="button"
       class="pricing-button"
-      :disabled="current || plan.id === 'free'"
+      :disabled="disabled || current || plan.id === 'free'"
       @click="select"
     >
       {{

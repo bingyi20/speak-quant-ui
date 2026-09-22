@@ -7,7 +7,7 @@
   --radius-composer: 20px;
   --sidebar-width: 260px;
   --conversation-width: 736px;
-  --home-width: 650px;
+  --home-width: var(--conversation-width);
   --landing-width: 820px;
   --motion-fast: 160ms;
   --motion-panel: 260ms;

@@ -5,6 +5,7 @@
   --color-brand-hover: #dfb778;
   --color-brand-on: #211b13;
   --color-bg-canvas: #1c1d1a;
+  --color-bg-public-header: rgb(28 29 26 / 82%);
   --color-bg-sidebar: #171815;
   --color-bg-sidebar-interactive: #30312d;
   --color-bg-menu-hover: #30312d;
@@ -15,6 +16,8 @@
   --color-text-secondary: #bcbbb0;
   --color-text-muted: #a5a69a;
   --color-border-default: #3f4137;
+  --color-diagram-connector: #5c5445;
+  --color-idea-glow: radial-gradient(circle, #e7bc6b45 0%, #e7bc6b00 70%);
   --color-border-focus: var(--color-text-muted);
   --color-success: #8fc5af;
   --color-danger: #dfa096;

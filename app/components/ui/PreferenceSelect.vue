@@ -1,9 +1,14 @@
 <script setup lang="ts" generic="T extends string">
 import type { DropdownMenuItem } from '@nuxt/ui'
-const props = defineProps<{
-  label: string
-  options: { label: string; value: T }[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    label: string
+    disabled?: boolean
+    modal?: boolean
+    options: { label: string; value: T }[]
+  }>(),
+  { modal: true },
+)
 const model = defineModel<T>({ required: true })
 const selected = computed(() => props.options.find((option) => option.value === model.value)?.label)
 const items = computed<DropdownMenuItem[]>(() =>
@@ -19,6 +24,7 @@ const items = computed<DropdownMenuItem[]>(() =>
 </script>
 <template>
   <UDropdownMenu
+    :modal="props.modal"
     :items="items"
     :content="{ align: 'end', sideOffset: 6, collisionPadding: 12 }"
     :ui="{
@@ -33,6 +39,7 @@ const items = computed<DropdownMenuItem[]>(() =>
       type="button"
       class="preference-select"
       :aria-label="label"
+      :disabled="disabled"
     >
       <span>{{ selected }}</span>
       <UIcon name="i-lucide-chevron-down" />

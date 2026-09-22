@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { usePreferencesStore } from '~/stores/preferences'
 import { useAuthStore } from '~/features/auth'
 import { useOverlaysStore } from '~/stores/overlays'
 import PreferenceSelect from '~/components/ui/PreferenceSelect.vue'
 import type { ThemePreference, Locale } from '#shared/types/http'
-const preferences = usePreferencesStore()
+const { language } = useLanguage()
 const auth = useAuthStore()
 const overlays = useOverlaysStore()
 const theme = useTheme()
@@ -163,7 +162,7 @@ async function logout() {
         <div class="setting-row">
           <span>{{ $t('settings.language') }}</span>
           <PreferenceSelect
-            v-model="preferences.locale"
+            v-model="language"
             :label="$t('settings.language')"
             :options="localeOptions"
           />

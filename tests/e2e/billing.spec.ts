@@ -20,6 +20,56 @@ async function openPricing(page: Page) {
   return dialog
 }
 
+test('signed-in public pricing and workspace share current-plan and top-up state after reload', async ({
+  page,
+}) => {
+  for (const copy of [
+    {
+      locale: 'en-US',
+      path: '/pricing',
+      current: 'Current plan',
+      credits: 'Credit top-ups',
+      membership: 'Current membership',
+      start: 'Start research',
+    },
+    {
+      locale: 'zh-CN',
+      path: '/zh-CN/pricing',
+      current: '当前套餐',
+      credits: '积分加购',
+      membership: '当前会员',
+      start: '开始研究',
+    },
+  ]) {
+    await page
+      .context()
+      .addCookies([
+        { name: 'trade-locale-manual', value: copy.locale, url: 'http://localhost:6002' },
+      ])
+    await page.goto(copy.path)
+    const free = page.getByRole('article', { name: 'Free', exact: true })
+    await expect(free.getByRole('button', { name: copy.current, exact: true })).toBeDisabled()
+    await page.reload()
+    await expect(free.getByRole('button', { name: copy.current, exact: true })).toBeDisabled()
+    await expect(page.getByText(copy.start, { exact: true })).toHaveCount(0)
+    const publicCard = await free.innerText()
+    await page.getByRole('tab', { name: copy.credits, exact: true }).click()
+    await expect(page.getByText(copy.membership, { exact: true })).toBeVisible()
+    const publicMembership = await page.locator('.pricing-topup-heading').innerText()
+
+    await page.goto('/new-task')
+    if ((page.viewportSize()?.width ?? 1440) <= 760) await page.locator('.workspace-expand').click()
+    await page.locator('.account-topup').filter({ visible: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('button', { name: copy.current, exact: true })).toBeDisabled()
+    expect(await dialog.getByRole('article', { name: 'Free', exact: true }).innerText()).toBe(
+      publicCard,
+    )
+    await dialog.getByRole('tab', { name: copy.credits, exact: true }).click()
+    expect(await dialog.locator('.pricing-topup-heading').innerText()).toBe(publicMembership)
+  }
+})
+
 test('full-screen pricing preserves research, shows payment notices for both plans, and restores focus', async ({
   page,
   isMobile,
@@ -155,7 +205,7 @@ test('English and engineering dark theme render without overflow or focus escapi
 }) => {
   await page
     .context()
-    .addCookies([{ name: 'trade-locale', value: 'en-US', domain: 'localhost', path: '/' }])
+    .addCookies([{ name: 'trade-locale-manual', value: 'en-US', domain: 'localhost', path: '/' }])
   await page.goto('/new-task')
   if ((page.viewportSize()?.width ?? 1440) <= 760) await page.locator('.workspace-expand').click()
   await page.locator('.account-topup').filter({ visible: true }).click()
@@ -188,7 +238,7 @@ test('credit estimates keep their height and position while amounts are cleared 
 }) => {
   await page
     .context()
-    .addCookies([{ name: 'trade-locale', value: 'en-US', domain: 'localhost', path: '/' }])
+    .addCookies([{ name: 'trade-locale-manual', value: 'en-US', domain: 'localhost', path: '/' }])
   await page.goto('/new-task')
   if ((page.viewportSize()?.width ?? 1440) <= 760) await page.locator('.workspace-expand').click()
   await page.locator('.account-topup').filter({ visible: true }).click()

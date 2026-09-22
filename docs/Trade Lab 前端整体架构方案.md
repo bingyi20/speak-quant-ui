@@ -89,23 +89,25 @@ SSR 请求后端时使用服务端配置的绝对 API 地址；该配置与浏�
 
 | 路由 | 用途与布局 | 首期渲染 | 索引策略 |
 | --- | --- | --- | --- |
-| `/` | 产品落地页；public 布局，品牌导航、产品介绍、研究输入框与示例 | SSR 公共内容；客户端增强输入与认证入口 | 公共内容可索引 |
+| `/`、`/zh-CN` | 英文／中文产品落地页；public 布局，品牌导航、产品介绍、研究输入框与示例 | SSR 公共内容；客户端增强输入与认证入口 | 公共内容可索引 |
 | `/new-task` | 工作台新研究页；workspace 布局，左侧历史、中间输入区 | 路由级 CSR | noindex、禁止共享缓存 |
 | `/login` | 登录及登录返回入口；auth 布局 | SSR 页面壳，客户端认证 | noindex、no-store |
 | `/conversations/:id` | 已创建的研究；workspace 布局，对话与资产面板 | 路由级 CSR | noindex、禁止共享缓存 |
+| `/pricing`、`/privacy`、`/terms`、`/contact`、`/open-source` 及对应 `/zh-CN/...` | 公共价格、政策／联系草案及开源说明 | SSR | 首页／价格／开源说明可索引；草案暂 noindex |
+| `/refunds` 及 `/zh-CN/refunds` | 取消退款已合入价格页 | 301 跳转到同语言 `/pricing#billing` | 不单独索引 |
 | 后续公开内容路由 | SEO 文章、公开说明等；public 布局 | SSR 或预渲染，按内容选择 | 明确开放后加入 sitemap |
 
 Nuxt 全局保持 SSR 开启，为 `/new-task` 和 `/conversations/**` 配置 `routeRules` 的 `ssr: false`，不在全局关闭 SSR。`routeRules` 可按路由选择渲染方式，符合 Nuxt 的混合渲染机制。参见 [Nuxt Rendering Modes](https://nuxt.com/docs/4.x/guide/concepts/rendering)。
 
 落地页不包含工作台的个人历史侧栏。SSR 不输出 Token 或草稿；客户端认证恢复期间，导航中的认证相关入口使用一致占位。SSR 首次输出与客户端首次渲染使用同一份公共数据及语言。
 
-`/` 始终展示产品落地页，已登录用户访问时也不强制跳转；导航提供“进入工作台”，指向 `/new-task`。落地页首屏可沿用已确认的标题、研究输入框和快捷示例，下方承载产品介绍、使用过程和研究案例。工作台新研究页保持精简，不重复放置营销内容。
+`/` 始终展示产品落地页，已登录用户访问时也不强制跳转；导航提供“工作台”（英文 Workspace），指向 `/new-task`。落地页首屏可沿用已确认的标题、研究输入框和快捷示例，下方直接呈现三步研究流程和业务边界，不增加模拟演示或研究案例模块。工作台新研究页保持精简，不重复放置营销内容。
 
 #### 发起研究与登录衔接
 
 两个页面复用 conversation 模块导出的研究输入组件与创建 controller，页面分别决定外围排版和内容，不复制提交、登录恢复或幂等逻辑。
 
-- 点击“进入工作台”或工作台内“新研究”进入 `/new-task`，不创建空 Conversation；需要登录时，完成登录后返回该入口。
+- 点击“工作台”或工作台内“新研究”进入 `/new-task`，不创建空 Conversation；需要登录时，完成登录后返回该入口。
 - 任一输入入口点击发送，已登录则调用现有创建接口，成功后直接进入 `/conversations/:id`，无需先经过 `/new-task`。
 - 未登录时，保存本次输入与明确的待提交意图，进入登录流程；登录成功后继续这次提交，创建成功后进入详情。单纯访问页面、填入示例或普通登录不触发创建。
 - 输入与待提交意图保存在当前浏览器标签页的临时状态中，按需使用 sessionStorage 跨登录跳转恢复，不放入 URL。成功后消费并清除待提交意图；取消或失败保留可编辑草稿，同一次提交重试复用幂等 key。
@@ -253,11 +255,12 @@ features 的公开入口
 | 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
 | 订阅套餐、积分加购与支付待上线提示 | `app/features/billing/index.ts`、`catalog.ts`、`components/`、`app/assets/css/billing.css`；复用契约和验证见[订阅与积分模块技术方案](订阅与积分模块技术方案.md) |
 | 全局偏好、主题及语言恢复          | `app/stores/preferences.ts`、`app/plugins/01.preferences.ts`、`app/composables/useTheme.ts`、`public/theme-init.js`                                                               |
-| 尺寸、字体、配色与页面样式        | `app/assets/css/tokens.css`、`themes/light.css`、`themes/dark.css`、`main.css`；Nuxt UI 配置在 `app/app.config.ts`                                                                |
+| 尺寸、字体、配色与页面样式        | `app/assets/css/tokens.css`、`themes/light.css`、`themes/dark.css`、`main.css`、`public.css`；Nuxt UI 配置在 `app/app.config.ts`                                                                |
 | 品牌、头像与公共控件              | `public/logo.svg`、`public/favicon.svg`、`public/avatar-default.svg`、`app/components/common/`、`app/components/ui/`                                                              |
 | 界面文案与国际化                  | `i18n/locales/zh-CN.json`、`en-US.json`、`i18n/i18n.config.ts`                                                                                                                    |
 | SSE、文件下载                     | `app/lib/sse/`、`app/lib/download/client.ts`                                                                                                                                      |
 | 图表、精度、Markdown、存储与遥测  | `app/lib/chart/`、`format/`、`storage/`、`telemetry/`                                                                                                                             |
+| 公开站点、协议、语言与 sitemap | `app/pages/index.vue`、`pricing.vue`、`privacy.vue`、`terms.vue`、`refunds.vue`、`contact.vue`、`layouts/public.vue`、`components/common/PublicDocument.vue`、`LegalDocument.vue`、`composables/useLanguage.ts`、`shared/public-site.ts`、`server/routes/`；[公开站点技术方案](公开站点技术方案.md) |
 | SEO 与公共生命周期工具            | `app/composables/usePageSeo.ts`、`useDisposableScope.ts`、`useChart.ts`                                                                                                           |
 | 测试与 HTTP Mock                  | `tests/unit/`、`tests/e2e/`、`tests/e2e/auth-fixtures.ts`、`history-data.ts`                                                                                                      |
 
@@ -461,9 +464,9 @@ Nuxt UI 已能满足的组件直接使用；需要统一产品语义、默认行
 
 系统界面文案从第一期使用 key，按 common/auth/conversation/replay 等命名空间组织。后端业务状态映射到本地文案；Agent 正文保持服务端内容，不自动翻译。
 
-偏好优先级为显式用户选择、已登录用户设置、已保存偏好、浏览器语言、默认语言。首次 SSR 使用可读取的 Cookie/请求语言并传给客户端；登录后再同步用户设置，避免 hydration 不一致。
+公开页面语言由 URL 决定：英文根路径、中文 `/zh-CN`，不受浏览器语言、IP 或账号恢复改写。只有主动选择写入 `trade-locale-manual`，旧自动 `trade-locale` 不迁移。私有页面按手动偏好、已登录账号语言、当前会话语言、英文恢复。首次 SSR 与客户端保持一致；账号恢复不写手动 Cookie。详见[公开站点技术方案](公开站点技术方案.md#语言与偏好)。
 
-日期、数字、比率集中格式化；保存 UTC，展示按明确时区。公开 SEO 页面后续采用稳定语言 URL，生成对应 canonical/hreflang；私有工作台切语言不必改变资源 URL。
+日期、数字、比率集中格式化；保存 UTC，展示按明确时区。公开 SEO 页面已采用稳定语言 URL 和 canonical/hreflang；私有工作台和登录页使用 `defineI18nRoute(false)`，切语言不改变资源 URL。
 
 ### 11.2 配置和部署
 

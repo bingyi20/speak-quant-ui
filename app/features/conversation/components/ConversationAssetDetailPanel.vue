@@ -31,6 +31,7 @@ const emit = defineEmits<{
   question: [reference: ReplayQuestionReference]
 }>()
 const auth = useAuthStore()
+const runnerEnabled = String(useRuntimeConfig().public.enableRunnerDownload) === 'true'
 const { t } = useI18n()
 const linkedNode = ref<string | null>(null)
 const isStrategy = computed(() => props.selected?.type === 'strategy_card')
@@ -266,7 +267,7 @@ function escape(event: KeyboardEvent) {
               ></UTooltip>
             </template>
             <UTooltip
-              v-else
+              v-else-if="runnerEnabled"
               :text="t('replay.downloadRunner')"
               :delay-duration="400"
             >
@@ -333,7 +334,7 @@ function escape(event: KeyboardEvent) {
           @question="emit('question', $event)"
         />
         <RunnerDownloadDialog
-          v-if="downloadSource && !showingReplay"
+          v-if="runnerEnabled && downloadSource && !showingReplay"
           v-model:open="downloadOpen"
           :node-id="downloadState.selectedNodeId.value"
           :replay-id="downloadSource.id"

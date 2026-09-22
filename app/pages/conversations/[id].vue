@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ConversationWorkspace } from '~/features/conversation'
 definePageMeta({ layout: 'workspace', middleware: 'auth' })
+defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 usePageSeo(

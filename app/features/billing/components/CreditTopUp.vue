@@ -8,7 +8,7 @@ import {
   type CheckoutSelection,
   type PricingPlan,
 } from '../catalog'
-const props = defineProps<{ plan: PricingPlan }>()
+const props = defineProps<{ plan: PricingPlan; preview?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ select: [selection: CheckoutSelection] }>()
 const { t, locale } = useI18n()
 const inputId = useId()
@@ -16,7 +16,7 @@ const amount = ref(String(TOP_UP_MIN))
 const quote = computed(() => quoteTopUp(amount.value, props.plan))
 const number = (value: number, digits = 0) => formatDecimal(String(value), locale.value, digits)
 function submit() {
-  if (quote.value) emit('select', quote.value)
+  if (quote.value && !props.disabled) emit('select', quote.value)
 }
 </script>
 
@@ -27,7 +27,7 @@ function submit() {
     @submit.prevent="submit"
   >
     <div class="pricing-topup-heading">
-      <p>{{ t('billing.currentMembership') }}</p>
+      <p>{{ t(preview ? 'billing.topUpPreview' : 'billing.currentMembership') }}</p>
       <h3>{{ plan.name }}</h3>
     </div>
     <div class="pricing-amount-label">
@@ -46,6 +46,7 @@ function submit() {
         inputmode="numeric"
         autocomplete="off"
         maxlength="10"
+        :disabled="disabled"
         :aria-invalid="!quote"
         :aria-describedby="`${inputId}-hint${!quote ? ` ${inputId}-error` : ''}`"
       />
@@ -68,6 +69,7 @@ function submit() {
         v-for="preset in TOP_UP_AMOUNTS"
         :key="preset"
         type="button"
+        :disabled="disabled"
         :aria-pressed="amount === String(preset)"
         @click="amount = String(preset)"
       >
@@ -93,7 +95,7 @@ function submit() {
     <button
       type="submit"
       class="pricing-button"
-      :disabled="!quote"
+      :disabled="disabled || !quote"
     >
       {{
         quote

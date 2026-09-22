@@ -22,6 +22,7 @@ const {
   back,
 } = useLogin()
 const config = useRuntimeConfig()
+const localePath = useLocalePath()
 const emailInput = useTemplateRef<HTMLInputElement>('emailInput')
 watch(step, (value) => {
   if (value === 'entry') nextTick(() => emailInput.value?.focus())
@@ -45,7 +46,7 @@ watch(step, (value) => {
     >
       <header class="login-intro">
         <NuxtLink
-          to="/"
+          :to="localePath('/')"
           class="login-brand"
           :aria-label="`Trade Lab · ${$t('nav.home')}`"
         >
@@ -165,19 +166,19 @@ watch(step, (value) => {
         {{ error }}
       </p>
       <p
-        v-if="step === 'entry' && config.public.termsUrl && config.public.privacyUrl"
+        v-if="step === 'entry'"
         class="login-legal"
       >
-        {{ $t('auth.consent') }}
+        {{ $t('auth.reviewPolicies') }}
         <a
-          :href="config.public.termsUrl"
+          :href="config.public.termsUrl || localePath('/terms')"
           target="_blank"
           rel="noopener noreferrer"
           >{{ $t('auth.terms') }}</a
         >
         {{ $t('auth.and') }}
         <a
-          :href="config.public.privacyUrl"
+          :href="config.public.privacyUrl || localePath('/privacy')"
           target="_blank"
           rel="noopener noreferrer"
           >{{ $t('auth.privacy') }}</a

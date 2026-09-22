@@ -168,6 +168,11 @@ test('full-width chart, frozen strategy return, evidence, context retry and stra
   await expect(panel.getByRole('button', { name: '更多回测操作' })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: '下载运行包' })).toHaveCount(0)
   await panel.getByRole('button', { name: '查看策略', exact: true }).click()
+  if (process.env.NUXT_PUBLIC_ENABLE_RUNNER_DOWNLOAD !== 'true') {
+    await expect(panel.getByRole('button', { name: '下载运行包', exact: true })).toHaveCount(0)
+    expect(errors).toEqual([])
+    return
+  }
   await expect(panel.getByRole('button', { name: '下载运行包', exact: true })).toBeEnabled()
   await panel.getByRole('button', { name: '下载运行包', exact: true }).click()
   let request: Record<string, string> | undefined
@@ -249,7 +254,7 @@ test('old candle contract, partial failure retry, no trades and public notices',
   await expect(page.locator('.replay-inline-error')).toHaveCount(0)
   if (isMobile) await page.getByRole('tab', { name: /交易/ }).click()
   await expect(page.getByText('没有触发交易', { exact: true })).toBeVisible()
-  await page.goto('/open-source')
+  await page.goto('/zh-CN/open-source')
   await expect(page.getByRole('heading', { name: '开源声明', exact: true })).toBeVisible()
   await expect(page.locator('article a[href="https://www.tradingview.com/"]')).toBeVisible()
 })
@@ -1349,7 +1354,7 @@ for (const language of ['zh-CN', 'en-US']) {
     await stubReplay(page)
     await page
       .context()
-      .addCookies([{ name: 'trade-locale', value: language, url: 'http://localhost:6002' }])
+      .addCookies([{ name: 'trade-locale-manual', value: language, url: 'http://localhost:6002' }])
     const raw = candles()
     Object.assign(raw[197]!, { open: '90000', close: '90000', high: '90150', low: '89870' })
     Object.assign(raw[198]!, { open: '96000', close: '95000', high: '96150', low: '94870' })

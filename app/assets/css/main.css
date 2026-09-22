@@ -1,5 +1,6 @@
 @import './conversation.css';
 @import './billing.css';
+@import './public.css';
 @import './asset-details.css';
 @import './replay.css';
 @import 'tailwindcss';
@@ -371,42 +372,6 @@ p {
 }
 .explore-link:hover {
   color: var(--color-brand);
-}
-.method-section {
-  max-width: 1130px;
-  padding: 68px 24px 85px;
-  margin: auto;
-  border-top: 1px solid var(--color-border-default);
-}
-.method-heading h2 {
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 400;
-  margin-top: 16px;
-}
-.method-heading p {
-  margin-top: 14px;
-  color: var(--color-text-secondary);
-}
-.method-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 60px;
-  margin: 46px 0;
-}
-.step-number {
-  color: var(--color-brand);
-  font: 13px var(--font-mono);
-}
-.method-grid h3 {
-  font-size: 17px;
-  font-weight: 500;
-  margin: 13px 0;
-}
-.method-grid p {
-  color: var(--color-text-secondary);
-  line-height: 1.9;
-  font-size: 14px;
 }
 .public-footer {
   display: flex;
@@ -1691,16 +1656,6 @@ p {
   }
   .composer-bottom > span {
     font-size: 10px;
-  }
-  .method-section {
-    padding-top: 42px;
-  }
-  .method-heading h2 {
-    font-size: 28px;
-  }
-  .method-grid {
-    grid-template-columns: 1fr;
-    gap: 28px;
   }
   .public-footer {
     flex-direction: column;

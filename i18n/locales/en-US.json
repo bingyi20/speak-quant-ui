@@ -2,7 +2,7 @@
   "nav": {
     "product": "Product",
     "method": "How it works",
-    "workspace": "Open workspace",
+    "workspace": "Workspace",
     "new": "New research",
     "history": "Research history",
     "historyEmpty": "Your research starts here.",
@@ -11,7 +11,8 @@
     "expand": "Expand sidebar",
     "home": "Back to home",
     "preview": "Explore workspace",
-    "login": "Sign in"
+    "login": "Sign in",
+    "pricing": "Pricing"
   },
   "common": {
     "close": "Close",
@@ -29,20 +30,38 @@
   },
   "landing": {
     "eyebrow": "TRADING RESEARCH WORKSPACE",
-    "title1": "3 minutes to ",
-    "title2": "test your trading idea",
-    "subtitle": "Trade Lab is an AI agent for quantitative strategy research. Describe your trading idea in natural language to design strategies, generate code, and analyze historical backtests through conversation.",
+    "title1": "Test your trading idea",
+    "title2": "in 3 minutes",
+    "subtitle": "Turn market ideas into evidence — explore, test, and refine strategies with AI.",
     "explore": "Explore the process",
-    "methodTitle": "From an idea to evidence.",
-    "methodIntro": "Keep the research in one conversation. Form a hypothesis, backtest the strategy, and keep asking questions.",
-    "step1": "Describe an idea",
-    "desc1": "Put your trading hypothesis into words and shape it into a clear strategy.",
-    "step2": "Backtest the strategy",
-    "desc2": "Understand when historical trades happened, under which conditions, and with what results.",
-    "step3": "Keep exploring",
-    "desc3": "Ask questions grounded in evidence and continue in the same workspace.",
+    "methodTitle": "Turn ideas into evidence.\nThen evidence into better ideas.",
+    "methodIntro": "No code. No trading account required.",
+    "step1": "Turn your idea into a test",
+    "desc1": "AI turns your hypothesis into trading rules and a working strategy.",
+    "step2": "Put it against the market",
+    "desc2": "Backtest on historical data. Replay every trade.",
+    "step3": "Learn from the evidence",
+    "desc3": "Explore what worked, what failed, and what to test next — with AI.",
     "footer": "Historical results do not predict future performance.",
-    "tag": "For people who take research seriously."
+    "tag": "For people who take research seriously.",
+    "period": ".",
+    "placeholder": "Describe an idea, observation, or question...",
+    "example1": "Trend",
+    "example2": "Breakout",
+    "example3": "Reversal",
+    "example4": "Timeframes",
+    "prompt1": "Explore a BTC trend-following strategy when a short moving average crosses above a long moving average.",
+    "prompt2": "Explore BTC breakouts above recent highs with rising volume.",
+    "prompt3": "Explore a BTC trend reversal when momentum weakens after a sustained move.",
+    "prompt4": "Explore daily trends together with hourly signals.",
+    "methodLabel": "HOW IT WORKS",
+    "boundaryTitle": "Trade Lab is research software.",
+    "boundaryBody": "Research software only. No custody, brokerage or live trading.",
+    "hypothesis": "Your idea",
+    "nextHypothesis": "Next hypothesis",
+    "stage1": "BUILD",
+    "stage2": "TEST",
+    "stage3": "LEARN"
   },
   "research": {
     "title": "What will you explore today?",
@@ -126,7 +145,8 @@
       "network": "Connection failed. Check your network and try again.",
       "generic": "Sign-in did not complete. Please try again.",
       "notEnabled": "This is an offline preview. Enable the API to sign in."
-    }
+    },
+    "reviewPolicies": "Read our"
   },
   "settings": {
     "freePlan": "Free",
@@ -297,7 +317,8 @@
     "enterAmount": "Enter a valid amount",
     "membershipUnavailable": "Membership information is unavailable. Please try again later.",
     "paymentSoon": "Payments coming soon",
-    "recharge": "Upgrade"
+    "recharge": "Upgrade",
+    "topUpPreview": "Top-up rate preview"
   },
   "strategy": {
     "current": "Current strategy",
@@ -627,5 +648,112 @@
     "attribution": "Charts powered by TradingView Lightweight Charts™.",
     "license": "Apache 2.0 license",
     "notice": "Copyright notice"
+  },
+  "publicSite": {
+    "menu": "Menu",
+    "footerNav": "Information and policies",
+    "contact": "Contact",
+    "updated": "Updated {date}",
+    "draft": "Draft for review. Operator details and final policies will be completed before publication.",
+    "operator": "Service operator",
+    "support": "Email support",
+    "pendingOperator": "Operator details will be published here before launch.",
+    "pendingSupport": "A verified support email will be published here before launch.",
+    "brandRelation": "Trade Lab is the product brand operated by {operator}.",
+    "contactIntro": "For account, research workspace, privacy or billing questions.",
+    "contactAdvice": "When contacting support, describe the issue and include a page or error reference if available. Do not send passwords, verification codes, private keys or full payment details."
+  },
+  "publicPricing": {
+    "intro": "Strategy research, backtesting, Replay and AI insights.",
+    "creditsTitle": "How credits work",
+    "creditsBody": "Credits power AI conversations, strategy generation and backtest analysis. More complex tasks and larger amounts of content use more credits.",
+    "topUpBody": "Plan credits refresh monthly. When they run out, wait for the next refresh or buy extra credits to keep researching, without changing your plan.",
+    "billingTitle": "Cancellation & refunds",
+    "billingBody": "The proposed plans renew monthly. Cancel before the next charge and keep access until the end of the current billing period.",
+    "contactLink": "Questions? Contact us",
+    "usage": {
+      "discussion": "Discuss ideas or interpret results",
+      "discussionAmount": "About 1–5 credits / task",
+      "strategy": "Generate or revise a strategy",
+      "strategyAmount": "About 10–30 credits / task",
+      "backtest": "Run and analyze a backtest",
+      "backtestAmount": "About 20–60 credits / task"
+    },
+    "usageNote": "Illustrative usage only. Final rates will be published before billing opens.",
+    "readingBody": "Reading past conversations, viewing saved strategies and replaying existing results use no additional credits.",
+    "topUpTitle": "What if I run out of credits?",
+    "refundBody": "Cancellation stops renewal; it does not request a refund. Contact support to review duplicate or incorrect charges, or loss of service access. Refund eligibility will be confirmed before paid plans open."
+  },
+  "legal": {
+    "draftLabel": "Draft",
+    "contactBody": "Operator and support details will be published on the contact page. The channel for privacy requests, billing questions and service notices will be confirmed before launch.",
+    "privacy": {
+      "title": "Privacy Policy",
+      "intro": "How Trade Lab handles information used for accounts, strategy research and service operation.",
+      "sections": [
+        {
+          "title": "Information used by the service",
+          "body": "Account information includes your email address, profile details and sign-in information. If you choose Google sign-in, Google provides the identity information needed to authenticate your account. Research information includes messages, strategy designs, generated code, backtest settings, results and your interactions with those results."
+        },
+        {
+          "title": "Why this information is used",
+          "body": "This information supports sign-in, saved research history, AI responses, strategy generation, historical backtests and error diagnosis. Service requests may also involve technical records such as request identifiers, timestamps, device or browser information and error details, depending on the deployed infrastructure."
+        },
+        {
+          "title": "AI and service providers",
+          "body": "Producing AI responses requires processing your prompts and relevant research context through AI services. Authentication, email delivery, hosting and storage may also involve service providers. The provider list, processing locations, retention settings and any use for model training must be verified for the production service before this policy is finalised. Do not include credentials or information you are not authorised to share in a research prompt."
+        },
+        {
+          "title": "Cookies and browser storage",
+          "body": "Trade Lab uses session cookies for sign-in and browser storage for preferences such as language and appearance. Unsent research drafts and pending submissions are stored in the current browser tab so that a login or retry can continue your work. Clearing site data can remove these local settings and drafts; it does not by itself delete research already saved to your account."
+        },
+        {
+          "title": "Retention and deletion",
+          "body": "Saved research supports reopening conversations and reviewing strategy and backtest history. You can delete conversations through the research-history controls. Deleting a conversation is separate from deleting an account or removing operational logs and backups. Retention periods, backup expiry and the account-deletion process remain to be confirmed for the production service."
+        },
+        {
+          "title": "Your choices and requests",
+          "body": "You can change supported account details and preferences in the workspace. Depending on applicable law, you may be entitled to request access, correction, deletion, a copy of your data, or limits on its processing, and to raise a concern with a relevant authority. The verified contact channel, identity checks, response process and applicable legal basis will be completed before publication."
+        },
+        {
+          "title": "Payments and policy changes",
+          "body": "Paid subscriptions and credit purchases are not yet enabled. If billing is introduced, this policy will identify the payment providers and the order or billing data involved. Material changes to data handling will be reflected in an updated policy; the date above identifies this draft."
+        }
+      ]
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "intro": "The scope and conditions of using Trade Lab as a strategy research workspace.",
+      "sections": [
+        {
+          "title": "What Trade Lab provides",
+          "body": "Trade Lab helps you discuss trading ideas, develop hypotheses, generate strategy code, test against historical market data and review results. It is research software. It does not hold customer funds, execute trades or provide brokerage services. The initial public offering does not include a live-trading Runner service."
+        },
+        {
+          "title": "Accounts and access",
+          "body": "Use accurate account information and keep access to your sign-in email secure. You are responsible for activity you authorise through your account. Do not share verification codes, impersonate another person, bypass access restrictions or use another person’s research without permission."
+        },
+        {
+          "title": "Research and AI limitations",
+          "body": "AI-generated explanations and code can contain errors. Backtests depend on the available historical data, assumptions, fees, market conditions and execution model. Historical or simulated results do not establish future returns. Review the strategy and backtest conditions before each run. Research output is not a recommendation to buy or sell a financial product, and the headline “3 minutes” is not a guaranteed completion time."
+        },
+        {
+          "title": "Your content and generated output",
+          "body": "You must have permission to submit the material you provide. You retain rights you already hold in that material; operating the service requires processing it to perform your requested research and maintain your account history. Generated output may be similar to output provided to others and may require review for accuracy and third-party rights. Third-party software and market data remain subject to their applicable licences."
+        },
+        {
+          "title": "Acceptable use and availability",
+          "body": "Do not use the service for unlawful activity, malware, unauthorised access, interference with other users, or attempts to defeat usage limits. Access may be limited to address misuse, security incidents or operational issues. Features may change and the service may be interrupted for maintenance or external provider failures; uninterrupted availability is not promised."
+        },
+        {
+          "title": "Plans, payments and ending use",
+          "body": "Current plan amounts are previews. Paid subscriptions and credit purchases are not yet available, and no purchase is completed by selecting a preview. Before charging, the service must disclose the actual price, allowance, billing cycle, renewal, cancellation and refund terms. You may stop using the service; account deletion and termination procedures will be confirmed before these terms are finalised."
+        },
+        {
+          "title": "Operator and governing terms",
+          "body": "The contracting entity, contact information, applicable law, dispute process and any limitations of liability will be completed after the operator and service jurisdictions are confirmed. This draft does not replace rights that cannot be excluded under applicable law."
+        }
+      ]
+    }
   }
 }

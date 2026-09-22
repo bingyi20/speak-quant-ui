@@ -9,6 +9,9 @@ import {
 } from './auth-fixtures'
 
 test.beforeEach(async ({ page }) => {
+  await page
+    .context()
+    .addCookies([{ name: 'trade-locale-manual', value: 'zh-CN', url: 'http://localhost:6002' }])
   await stubHistory(page)
   await stubGoogle(page)
   await page.route('**/api/auth/refresh', (route) =>
@@ -113,7 +116,7 @@ test('invalid code is announced, resend replaces the challenge and back retains 
   await expect(page.getByLabel('邮箱地址')).toHaveValue('tester@example.com')
   expect(configs).toBe(1)
   await page.getByRole('link', { name: 'Trade Lab · 返回首页' }).click()
-  await expect(page).toHaveURL(/\/$/)
+  await expect(page).toHaveURL(/\/zh-CN$/)
 })
 
 test('Google mailbox binding uses the Google endpoint and keeps its credential in memory', async ({

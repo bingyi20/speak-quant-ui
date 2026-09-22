@@ -581,7 +581,7 @@ test('guest explicit submit continues once after login; ordinary drafts never au
     loggedIn = true
     return route.fulfill({ json: envelope(authResponse) })
   })
-  await page.goto('/')
+  await page.goto('/zh-CN')
   await page.getByRole('textbox', { name: '交易想法' }).fill('访客发起的研究')
   await page.getByRole('button', { name: '发送研究想法' }).click()
   await expect(page).toHaveURL(/\/login\?returnTo=/)
@@ -642,11 +642,11 @@ test('cancelling guest login restores editable input without an automatic submis
     loggedIn = true
     return route.fulfill({ json: envelope(authResponse) })
   })
-  await page.goto('/')
+  await page.goto('/zh-CN')
   await page.getByRole('textbox', { name: '交易想法' }).fill('先保留，稍后再发')
   await page.getByRole('button', { name: '发送研究想法' }).click()
   await expect(page).toHaveURL(/\/login\?returnTo=/)
-  await page.locator('a[href="/"]').first().click()
+  await page.locator('a[href="/zh-CN"]').first().click()
   await expect(page.getByRole('textbox', { name: '交易想法' })).toHaveValue('先保留，稍后再发')
   await page.goto('/login')
   await page.getByRole('button', { name: '使用 Google 继续' }).click()

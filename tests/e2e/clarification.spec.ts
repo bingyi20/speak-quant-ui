@@ -173,7 +173,7 @@ test('a single English question wraps and retains the whole answer when retrying
 }) => {
   await page
     .context()
-    .addCookies([{ name: 'trade-locale', value: 'en-US', url: 'http://localhost:6002' }])
+    .addCookies([{ name: 'trade-locale-manual', value: 'en-US', url: 'http://localhost:6002' }])
   const prompt =
     'Which risk management approach should we use when a breakout reverses before the next candle closes?'
   const { calls } = await stubConversation(page, {

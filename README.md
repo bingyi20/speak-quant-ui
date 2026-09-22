@@ -15,7 +15,8 @@ pnpm dev
 
 | 地址                 | 页面                                         |
 | -------------------- | -------------------------------------------- |
-| `/`                  | SSR 产品落地页与研究输入                     |
+| `/`、`/zh-CN`        | SSR 英文／中文产品落地页与研究输入                     |
+| `/pricing`、`/privacy`、`/terms`、`/contact` | SSR 价格及协议／联系页；中文对应 `/zh-CN/...`，协议目前为草案；取消退款已合入价格页，`/refunds` 跳转到对应语言的 `/pricing#billing` |
 | `/new-task`          | 客户端工作台新研究页                         |
 | `/conversations/:id` | 真实消息、Agent 流式回复、快捷问答与资产面板 |
 | `/login`             | 邮箱验证码 / Google 登录                     |
@@ -39,7 +40,9 @@ pnpm dev
 | `NUXT_PUBLIC_API_ENABLED`       | 默认 `true`，开启真实登录、认证恢复及工作台访问守卫；`false` 为离线预览 |
 | `NUXT_PUBLIC_API_BASE`          | 本地默认 `http://localhost:6001/api`，生产默认 `/api`                   |
 | `NUXT_API_BASE`                 | 服务端公开数据请求的绝对 API 地址                                       |
-| `NUXT_PUBLIC_SITE_URL`          | canonical 等公开地址，生产配置实际站点域名                              |
+| `NUXT_PUBLIC_SITE_URL`          | canonical 等公开地址，默认 https://speakquant.com，生产不可配置 localhost                              |
+| `NUXT_PUBLIC_OPERATOR_NAME` / `NUXT_PUBLIC_SUPPORT_EMAIL` | 运营主体及已验证邮箱；留空显示待补齐 |
+| `NUXT_PUBLIC_ENABLE_RUNNER_DOWNLOAD` | 默认 false，首发隐藏运行包下载入口；不改变后端接口权限 |
 | `NUXT_PUBLIC_ENABLE_DARK_THEME` | 默认 `false`；设为 `true` 可验证 dark/system 工程主题，非已定稿深色设计 |
 
 本地统一使用 `localhost`，不要与 `127.0.0.1` 混用（Google 开发 OAuth 仅允许 localhost）。后端需允许 `http://localhost:6002` 的 CORS 凭据请求、业务方法及 Authorization / Idempotency-Key / X-Request-ID 等 Header，并暴露 Content-Disposition 供下载使用。开发 Cookie 关闭 Secure；生产 HTTPS Cookie 开启 Secure。前端不提供 API 代理或 BFF。
@@ -48,7 +51,7 @@ pnpm dev
 
 Google 从 `/auth/google/config` 获取 client ID 和 nonce。官方脚本加载失败时可重试或使用邮箱；没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。退出成功后清理会话并调用 GIS `disableAutoSelect()`。
 
-正式政策链接通过 `NUXT_PUBLIC_TERMS_URL`、`NUXT_PUBLIC_PRIVACY_URL` 配置，两项齐全时展示同意说明与可点击链接；当前未提供正式文案，不生成虚假条款页面。Google SDK 集成依据：[官方 JavaScript API](https://developers.google.com/identity/gsi/web/reference/js-reference)。
+登录页始终通过新标签页打开对应语言的条款、隐私页面，保留登录状态；当前为草案，主体与正式规则待补齐，不显示已生效的同意声明。可选 `NUXT_PUBLIC_TERMS_URL`、`NUXT_PUBLIC_PRIVACY_URL` 用于正式外链覆盖。Google SDK 集成依据：[官方 JavaScript API](https://developers.google.com/identity/gsi/web/reference/js-reference)。
 
 ## 目录职责
 
@@ -128,7 +131,7 @@ pnpm preview
 HOST=127.0.0.1 PORT=6002 node .output/server/index.mjs
 ```
 
-`/new-task`、`/conversations/**` 为 CSR + noindex + no-store，`/` 保留 SSR。后续公开页面放在 `app/pages`，声明 `layout: 'public'` 并调用 `usePageSeo`。sitemap、公开文章及营销内容扩展在后续阶段完成。
+`/new-task`、`/conversations/**` 为 CSR + noindex + no-store，`/` 保留 SSR。后续公开页面放在 `app/pages`，声明 `layout: 'public'` 并调用 `usePageSeo`。已提供 `/sitemap.xml`、`/robots.txt`、双语 canonical/hreflang 和分享图；协议与联系草案暂不索引。详见[公开站点技术方案](docs/公开站点技术方案.md)。
 
 ## 当前边界
 
@@ -136,7 +139,7 @@ HOST=127.0.0.1 PORT=6002 node .output/server/index.mjs
 
 已实现 Agent 对话：新建研究、访客发送衔接登录、纯文本消息、Markdown 流式回复、工具状态、批量澄清、历史分页和断流恢复。用户消息先正常显示，仅失败时提示；AI 回复结束前输入仍可编辑，但不能发送，没有暂停按钮。Markdown 复用 `marked` 与 `sanitize-html`，不自写解析器。
 
-Strategy / Replay 卡片可展开侧边面板。Strategy 的 Header 切换当前/历史版本，以变更摘要识别节点，同步更新 Design、只读代码和回测记录；回测默认展示所选版本，可手动查看全部并标记所选版本。Design 共用 Agent Markdown 排版，代码支持高亮与复制；策略和 Replay 支持覆盖整个页面的全屏查看。回测详情提供全宽 K 线、播放与事件定位、洞察/交易/成交明细、报告、冻结策略往返、上下文追问和运行包下载，返回策略保留版本、列表范围、滚动与焦点。多周期按服务端能力清单启用。前端回测执行/重试/取消、策略恢复、Runner 运行控制、支付及会员/积分数据仍待接入。实现契约见[策略详情模块技术方案](docs/策略详情模块技术方案.md)与[回测详情模块技术方案](docs/回测详情模块技术方案.md)，回测验证见[回测详情联调记录](docs/回测详情联调记录.md)。真实联调与测试范围见 [Agent 对话接口联调记录](docs/Agent%20对话接口联调记录.md)。
+Strategy / Replay 卡片可展开侧边面板。Strategy 的 Header 切换当前/历史版本，以变更摘要识别节点，同步更新 Design、只读代码和回测记录；回测默认展示所选版本，可手动查看全部并标记所选版本。Design 共用 Agent Markdown 排版，代码支持高亮与复制；策略和 Replay 支持覆盖整个页面的全屏查看。回测详情提供全宽 K 线、播放与事件定位、洞察/交易/成交明细、报告、冻结策略往返、上下文追问；运行包下载原实现保留，首发默认隐藏入口。返回策略保留版本、列表范围、滚动与焦点。多周期按服务端能力清单启用。前端回测执行/重试/取消、策略恢复、Runner 运行控制、支付及会员/积分数据仍待接入。实现契约见[策略详情模块技术方案](docs/策略详情模块技术方案.md)与[回测详情模块技术方案](docs/回测详情模块技术方案.md)，回测验证见[回测详情联调记录](docs/回测详情联调记录.md)。真实联调与测试范围见 [Agent 对话接口联调记录](docs/Agent%20对话接口联调记录.md)。
 
 公开 SEO 页面可以直接嵌入下面的组件，统一处理草稿、登录、创建与跳转，页面继续使用 SSR：
 
@@ -155,7 +158,7 @@ import { ResearchEntry } from '~/features/conversation'
 
 架构依据：[前端整体架构方案](docs/Trade%20Lab%20前端整体架构方案.md)。
 
-订阅 UI 已实现 Free / Pro / Max、积分加购与支付待上线提示，数据暂为静态目录；支付入口显示尚未开放，不创建订单或改变会员／余额。未来独立 Pricing 页通过 `features/billing` 的 `PricingContent` 公开入口复用。价格规则、组件契约及测试边界见[订阅与积分模块技术方案](docs/订阅与积分模块技术方案.md)。
+订阅 UI 已实现 Free / Pro / Max、积分加购与支付待上线提示，数据暂为静态目录；支付入口显示尚未开放，不创建订单或改变会员／余额。独立 `/pricing` 与 `/zh-CN/pricing` 和工作台弹窗完整复用 `features/billing` 的 `PricingContent`；已登录时显示相同的 Free 当前套餐预览，访客显示禁用的免费套餐及 Free 加购费率示例，不提供研究跳转。付费套餐与有效加购统一显示支付待上线提示。价格规则、组件契约及测试边界见[订阅与积分模块技术方案](docs/订阅与积分模块技术方案.md)。
 
 ## 登录联调验证
 

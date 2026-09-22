@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AccountTrigger from '~/features/account/components/AccountTrigger.vue'
 import ResearchHistory from '~/features/conversation/components/ResearchHistory.vue'
+const localePath = useLocalePath()
 defineProps<{ collapsed?: boolean; mobile?: boolean }>()
 defineEmits<{
   (event: 'toggle' | 'navigate' | 'settings' | 'pricing'): void
@@ -11,7 +12,7 @@ defineEmits<{
   <div class="sidebar-top">
     <NuxtLink
       v-if="!collapsed"
-      to="/"
+      :to="localePath('/')"
       aria-label="Trade Lab"
       @click="$emit('navigate')"
       ><CommonBrandMark

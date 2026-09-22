@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NuxtError } from '#app'
 defineProps<{ error: NuxtError }>()
+useSeoMeta({ robots: 'noindex, nofollow' })
 </script>
 <template>
   <main class="error-page">

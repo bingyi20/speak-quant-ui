@@ -2,20 +2,32 @@
 import { useTemplateRef } from 'vue'
 import { useResearchEntry } from '../composables/useResearchEntry'
 import MessageComposer from './MessageComposer.vue'
-withDefaults(
+const props = withDefaults(
   defineProps<{
     compact?: boolean
     showHint?: boolean
     showExamples?: boolean
+    examples?: { label: string; prompt: string }[]
     placeholder?: string
   }>(),
-  { compact: false, showHint: false, placeholder: undefined, showExamples: undefined },
+  {
+    compact: false,
+    showHint: false,
+    placeholder: undefined,
+    showExamples: undefined,
+    examples: undefined,
+  },
 )
 const { draft, error, busy, intent, canEdit, blocked, submit, retry, dismiss } = useResearchEntry()
 const { t } = useI18n()
 const composer = useTemplateRef('composer')
+const ready = ref(false)
+onMounted(() => {
+  ready.value = true
+})
 function chooseExample(n: number) {
-  draft.value = t(`research.prompt${n}`)
+  if (busy.value || intent.value) return
+  draft.value = props.examples?.[n - 1]?.prompt ?? t(`research.prompt${n}`)
   void composer.value?.focus()
 }
 </script>
@@ -83,6 +95,7 @@ function chooseExample(n: number) {
       <button
         v-for="n in 4"
         :key="n"
+        :disabled="!ready || busy || !!intent"
         @click="chooseExample(n)"
       >
         <svg
@@ -102,7 +115,10 @@ function chooseExample(n: number) {
             stroke="currentColor"
             stroke-width="1.6"
           /></svg
-        ><span>{{ $t(`research.example${n}`) }}<UIcon name="i-lucide-arrow-up-right" /></span>
+        ><span
+          >{{ examples?.[n - 1]?.label ?? $t(`research.example${n}`)
+          }}<UIcon name="i-lucide-arrow-up-right"
+        /></span>
       </button>
     </div>
   </div>

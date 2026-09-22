@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthStore } from '~/features/auth'
 import {
   PRICING_PLANS,
   PREVIEW_PLAN_ID,
@@ -12,25 +13,79 @@ import CreditTopUp from './CreditTopUp.vue'
 const props = withDefaults(
   defineProps<{
     plans?: readonly PricingPlan[]
-    currentPlanId?: PlanId
+    currentPlanId?: PlanId | null
     initialTab?: PricingTab
+    headingTag?: 'h1' | 'h2'
   }>(),
-  { plans: () => PRICING_PLANS, currentPlanId: PREVIEW_PLAN_ID, initialTab: 'plans' },
+  {
+    plans: () => PRICING_PLANS,
+    currentPlanId: undefined,
+    initialTab: 'plans',
+    headingTag: 'h2',
+  },
 )
 const emit = defineEmits<{ checkout: [selection: CheckoutSelection] }>()
 const { t } = useI18n()
+const auth = useAuthStore()
+const hydrated = ref(false)
+onMounted(() => {
+  hydrated.value = true
+})
+// Membership is still a preview; both surfaces use the same restored account state.
+const resolvedPlanId = computed(() =>
+  props.currentPlanId !== undefined
+    ? props.currentPlanId
+    : hydrated.value && auth.isAuthenticated
+      ? PREVIEW_PLAN_ID
+      : null,
+)
 const activeTab = ref<PricingTab>(props.initialTab)
 const tabs = computed(() => [
-  { value: 'plans', label: t('billing.plansTab'), slot: 'plans' as const },
-  { value: 'credits', label: t('billing.creditsTab'), slot: 'credits' as const },
+  {
+    value: 'plans',
+    label: t('billing.plansTab'),
+    slot: 'plans' as const,
+    disabled: !hydrated.value,
+  },
+  {
+    value: 'credits',
+    label: t('billing.creditsTab'),
+    slot: 'credits' as const,
+    disabled: !hydrated.value,
+  },
 ])
-const currentPlan = computed(() => props.plans.find((plan) => plan.id === props.currentPlanId))
+const topUpPlan = computed(() =>
+  props.plans.find((plan) => plan.id === (resolvedPlanId.value ?? PREVIEW_PLAN_ID)),
+)
+const paymentNotice = ref(false)
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+function clearPaymentNotice() {
+  clearTimeout(noticeTimer)
+  paymentNotice.value = false
+}
+function checkout(selection: CheckoutSelection) {
+  if (!hydrated.value) return
+  emit('checkout', selection)
+  clearTimeout(noticeTimer)
+  paymentNotice.value = true
+  noticeTimer = setTimeout(clearPaymentNotice, 2200)
+}
+onBeforeUnmount(clearPaymentNotice)
 </script>
 
 <template>
   <section class="pricing-content">
+    <div
+      class="subscription-notice"
+      role="status"
+      aria-live="polite"
+    >
+      <Transition name="subscription-notice">
+        <span v-if="paymentNotice">{{ t('billing.paymentSoon') }}</span>
+      </Transition>
+    </div>
     <header class="pricing-heading">
-      <h2>{{ t('billing.title') }}</h2>
+      <component :is="headingTag">{{ t('billing.title') }}</component>
     </header>
     <UTabs
       v-model="activeTab"
@@ -50,16 +105,19 @@ const currentPlan = computed(() => props.plans.find((plan) => plan.id === props.
             v-for="plan in plans"
             :key="plan.id"
             :plan="plan"
-            :current="plan.id === currentPlanId"
-            @select="emit('checkout', $event)"
+            :current="plan.id === resolvedPlanId"
+            :disabled="!hydrated"
+            @select="checkout"
           />
         </div>
       </template>
       <template #credits
         ><CreditTopUp
-          v-if="currentPlan"
-          :plan="currentPlan"
-          @select="emit('checkout', $event)"
+          v-if="topUpPlan"
+          :plan="topUpPlan"
+          :preview="resolvedPlanId === null"
+          :disabled="!hydrated"
+          @select="checkout"
         />
         <p
           v-else
