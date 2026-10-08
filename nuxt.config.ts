@@ -29,7 +29,7 @@ export default defineNuxtConfig({
       privacyUrl: '',
       siteUrl: 'https://speakquant.com',
       operatorName: '',
-      supportEmail: '',
+      supportEmail: 'support@speakquant.com',
     },
   },
   routeRules: {
