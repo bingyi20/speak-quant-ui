@@ -10,3 +10,6 @@ coverage/
 playwright-report/
 test-results/
 *.log
+
+# Non-secret production deployment template
+!deploy/.env.production.example
