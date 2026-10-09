@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test'
 import { conversationId, message, strategyCard, stubConversation } from './conversation-fixtures'
-import { anonymous, authResponse, envelope, stubGoogle } from './auth-fixtures'
+import { anonymous, authResponse, envelope } from './auth-fixtures'
 
 test('asset detail keeps its compact strategy header and resizes directly from its border', async ({
   page,
@@ -565,19 +565,23 @@ test('composer grows and shrinks with text, caps at sixteen lines and restores i
 test('guest explicit submit continues once after login; ordinary drafts never auto-send', async ({
   page,
 }) => {
+  await page
+    .context()
+    .addCookies([{ name: 'trade-locale-manual', value: 'zh-CN', url: 'http://localhost:6002' }])
   const { calls } = await stubConversation(page)
   let loggedIn = false
-  await stubGoogle(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({
       status: loggedIn ? 200 : 401,
       json: loggedIn ? envelope(authResponse) : anonymous,
     }),
   )
-  await page.route('**/api/auth/google/config', (route) =>
-    route.fulfill({ json: envelope({ client_id: 'test', nonce: 'test' }) }),
+  await page.route('**/api/auth/email/code', (route) =>
+    route.fulfill({
+      json: envelope({ verification_id: 'guest-code', expires_in: 600, resend_after: 60 }),
+    }),
   )
-  await page.route('**/api/auth/google', (route) => {
+  await page.route('**/api/auth/email/verify', (route) => {
     loggedIn = true
     return route.fulfill({ json: envelope(authResponse) })
   })
@@ -585,7 +589,9 @@ test('guest explicit submit continues once after login; ordinary drafts never au
   await page.getByRole('textbox', { name: '交易想法' }).fill('访客发起的研究')
   await page.getByRole('button', { name: '发送研究想法' }).click()
   await expect(page).toHaveURL(/\/login\?returnTo=/)
-  await page.getByRole('button', { name: '使用 Google 继续' }).click()
+  await page.getByLabel('邮箱地址').fill('tester@example.com')
+  await page.getByRole('button', { name: '继续', exact: true }).click()
+  await page.getByLabel('第 1 位验证码').pressSequentially('123456')
   await expect(page).toHaveURL(new RegExp(`/conversations/${conversationId}$`))
   await expect(page.locator('.user-bubble')).toHaveText('访客发起的研究')
   expect(calls.filter((c) => c.method === 'create')).toHaveLength(1)
@@ -626,19 +632,23 @@ test('question drafts restore on reload and older questions do not reappear in a
 test('cancelling guest login restores editable input without an automatic submission later', async ({
   page,
 }) => {
+  await page
+    .context()
+    .addCookies([{ name: 'trade-locale-manual', value: 'zh-CN', url: 'http://localhost:6002' }])
   const { calls } = await stubConversation(page)
   let loggedIn = false
-  await stubGoogle(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({
       status: loggedIn ? 200 : 401,
       json: loggedIn ? envelope(authResponse) : anonymous,
     }),
   )
-  await page.route('**/api/auth/google/config', (route) =>
-    route.fulfill({ json: envelope({ client_id: 'test', nonce: 'test' }) }),
+  await page.route('**/api/auth/email/code', (route) =>
+    route.fulfill({
+      json: envelope({ verification_id: 'guest-code', expires_in: 600, resend_after: 60 }),
+    }),
   )
-  await page.route('**/api/auth/google', (route) => {
+  await page.route('**/api/auth/email/verify', (route) => {
     loggedIn = true
     return route.fulfill({ json: envelope(authResponse) })
   })
@@ -649,7 +659,9 @@ test('cancelling guest login restores editable input without an automatic submis
   await page.locator('a[href="/zh-CN"]').first().click()
   await expect(page.getByRole('textbox', { name: '交易想法' })).toHaveValue('先保留，稍后再发')
   await page.goto('/login')
-  await page.getByRole('button', { name: '使用 Google 继续' }).click()
+  await page.getByLabel('邮箱地址').fill('tester@example.com')
+  await page.getByRole('button', { name: '继续', exact: true }).click()
+  await page.getByLabel('第 1 位验证码').pressSequentially('123456')
   await expect(page).toHaveURL(/\/new-task$/)
   await expect(page.getByRole('textbox', { name: '交易想法' })).toHaveValue('先保留，稍后再发')
   expect(calls).toHaveLength(0)

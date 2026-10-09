@@ -1,6 +1,6 @@
 # SpeakQuant UI
 
-Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱 / Google 登录、研究历史和 Agent 对话主流程；策略与回测详情工作区已接入；回测执行/重试/取消等写操作仍待实现。
+Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱登录、研究历史和 Agent 对话主流程；Google 入口暂为待上线提示；策略与回测详情工作区已接入；回测执行/重试/取消等写操作仍待实现。
 
 产品名称统一为 **SpeakQuant**。仓库目录、既有文档路径和浏览器偏好／草稿的 `trade-*` 存储标识继续沿用，保留已有链接、偏好和未提交输入。
 
@@ -21,7 +21,7 @@ pnpm dev
 | `/pricing`、`/privacy`、`/terms`、`/contact` | SSR 价格及协议／联系页；中文对应 `/zh-CN/...`，双语政策已按用户提供信息重写，生产发布与提审核对见专项文档；取消退款已合入价格页，`/refunds` 跳转到对应语言的 `/pricing#billing` |
 | `/new-task`                                  | 客户端工作台新研究页                                                                                                                                                            |
 | `/conversations/:id`                         | 真实消息、Agent 流式回复、快捷问答与资产面板                                                                                                                                    |
-| `/login`                                     | 邮箱验证码 / Google 登录                                                                                                                                                        |
+| `/login`                                     | 邮箱验证码登录；Google 入口暂为待上线提示                                                                                                                                                        |
 
 工作台左下角打开个人信息与偏好弹窗；移动端展开侧栏后打开。侧栏账户行右侧“升级”默认打开月度套餐页，其余账户行区域打开设置；账户设置中的“升级套餐”打开全屏套餐页签，积分加购通过弹窗内页签切换。语言设置和侧栏折叠可保存。输入草稿按用户与会话保存在当前标签页；发送会创建真实对话，访客先登录后继续。登录页通过统一 HTTP 客户端连接真实接口。
 
@@ -50,9 +50,9 @@ pnpm dev
 
 本地统一使用 `localhost`，不要与 `127.0.0.1` 混用（Google 开发 OAuth 仅允许 localhost）。后端需允许 `http://localhost:6002` 的 CORS 凭据请求、业务方法及 Authorization / Idempotency-Key / X-Request-ID 等 Header，并暴露 Content-Disposition 供下载使用。开发 Cookie 关闭 Secure；生产 HTTPS Cookie 开启 Secure。前端不提供 API 代理或 BFF。
 
-`/login` 提供邮箱输入 → 六位验证码，以及 Google 官方 GIS 按钮。验证码支持粘贴、自动提交、重发倒计时和错误重试；Google 第三方邮箱补验仍提交 `/auth/google`。成功后返回安全的 `returnTo` 路径（默认 `/new-task`），并携带当前访客研究草稿。已有会话访问登录页会直接返回工作台。
+`/login` 提供邮箱输入 → 六位验证码，以及保留点击提示的灰色 Google 按钮。验证码支持粘贴、自动提交、重发倒计时和错误重试。成功后返回安全的 `returnTo` 路径（默认 `/new-task`），并携带当前访客研究草稿。已有会话访问登录页会直接返回工作台。
 
-Google 从 `/auth/google/config` 获取 client ID 和 nonce。官方脚本加载失败时可重试或使用邮箱；没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。退出成功后清理会话并调用 GIS `disableAutoSelect()`。
+Google 底层实现保留：启用后从 `/auth/google/config` 获取 client ID 和 nonce，第三方邮箱补验提交 `/auth/google`；当前登录页不挂载 GIS 组件或发起 Google 请求，没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。退出成功后清理会话，并在已加载 GIS 时调用 `disableAutoSelect()`。
 
 登录页始终通过新标签页打开对应语言的条款、隐私页面，保留登录状态；入口及验证码步骤均提供同意服务条款、已阅读隐私政策的告知；尚未同步后端协议版本及同意记录，发布前需核对实际版本和可追溯接受流程。可选 `NUXT_PUBLIC_TERMS_URL`、`NUXT_PUBLIC_PRIVACY_URL` 用于正式外链覆盖。Google SDK 集成依据：[官方 JavaScript API](https://developers.google.com/identity/gsi/web/reference/js-reference)。
 
@@ -168,5 +168,6 @@ import { ResearchEntry } from '~/features/conversation'
 ## 登录联调验证
 
 - 2026-09-05：本地真实后端完成邮箱发码、校验登录、刷新恢复与退出；均成功返回。未保存验证码或 Token 到工程文件。
-- Google：真实配置与 nonce 接口、官方 GIS 按钮加载已验证；账号授权后的真实 Google 登录仍需用户本人完成。自动化测试模拟 SDK credential，覆盖直接登录、nonce 失效重启和第三方邮箱补验。
-- Playwright 在独立上下文拦截认证 API / Google SDK，不发送测试邮件；覆盖桌面与移动端的验证码、取消、重发、错误、跳转、会话恢复及工作台页面。
+- Google：2026-10-09 起页面入口暂为灰色按钮，点击在页面中上方居中提示“谷歌授权登录待上线 / Google sign-in is coming soon.”，与支付入口共用 `TransientNotice`，2.2 秒后淡出。保留键盘操作，不加载 GIS SDK 或请求 Google 认证接口。原组件及认证实现保留，恢复前需完成真实授权验证。
+- Playwright 在独立上下文拦截认证 API，不发送测试邮件；覆盖桌面与移动端的验证码、取消、重发、错误、跳转、会话恢复及工作台页面；Google 入口仅验证待上线提示及不触发授权。
+- 2026-10-09：Google 占位与统一提示调整后 lint、typecheck 和 10 项桌面／模拟手机登录、公开价格页及订阅提示回归通过；验证提示中上方居中、无图标或操作按钮、自动淡出，本地浏览器确认灰色按钮和点击提示。认证写请求使用 Mock，未重新验证真实邮箱或 Google 授权，未部署。

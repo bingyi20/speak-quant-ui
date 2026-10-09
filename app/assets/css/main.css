@@ -1265,6 +1265,39 @@ p {
   font-size: 13px;
   color: var(--color-text-muted);
 }
+.transient-notice {
+  position: fixed;
+  top: max(104px, 16dvh);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-panel);
+  pointer-events: none;
+  max-width: calc(100% - 40px);
+}
+.transient-notice > span {
+  display: block;
+  padding: 10px 18px;
+  border-radius: var(--radius-control);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-menu);
+  font-size: 14px;
+  text-align: center;
+}
+.transient-notice-enter-active,
+.transient-notice-leave-active {
+  transition: opacity 150ms ease;
+}
+.transient-notice-enter-from,
+.transient-notice-leave-to {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .transient-notice-enter-active,
+  .transient-notice-leave-active {
+    transition: none;
+  }
+}
 /* Auth uses the same brand tokens as public pages and the workspace. */
 .auth-shell {
   min-height: 100svh;
@@ -1372,6 +1405,24 @@ p {
 .google-sign-in {
   min-height: 50px;
 }
+.google-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 15px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  transition: color 150ms ease;
+}
+.google-placeholder:hover,
+.google-placeholder:focus-visible {
+  color: var(--color-text-primary);
+}
 .google-button {
   height: 40px;
   width: calc(100% / var(--google-button-scale));
@@ -1423,6 +1474,10 @@ p {
   font-size: 26px;
   border-radius: 12px;
   caret-color: var(--color-brand);
+}
+.verification-code input:focus {
+  outline: none;
+  box-shadow: none;
 }
 .login-resend {
   text-align: center;

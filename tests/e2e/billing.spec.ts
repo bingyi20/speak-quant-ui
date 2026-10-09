@@ -101,8 +101,8 @@ test('full-screen pricing preserves research, shows payment notices for both pla
     await choose.click()
     await expect(page.getByText('支付功能待上线', { exact: true })).toHaveCount(1)
     await expect(page.getByText('支付功能待上线', { exact: true })).toBeVisible()
-    await expect(dialog.locator('.subscription-notice')).toHaveAttribute('role', 'status')
-    await expect(dialog.locator('.subscription-notice button')).toHaveCount(0)
+    await expect(dialog.locator('.transient-notice')).toHaveAttribute('role', 'status')
+    await expect(dialog.locator('.transient-notice button')).toHaveCount(0)
     await expect(page.getByRole('dialog')).toHaveCount(1)
     await expect(choose).toBeFocused()
   }

@@ -105,6 +105,7 @@
     "emailPlaceholder": "你的邮箱",
     "continue": "继续",
     "google": "使用 Google 继续",
+    "googleSoon": "谷歌授权登录待上线",
     "or": "或",
     "restoreError": "暂时无法恢复登录，请检查网络后重试。",
     "scaffoldLink": "先看看工作台",

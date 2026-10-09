@@ -10,6 +10,7 @@ import {
 } from '../catalog'
 import PlanCard from './PlanCard.vue'
 import CreditTopUp from './CreditTopUp.vue'
+import TransientNotice from '~/components/ui/TransientNotice.vue'
 const props = withDefaults(
   defineProps<{
     plans?: readonly PricingPlan[]
@@ -57,33 +58,20 @@ const tabs = computed(() => [
 const topUpPlan = computed(() =>
   props.plans.find((plan) => plan.id === (resolvedPlanId.value ?? PREVIEW_PLAN_ID)),
 )
-const paymentNotice = ref(false)
-let noticeTimer: ReturnType<typeof setTimeout> | undefined
-function clearPaymentNotice() {
-  clearTimeout(noticeTimer)
-  paymentNotice.value = false
-}
+const paymentNotice = useTemplateRef('paymentNotice')
 function checkout(selection: CheckoutSelection) {
   if (!hydrated.value) return
   emit('checkout', selection)
-  clearTimeout(noticeTimer)
-  paymentNotice.value = true
-  noticeTimer = setTimeout(clearPaymentNotice, 2200)
+  paymentNotice.value?.show()
 }
-onBeforeUnmount(clearPaymentNotice)
 </script>
 
 <template>
   <section class="pricing-content">
-    <div
-      class="subscription-notice"
-      role="status"
-      aria-live="polite"
-    >
-      <Transition name="subscription-notice">
-        <span v-if="paymentNotice">{{ t('billing.paymentSoon') }}</span>
-      </Transition>
-    </div>
+    <TransientNotice
+      ref="paymentNotice"
+      :message="t('billing.paymentSoon')"
+    />
     <header class="pricing-heading">
       <component :is="headingTag">{{ t('billing.title') }}</component>
     </header>

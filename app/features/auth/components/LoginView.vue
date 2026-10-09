@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useLogin } from '../composables/useLogin'
-import GoogleSignIn from './GoogleSignIn.vue'
 import VerificationCode from './VerificationCode.vue'
+import TransientNotice from '~/components/ui/TransientNotice.vue'
 const {
   step,
   email,
@@ -9,7 +9,6 @@ const {
   code,
   pending,
   error,
-  googleRevision,
   bindingGoogle,
   blocked,
   resendIn,
@@ -18,9 +17,9 @@ const {
   enabled,
   sendCode,
   verify,
-  googleLogin,
   back,
 } = useLogin()
+const googleNotice = useTemplateRef('googleNotice')
 const config = useRuntimeConfig()
 const localePath = useLocalePath()
 const emailInput = useTemplateRef<HTMLInputElement>('emailInput')
@@ -30,6 +29,10 @@ watch(step, (value) => {
 </script>
 <template>
   <div class="login-page">
+    <TransientNotice
+      ref="googleNotice"
+      :message="$t('auth.googleSoon')"
+    />
     <div class="auth-back-slot">
       <button
         v-if="step === 'code'"
@@ -72,10 +75,14 @@ watch(step, (value) => {
           :inert="pending || restoring"
           :aria-disabled="pending || restoring"
         >
-          <GoogleSignIn
-            :key="googleRevision"
-            @credential="googleLogin"
-          />
+          <button
+            type="button"
+            class="google-placeholder"
+            :aria-description="$t('auth.googleSoon')"
+            @click="googleNotice?.show()"
+          >
+            {{ $t('auth.google') }}
+          </button>
         </div>
         <div class="login-divider">
           <span>{{ $t('auth.or') }}</span>

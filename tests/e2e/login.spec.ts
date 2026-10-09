@@ -20,6 +20,9 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/google/config', (route) =>
     route.fulfill({ json: envelope({ client_id: 'test-client', nonce: 'test-nonce' }) }),
   )
+  await page.route('**/api/auth/google', (route) =>
+    route.fulfill({ status: 503, json: { code: 50300, error: { key: 'SERVICE_UNAVAILABLE' } } }),
+  )
   await page.route('**/api/auth/email/code', (route) =>
     route.fulfill({
       json: envelope({
@@ -114,46 +117,39 @@ test('invalid code is announced, resend replaces the challenge and back retains 
   await expect(page.locator('#login-error')).toBeEmpty()
   await page.getByRole('button', { name: '返回登录' }).click()
   await expect(page.getByLabel('邮箱地址')).toHaveValue('tester@example.com')
-  expect(configs).toBe(1)
+  expect(configs).toBe(0)
   await page.getByRole('link', { name: 'SpeakQuant · 返回首页' }).click()
   await expect(page).toHaveURL(/\/zh-CN$/)
 })
 
-test('Google mailbox binding uses the Google endpoint and keeps its credential in memory', async ({
+test('Google sign-in remains visible and shows a coming-soon notice without starting OAuth', async ({
   page,
 }) => {
-  let calls = 0
-  await page.route('**/api/auth/email/verify', () => {
-    throw new Error('Must not consume Google binding code via email verify')
-  })
-  await page.route('**/api/auth/google', (route) => {
-    calls++
-    const body = route.request().postDataJSON()
-    expect(body.credential).toBe('test-google-credential')
-    if (calls === 1)
-      return route.fulfill({
-        status: 409,
-        json: {
-          code: 40910,
-          error: { key: 'GOOGLE_EMAIL_VERIFICATION_REQUIRED' },
-          data: { email: 'tester@example.com' },
-        },
-      })
-    expect(body).toEqual({
-      credential: 'test-google-credential',
-      verification_id: '01CODE00000000000000000000',
-      code: '123456',
-    })
-    return route.fulfill({ json: envelope(authResponse) })
+  const googleRequests: string[] = []
+  page.on('request', (request) => {
+    if (
+      /accounts\.google\.com\/gsi\/client|\/api\/auth\/google(?:\/config)?(?:\?|$)/.test(
+        request.url(),
+      )
+    )
+      googleRequests.push(request.url())
   })
   await page.goto('/login?returnTo=https://example.com')
-  await page.getByRole('button', { name: '使用 Google 继续' }).click()
-  await expect(page.getByText('请验证邮箱，完成 Google 账号登录')).toBeVisible()
-  const storage = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))
-  expect(storage).not.toContain('test-google-credential')
-  await page.getByLabel('第 1 位验证码').pressSequentially('123456')
-  await expect(page).toHaveURL((url) => url.pathname === '/new-task')
-  expect(calls).toBe(2)
+  await expect(page.getByLabel('邮箱地址')).toBeEnabled()
+  const google = page.getByRole('button', { name: '使用 Google 继续' })
+  await expect(google).toBeVisible()
+  await google.click()
+  await expect(page.getByText('谷歌授权登录待上线', { exact: true })).toBeVisible()
+  const notice = page.locator('.transient-notice')
+  await expect(notice).toHaveAttribute('role', 'status')
+  await expect(notice.locator('button, svg, .iconify, img')).toHaveCount(0)
+  const noticeBounds = (await notice.boundingBox())!
+  expect(noticeBounds.x + noticeBounds.width / 2).toBeCloseTo(page.viewportSize()!.width / 2, 0)
+  expect(noticeBounds.y).toBeGreaterThan(0)
+  expect(noticeBounds.y + noticeBounds.height).toBeLessThan(page.viewportSize()!.height / 2)
+  await expect(page).toHaveURL((url) => url.pathname === '/login')
+  await expect(page.getByLabel('邮箱地址')).toBeEnabled()
+  expect(googleRequests).toEqual([])
 })
 
 test('attempt limit disables verification, and resending unlocks a fresh code', async ({
@@ -241,26 +237,26 @@ test('pasting a six-digit code submits once and a failed resend preserves the ol
   expect(verifies).toBe(1)
 })
 
-test('expired Google challenge is renewed before retrying direct sign-in', async ({ page }) => {
-  let attempts = 0
-  let configs = 0
-  await page.route('**/api/auth/google/config', (route) => {
-    configs++
-    return route.fulfill({ json: envelope({ client_id: 'client', nonce: `nonce-${configs}` }) })
-  })
-  await page.route('**/api/auth/google', (route) => {
-    attempts++
-    return route.fulfill(
-      attempts === 1
-        ? { status: 401, json: { code: 40106, error: { key: 'GOOGLE_LOGIN_CHALLENGE_INVALID' } } }
-        : { json: envelope(authResponse) },
+test('Google coming-soon notice supports keyboard activation in English', async ({ page }) => {
+  await page
+    .context()
+    .addCookies([{ name: 'trade-locale-manual', value: 'en-US', url: 'http://localhost:6002' }])
+  const googleRequests: string[] = []
+  page.on('request', (request) => {
+    if (
+      /accounts\.google\.com\/gsi\/client|\/api\/auth\/google(?:\/config)?(?:\?|$)/.test(
+        request.url(),
+      )
     )
+      googleRequests.push(request.url())
   })
   await page.goto('/login?returnTo=/conversations/research-one')
-  await page.getByRole('button', { name: '使用 Google 继续' }).click()
-  await expect(page.getByRole('alert')).toContainText('Google 登录已过期')
-  await page.getByRole('button', { name: '使用 Google 继续' }).click()
-  await expect(page).toHaveURL((url) => url.pathname === '/conversations/research-one')
-  expect(configs).toBe(2)
-  expect(attempts).toBe(2)
+  await expect(page.getByLabel('Email address')).toBeEnabled()
+  const google = page.getByRole('button', { name: 'Continue with Google' })
+  await google.focus()
+  await expect(google).toBeFocused()
+  await google.press('Enter')
+  await expect(page.getByText('Google sign-in is coming soon.', { exact: true })).toBeVisible()
+  await expect(page).toHaveURL((url) => url.pathname === '/login')
+  expect(googleRequests).toEqual([])
 })

@@ -105,6 +105,7 @@
     "emailPlaceholder": "Your email",
     "continue": "Continue",
     "google": "Continue with Google",
+    "googleSoon": "Google sign-in is coming soon.",
     "or": "or",
     "restoreError": "Unable to restore your session. Check your connection and retry.",
     "scaffoldLink": "Explore the workspace first",
