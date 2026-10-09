@@ -2,7 +2,7 @@
 definePageMeta({ layout: 'public' })
 const { t } = useI18n()
 usePageSeo(
-  () => `${t('openSource.title')} — Trade Lab`,
+  () => `${t('openSource.title')} — SpeakQuant`,
   () => t('openSource.intro'),
   true,
 )

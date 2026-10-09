@@ -1,6 +1,8 @@
-# Trade Lab UI
+# SpeakQuant UI
 
 Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱 / Google 登录、研究历史和 Agent 对话主流程；策略与回测详情工作区已接入；回测执行/重试/取消等写操作仍待实现。
+
+产品名称统一为 **SpeakQuant**。仓库目录、既有文档路径和浏览器偏好／草稿的 `trade-*` 存储标识继续沿用，保留已有链接、偏好和未提交输入。
 
 ## 启动
 
@@ -13,13 +15,13 @@ pnpm dev
 
 访问 **http://localhost:6002**。真实登录需启动 6001 后端；设置 `NUXT_PUBLIC_API_ENABLED=false` 可离线预览，不需要配置代理。
 
-| 地址                 | 页面                                         |
-| -------------------- | -------------------------------------------- |
-| `/`、`/zh-CN`        | SSR 英文／中文产品落地页与研究输入                     |
-| `/pricing`、`/privacy`、`/terms`、`/contact` | SSR 价格及协议／联系页；中文对应 `/zh-CN/...`，协议目前为草案；取消退款已合入价格页，`/refunds` 跳转到对应语言的 `/pricing#billing` |
-| `/new-task`          | 客户端工作台新研究页                         |
-| `/conversations/:id` | 真实消息、Agent 流式回复、快捷问答与资产面板 |
-| `/login`             | 邮箱验证码 / Google 登录                     |
+| 地址                                         | 页面                                                                                                                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`、`/zh-CN`                                | SSR 英文／中文产品落地页与研究输入                                                                                                                                              |
+| `/pricing`、`/privacy`、`/terms`、`/contact` | SSR 价格及协议／联系页；中文对应 `/zh-CN/...`，双语政策已按用户提供信息重写，生产发布与提审核对见专项文档；取消退款已合入价格页，`/refunds` 跳转到对应语言的 `/pricing#billing` |
+| `/new-task`                                  | 客户端工作台新研究页                                                                                                                                                            |
+| `/conversations/:id`                         | 真实消息、Agent 流式回复、快捷问答与资产面板                                                                                                                                    |
+| `/login`                                     | 邮箱验证码 / Google 登录                                                                                                                                                        |
 
 工作台左下角打开个人信息与偏好弹窗；移动端展开侧栏后打开。侧栏账户行右侧“升级”默认打开月度套餐页，其余账户行区域打开设置；账户设置中的“升级套餐”打开全屏套餐页签，积分加购通过弹窗内页签切换。语言设置和侧栏折叠可保存。输入草稿按用户与会话保存在当前标签页；发送会创建真实对话，访客先登录后继续。登录页通过统一 HTTP 客户端连接真实接口。
 
@@ -35,15 +37,16 @@ pnpm dev
 
 复制 `.env.example` 为 `.env` 后按需调整。默认无需 `.env` 即可启动。
 
-| 变量                            | 用途                                                                    |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| `NUXT_PUBLIC_API_ENABLED`       | 默认 `true`，开启真实登录、认证恢复及工作台访问守卫；`false` 为离线预览 |
-| `NUXT_PUBLIC_API_BASE`          | 本地默认 `http://localhost:6001/api`，生产默认 `/api`                   |
-| `NUXT_API_BASE`                 | 服务端公开数据请求的绝对 API 地址                                       |
-| `NUXT_PUBLIC_SITE_URL`          | canonical 等公开地址，默认 https://speakquant.com，生产不可配置 localhost                              |
-| `NUXT_PUBLIC_OPERATOR_NAME` / `NUXT_PUBLIC_SUPPORT_EMAIL` | 运营主体及已验证邮箱；留空显示待补齐 |
-| `NUXT_PUBLIC_ENABLE_RUNNER_DOWNLOAD` | 默认 false，首发隐藏运行包下载入口；不改变后端接口权限 |
-| `NUXT_PUBLIC_ENABLE_DARK_THEME` | 默认 `false`；设为 `true` 可验证 dark/system 工程主题，非已定稿深色设计 |
+| 变量                                                      | 用途                                                                                                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `NUXT_PUBLIC_API_ENABLED`                                 | 默认 `true`，开启真实登录、认证恢复及工作台访问守卫；`false` 为离线预览                                                              |
+| `NUXT_PUBLIC_API_BASE`                                    | 本地默认 `http://localhost:6001/api`，生产默认 `/api`                                                                                |
+| `NUXT_API_BASE`                                           | 服务端公开数据请求的绝对 API 地址                                                                                                    |
+| `NUXT_PUBLIC_SITE_URL`                                    | canonical 等公开地址，默认 https://speakquant.com，生产不可配置 localhost                                                            |
+| `NUXT_PUBLIC_OPERATOR_NAME` / `NUXT_PUBLIC_SUPPORT_EMAIL` | 公开运营公司与支持邮箱，默认 `Nanhao Labs Inc`、`support@speakquant.com`，可按部署覆盖；信息缺失时显示草案，发布时清理旧邮箱环境覆盖，详见公开站点方案 |
+| `NUXT_PUBLIC_OPERATOR_REGISTRATION_NUMBER` / `NUXT_PUBLIC_OPERATOR_REGISTERED_ADDRESS` | 公司注册号与注册地址，默认采用公司秘书卡信息；用于政策和联系页，不代表实际办公地址 |
+| `NUXT_PUBLIC_ENABLE_RUNNER_DOWNLOAD`                      | 默认 false，首发隐藏运行包下载入口；不改变后端接口权限                                                                               |
+| `NUXT_PUBLIC_ENABLE_DARK_THEME`                           | 默认 `false`；设为 `true` 可验证 dark/system 工程主题，非已定稿深色设计                                                              |
 
 本地统一使用 `localhost`，不要与 `127.0.0.1` 混用（Google 开发 OAuth 仅允许 localhost）。后端需允许 `http://localhost:6002` 的 CORS 凭据请求、业务方法及 Authorization / Idempotency-Key / X-Request-ID 等 Header，并暴露 Content-Disposition 供下载使用。开发 Cookie 关闭 Secure；生产 HTTPS Cookie 开启 Secure。前端不提供 API 代理或 BFF。
 
@@ -51,7 +54,7 @@ pnpm dev
 
 Google 从 `/auth/google/config` 获取 client ID 和 nonce。官方脚本加载失败时可重试或使用邮箱；没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。退出成功后清理会话并调用 GIS `disableAutoSelect()`。
 
-登录页始终通过新标签页打开对应语言的条款、隐私页面，保留登录状态；当前为草案，主体与正式规则待补齐，不显示已生效的同意声明。可选 `NUXT_PUBLIC_TERMS_URL`、`NUXT_PUBLIC_PRIVACY_URL` 用于正式外链覆盖。Google SDK 集成依据：[官方 JavaScript API](https://developers.google.com/identity/gsi/web/reference/js-reference)。
+登录页始终通过新标签页打开对应语言的条款、隐私页面，保留登录状态；入口及验证码步骤均提供同意服务条款、已阅读隐私政策的告知；尚未同步后端协议版本及同意记录，发布前需核对实际版本和可追溯接受流程。可选 `NUXT_PUBLIC_TERMS_URL`、`NUXT_PUBLIC_PRIVACY_URL` 用于正式外链覆盖。Google SDK 集成依据：[官方 JavaScript API](https://developers.google.com/identity/gsi/web/reference/js-reference)。
 
 ## 目录职责
 
@@ -89,7 +92,7 @@ SSE 使用 `openEventStream(http, streamUrl, { signal, onEvent, isTerminal })`�
 
 ## 替换 Logo
 
-页面图标统一使用 `public/logo.svg`，直接替换该文件即可更新各处 Logo。`BrandMark.vue` 只负责图标与 Trade Lab 文字的组合，不再内嵌 SVG 路径。
+页面图标统一使用 `public/logo.svg`，直接替换该文件即可更新各处 Logo。`BrandMark.vue` 只负责图标与 SpeakQuant 文字的组合，不再内嵌 SVG 路径。
 
 当前图标是单色 SVG，通过 CSS mask 使用主题品牌色；保持透明背景，文件中只放图形。若未来换成多色 Logo，再将组件改为图片引用。浏览器标签图标独立保存在 `public/favicon.svg`，更换品牌时可同步替换。
 
@@ -131,7 +134,7 @@ pnpm preview
 HOST=127.0.0.1 PORT=6002 node .output/server/index.mjs
 ```
 
-`/new-task`、`/conversations/**` 为 CSR + noindex + no-store，`/` 保留 SSR。后续公开页面放在 `app/pages`，声明 `layout: 'public'` 并调用 `usePageSeo`。已提供 `/sitemap.xml`、`/robots.txt`、双语 canonical/hreflang 和分享图；协议与联系草案暂不索引。详见[公开站点技术方案](docs/公开站点技术方案.md)。
+`/new-task`、`/conversations/**` 为 CSR + noindex + no-store，`/` 保留 SSR。后续公开页面放在 `app/pages`，声明 `layout: 'public'` 并调用 `usePageSeo`。已提供 `/sitemap.xml`、`/robots.txt`、双语 canonical/hreflang 和分享图；协议与联系页公开可访问，保持不索引。详见[公开站点技术方案](docs/公开站点技术方案.md)。
 
 ## 当前边界
 

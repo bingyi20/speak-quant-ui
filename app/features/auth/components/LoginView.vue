@@ -48,7 +48,7 @@ watch(step, (value) => {
         <NuxtLink
           :to="localePath('/')"
           class="login-brand"
-          :aria-label="`Trade Lab · ${$t('nav.home')}`"
+          :aria-label="`SpeakQuant · ${$t('nav.home')}`"
         >
           <CommonBrandMark />
         </NuxtLink>
@@ -165,18 +165,15 @@ watch(step, (value) => {
       >
         {{ error }}
       </p>
-      <p
-        v-if="step === 'entry'"
-        class="login-legal"
-      >
-        {{ $t('auth.reviewPolicies') }}
+      <p class="login-legal">
+        {{ $t('auth.consent') }}
         <a
           :href="config.public.termsUrl || localePath('/terms')"
           target="_blank"
           rel="noopener noreferrer"
           >{{ $t('auth.terms') }}</a
         >
-        {{ $t('auth.and') }}
+        {{ $t('auth.privacyAcknowledgement') }}
         <a
           :href="config.public.privacyUrl || localePath('/privacy')"
           target="_blank"

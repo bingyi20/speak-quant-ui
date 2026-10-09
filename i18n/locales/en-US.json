@@ -55,8 +55,8 @@
     "prompt3": "Explore a BTC trend reversal when momentum weakens after a sustained move.",
     "prompt4": "Explore daily trends together with hourly signals.",
     "methodLabel": "HOW IT WORKS",
-    "boundaryTitle": "Trade Lab is research software.",
-    "boundaryBody": "Research software only. No custody, brokerage or live trading.",
+    "boundaryTitle": "SpeakQuant is research software.",
+    "boundaryBody": "The current online workspace supports research and backtesting. It does not place orders for you or hold funds.",
     "hypothesis": "Your idea",
     "nextHypothesis": "Next hypothesis",
     "stage1": "BUILD",
@@ -100,7 +100,7 @@
   },
   "auth": {
     "title": "Sign in or sign up",
-    "subtitle": "Explore quantitative strategies with Trade Lab",
+    "subtitle": "Explore quantitative strategies with SpeakQuant",
     "email": "Email address",
     "emailPlaceholder": "Your email",
     "continue": "Continue",
@@ -127,7 +127,7 @@
     "googleLoading": "Preparing Google sign-in…",
     "googleUnavailable": "Google is unavailable. Continue with email.",
     "googleExpired": "Google sign-in expired. Please reload.",
-    "consent": "By continuing, you agree to our",
+    "consent": "By continuing to sign in, you agree to the",
     "terms": "Terms of Service",
     "and": "and",
     "privacy": "Privacy Policy",
@@ -146,7 +146,7 @@
       "generic": "Sign-in did not complete. Please try again.",
       "notEnabled": "This is an offline preview. Enable the API to sign in."
     },
-    "reviewPolicies": "Read our"
+    "privacyAcknowledgement": "and acknowledge reading the"
   },
   "settings": {
     "freePlan": "Free",
@@ -282,7 +282,7 @@
     "currentPlan": "Current plan",
     "freePlan": "Free plan",
     "choosePlan": "Choose {plan}",
-    "previewNote": "Plans, prices and current membership are previews. Payments are coming soon.",
+    "previewNote": "Prices are in USD. Plans and membership are previews; payments are not yet available.",
     "plans": {
       "free": {
         "description": "Start with your first trading idea",
@@ -644,7 +644,7 @@
   },
   "openSource": {
     "title": "Open source notices",
-    "intro": "Trade Lab uses the following open source chart library.",
+    "intro": "SpeakQuant uses the following open source chart library.",
     "attribution": "Charts powered by TradingView Lightweight Charts™.",
     "license": "Apache 2.0 license",
     "notice": "Copyright notice"
@@ -657,103 +657,261 @@
     "draft": "Draft for review. Operator details and final policies will be completed before publication.",
     "operator": "Service operator",
     "support": "Email support",
+    "registrationNumber": "Company registration number",
+    "registeredAddress": "Registered address",
     "pendingOperator": "Operator details will be published here before launch.",
     "pendingSupport": "A verified support email will be published here before launch.",
-    "brandRelation": "Trade Lab is the product brand operated by {operator}.",
+    "brandRelation": "SpeakQuant is independently operated by {operator}.",
     "contactIntro": "For account, research workspace, privacy or billing questions.",
     "contactAdvice": "When contacting support, describe the issue and include a page or error reference if available. Do not send passwords, verification codes, private keys or full payment details."
   },
   "publicPricing": {
-    "intro": "Strategy research, backtesting, Replay and AI insights.",
-    "creditsTitle": "How credits work",
-    "creditsBody": "Credits power AI conversations, strategy generation and backtest analysis. More complex tasks and larger amounts of content use more credits.",
-    "topUpBody": "Plan credits refresh monthly. When they run out, wait for the next refresh or buy extra credits to keep researching, without changing your plan.",
-    "billingTitle": "Cancellation & refunds",
-    "billingBody": "The proposed plans renew monthly. Cancel before the next charge and keep access until the end of the current billing period.",
-    "contactLink": "Questions? Contact us",
-    "usage": {
-      "discussion": "Discuss ideas or interpret results",
-      "discussionAmount": "About 1–5 credits / task",
-      "strategy": "Generate or revise a strategy",
-      "strategyAmount": "About 10–30 credits / task",
-      "backtest": "Run and analyze a backtest",
-      "backtestAmount": "About 20–60 credits / task"
-    },
-    "usageNote": "Illustrative usage only. Final rates will be published before billing opens.",
-    "readingBody": "Reading past conversations, viewing saved strategies and replaying existing results use no additional credits.",
+    "faqTitle": "Frequently asked questions",
+    "intro": "Strategy research, backtesting, trade replay and AI insights.",
+    "plansTitle": "How do the plans differ?",
+    "plansBody": "All plans support AI-assisted strategy research, historical backtesting and result analysis. They differ in monthly credits and top-up rates. The current online workspace does not hold funds or place orders for you.",
+    "creditsTitle": "How are credits used?",
+    "creditsBody": "Credits are used to process your AI research requests. Usage varies with the model, tools and task complexity. More complex tasks and more content generally use more credits. Viewing existing conversations, strategies and backtest results uses no additional credits.",
     "topUpTitle": "What if I run out of credits?",
-    "refundBody": "Cancellation stops renewal; it does not request a refund. Contact support to review duplicate or incorrect charges, or loss of service access. Refund eligibility will be confirmed before paid plans open."
+    "topUpBody": "You can buy a one-time credit top-up, upgrade to a higher monthly plan, or wait for your next renewal to refresh your credits. When you upgrade, your remaining credits are added to your new plan's allowance. On Max, you cannot change plans until the current billing period ends; you can top up or wait for renewal.",
+    "billingTitle": "Do subscriptions renew automatically, and how do I cancel?",
+    "billingBody": "The proposed paid plans renew monthly. Cancel before the next charge to stop renewal; your plan benefits remain available until the end of the current billing period.",
+    "refundTitle": "Can I request a refund?",
+    "refundBody": "Subscriptions and credit top-ups are digital services and are generally non-refundable. Contact support about duplicate charges, payment errors, accidental purchases or failure to deliver a paid service as agreed, so we can investigate and handle remedies or refunds. Statutory consumer rights and mandatory payment-channel rules remain unaffected.",
+    "contactLink": "Questions? Contact us"
   },
   "legal": {
     "draftLabel": "Draft",
-    "contactBody": "Operator and support details will be published on the contact page. The channel for privacy requests, billing questions and service notices will be confirmed before launch.",
+    "contactBody": "For questions about this policy, the Terms of Service or personal information processing, or to request access, correction or deletion, contact us at the email below.",
     "privacy": {
       "title": "Privacy Policy",
-      "intro": "How Trade Lab handles information used for accounts, strategy research and service operation.",
+      "intro": "SpeakQuant is operated by {operator}, a corporation incorporated in Wyoming, United States (\"we\", \"us\" or \"our\"). We are responsible for the processing of personal information for this service. This policy explains how we collect, use, retain and share information when you use our website and research workspace.",
       "sections": [
         {
-          "title": "Information used by the service",
-          "body": "Account information includes your email address, profile details and sign-in information. If you choose Google sign-in, Google provides the identity information needed to authenticate your account. Research information includes messages, strategy designs, generated code, backtest settings, results and your interactions with those results."
+          "title": "Information we collect",
+          "paragraphs": [
+            "Account information includes your email address, display name, avatar, language preferences, and sign-in and session information. If you use Google sign-in, we receive the account identifier, email address and basic profile information needed to verify your identity.",
+            "Research information includes your messages, trading ideas, strategy designs and code, backtest settings and results, and related research actions. When you contact support, we also process the problem description and correspondence you provide.",
+            "Operational information includes IP addresses, browser or device information, request times, usage records and error logs, used to operate the service, protect accounts and diagnose problems."
+          ]
         },
         {
-          "title": "Why this information is used",
-          "body": "This information supports sign-in, saved research history, AI responses, strategy generation, historical backtests and error diagnosis. Service requests may also involve technical records such as request identifiers, timestamps, device or browser information and error details, depending on the deployed infrastructure."
+          "title": "How we use information",
+          "paragraphs": [
+            "We use this information to authenticate users, provide AI conversations and strategy research, run historical backtests, save research, offer support, and maintain service security and reliability. When paid features become available, we will also process orders, subscriptions and credit entitlements.",
+            "Where applicable law requires a legal basis, we rely on what is necessary to provide and perform the service, meet legal obligations, and pursue legitimate interests in security and product improvement. Where consent is required, we obtain it separately; using the service alone does not replace that consent."
+          ]
+        },
+        {
+          "title": "Product improvement and model training",
+          "paragraphs": [
+            "SpeakQuant does not use your research content to train models. We may analyze usage, feedback and necessary research content to diagnose problems, evaluate response quality and improve the product experience. We use aggregated or de-identified information where possible and limit access to relevant content to what is needed."
+          ]
         },
         {
           "title": "AI and service providers",
-          "body": "Producing AI responses requires processing your prompts and relevant research context through AI services. Authentication, email delivery, hosting and storage may also involve service providers. The provider list, processing locations, retention settings and any use for model training must be verified for the production service before this policy is finalised. Do not include credentials or information you are not authorised to share in a research prompt."
+          "paragraphs": [
+            "Our AI features use models such as Claude and OpenAI models. To fulfill your research requests, we send messages, strategy code, backtest information and necessary context to the AI service providers supplying those capabilities. Online research may also send search terms or URLs to search and web content providers.",
+            "We also use providers for authentication, email delivery, cloud hosting and storage, which process information needed for their respective functions. The data a provider receives depends on the features you use. Its retention, security monitoring and related processing are governed by the applicable service terms and data processing arrangements.",
+            "We may also disclose information where necessary to meet legal requirements, respond to lawful requests, resolve disputes, or protect users and the service. You can contact us at the email below for information about specific providers and their data processing."
+          ]
+        },
+        {
+          "title": "Payment information",
+          "paragraphs": [
+            "Paid features are not currently available. When enabled, checkout will identify the provider processing the transaction. You submit payment card details directly to that provider; do not submit full card numbers or security codes in research conversations or support messages.",
+            "We may share or receive names, email addresses, country or region, order and customer identifiers, subscription details, amounts, currencies, and payment or refund status to deliver entitlements, reconcile transactions, provide support and meet legal obligations. Checkout identifies the actual payment provider or merchant of record and provides its applicable privacy notice. Processing it performs under its own legal obligations is also governed by that notice."
+          ]
         },
         {
           "title": "Cookies and browser storage",
-          "body": "Trade Lab uses session cookies for sign-in and browser storage for preferences such as language and appearance. Unsent research drafts and pending submissions are stored in the current browser tab so that a login or retry can continue your work. Clearing site data can remove these local settings and drafts; it does not by itself delete research already saved to your account."
+          "paragraphs": [
+            "We use cookies for sign-in and preferences such as language and appearance. Some cookies remain after you close the browser. Preference cookies last up to one year; sign-in cookies are retained according to the authentication settings and cleared when you sign out.",
+            "Local browser storage saves interface preferences, while tab session storage holds unsent drafts and pending submissions. You can clear or restrict this data in your browser, but may need to sign in or set preferences again. Clearing browser data does not automatically delete research saved in your account."
+          ]
+        },
+        {
+          "title": "Data storage and international processing",
+          "paragraphs": [
+            "We use cloud hosting, storage and content delivery services according to our deployment needs. Providers may include AWS, Cloudflare and others. Our processing locations and those of our service providers may span different countries or regions, so your information may be stored or processed outside your country or region.",
+            "For international processing, we use the safeguards required by applicable law, such as applicable contractual arrangements or other legally permitted mechanisms. You may contact us for information about the relevant processing locations and safeguards."
+          ]
         },
         {
           "title": "Retention and deletion",
-          "body": "Saved research supports reopening conversations and reviewing strategy and backtest history. You can delete conversations through the research-history controls. Deleting a conversation is separate from deleting an account or removing operational logs and backups. Retention periods, backup expiry and the account-deletion process remain to be confirmed for the production service."
+          "paragraphs": [
+            "We retain personal information only for as long as needed for the purposes in this policy. Research records support your account and research history. Retention of technical logs and support records depends on troubleshooting, security, dispute resolution and legal obligations. We consider the nature of the data, its purpose, risks and applicable legal requirements when determining retention.",
+            "You can delete conversations in the workspace or request deletion of your account and related information using the email below. We verify requests and delete or anonymize information no longer needed in accordance with applicable requirements. Deleting a conversation does not delete your account. Backups and records that must be retained by law may not be removed immediately; retained information is used only for the relevant recovery, security or legal purposes."
+          ]
         },
         {
-          "title": "Your choices and requests",
-          "body": "You can change supported account details and preferences in the workspace. Depending on applicable law, you may be entitled to request access, correction, deletion, a copy of your data, or limits on its processing, and to raise a concern with a relevant authority. The verified contact channel, identity checks, response process and applicable legal basis will be completed before publication."
+          "title": "Your rights and choices",
+          "paragraphs": [
+            "You can update supported profile details and preferences. Depending on applicable law, you may also have rights to access, correct or delete information, obtain a copy, restrict or object to processing, and withdraw consent. Withdrawal does not affect the lawfulness of processing based on consent before it was withdrawn.",
+            "Send requests to the email below with enough information to identify your account and explain the request. We may reasonably verify your identity to protect your account, and will handle and respond within the time required by applicable law. You may also complain to a competent data protection authority."
+          ]
         },
         {
-          "title": "Payments and policy changes",
-          "body": "Paid subscriptions and credit purchases are not yet enabled. If billing is introduced, this policy will identify the payment providers and the order or billing data involved. Material changes to data handling will be reflected in an updated policy; the date above identifies this draft."
+          "title": "Information security",
+          "paragraphs": [
+            "We use measures such as account authentication, permission controls and access restrictions to protect information, and maintain safeguards appropriate to processing risks. No network transmission or storage method is completely secure. If a security incident requires notification, we will respond and notify affected parties as required by applicable law."
+          ]
+        },
+        {
+          "title": "Children",
+          "paragraphs": [
+            "SpeakQuant is intended only for users who have reached the age of majority where they reside and can independently enter into an agreement. The service is not directed to minors. If you learn that a minor has provided personal information, email us so we can investigate and handle the information and account as required by law."
+          ]
+        },
+        {
+          "title": "Policy updates",
+          "paragraphs": [
+            "We may update this policy when the service or our processing changes and will show the updated date on this page. We will communicate material changes through appropriate means, such as a service notice or email, and obtain fresh consent where required by law."
+          ]
         }
       ]
     },
     "terms": {
       "title": "Terms of Service",
-      "intro": "The scope and conditions of using Trade Lab as a strategy research workspace.",
+      "intro": "These Terms of Service are between you and {operator}, a corporation incorporated in Wyoming, United States (\"we\", \"us\" or \"our\"). We operate SpeakQuant and provide its services. These terms describe the research workspace, conditions of use and rules applicable to paid features. Please read them before using the service.",
       "sections": [
         {
-          "title": "What Trade Lab provides",
-          "body": "Trade Lab helps you discuss trading ideas, develop hypotheses, generate strategy code, test against historical market data and review results. It is research software. It does not hold customer funds, execute trades or provide brokerage services. The initial public offering does not include a live-trading Runner service."
+          "title": "1. Agreement and scope",
+          "paragraphs": [
+            "These Terms of Service apply to the SpeakQuant website and online research workspace. Together with order conditions and supplemental terms clearly identified at purchase, they set out your rights and obligations and ours. Read them before registering, using or purchasing the service. If you do not agree, do not register or continue using the service.",
+            "By registering, expressly accepting or using the service after being given notice of these terms, you agree to comply with them. We obtain separate consent or confirmation where the law requires it. These terms do not replace express consent required for personal information processing, automatic renewal or other matters."
+          ]
         },
         {
-          "title": "Accounts and access",
-          "body": "Use accurate account information and keep access to your sign-in email secure. You are responsible for activity you authorise through your account. Do not share verification codes, impersonate another person, bypass access restrictions or use another person’s research without permission."
+          "title": "2. Description of the service",
+          "paragraphs": [
+            "SpeakQuant's online workspace provides AI-assisted exploration of trading ideas, strategy design and code generation, historical backtesting and result analysis. The current online workspace does not hold customer funds, place orders for users or provide brokerage services.",
+            "Available features, usage limits and deliverables are those described when you use or purchase the service. Unreleased features, previews and roadmap plans are not delivered services or promises of future availability. Using the software does not appoint us to manage your accounts, funds or investment decisions."
+          ]
         },
         {
-          "title": "Research and AI limitations",
-          "body": "AI-generated explanations and code can contain errors. Backtests depend on the available historical data, assumptions, fees, market conditions and execution model. Historical or simulated results do not establish future returns. Review the strategy and backtest conditions before each run. Research output is not a recommendation to buy or sell a financial product, and the headline “3 minutes” is not a guaranteed completion time."
+          "title": "3. User representations",
+          "paragraphs": ["When registering or using the service, you represent and agree that:"],
+          "items": [
+            "You have reached the age of majority where you reside and have legal capacity to enter into and perform these terms.",
+            "You will comply with these terms and the laws and regulations applicable to your use of the service.",
+            "The registration, contact and necessary payment information you provide is true, accurate, complete and kept up to date.",
+            "You have the right to submit your research content, and your use will not infringe intellectual property, privacy or other legal rights.",
+            "You will not use the service for unlawful, fraudulent or unauthorized activities, or to evade applicable sanctions, export controls or geographic restrictions.",
+            "If acting for an organization, you are authorized to accept these terms and use the service on its behalf."
+          ]
         },
         {
-          "title": "Your content and generated output",
-          "body": "You must have permission to submit the material you provide. You retain rights you already hold in that material; operating the service requires processing it to perform your requested research and maintain your account history. Generated output may be similar to output provided to others and may require review for accuracy and third-party rights. Third-party software and market data remain subject to their applicable licences."
+          "title": "4. Accounts and security",
+          "paragraphs": [
+            "Protect your sign-in email, verification codes and other credentials. Do not impersonate others, buy or sell accounts, or allow unauthorized access. You are responsible for actions you authorize through your account. Contact support promptly if credentials are lost or compromised or you discover unusual access.",
+            "If we have reasonable grounds to believe information is false, outdated or incomplete, we may request correction or necessary verification and take action under the suspension and termination provisions below. We will not ask you to email passwords, verification codes, exchange API keys or complete payment card details."
+          ]
         },
         {
-          "title": "Acceptable use and availability",
-          "body": "Do not use the service for unlawful activity, malware, unauthorised access, interference with other users, or attempts to defeat usage limits. Access may be limited to address misuse, security incidents or operational issues. Features may change and the service may be interrupted for maintenance or external provider failures; uninterrupted availability is not promised."
+          "title": "5. Acceptable use and prohibited activities",
+          "paragraphs": [
+            "Use the service within its published conditions and your authorization. You must not:"
+          ],
+          "items": [
+            "Engage in unlawful activity, fraud, impersonation or market manipulation, or infringe intellectual property, privacy or other rights.",
+            "Access other accounts, research or systems without authorization; distribute malicious software; attack, disrupt or impose an unreasonable load on the service.",
+            "Bypass authentication, security measures, rate limits, credit charges or other usage restrictions, or exploit vulnerabilities to obtain unauthorized benefits.",
+            "Without permission, use bots, scripts or similar means to register accounts in bulk, systematically scrape service content or automatically access restricted interfaces. Officially provided or expressly authorized automation used within its purpose and limits is not prohibited by this provision.",
+            "Copy, resell or distribute the SpeakQuant service, non-user software or branding beyond the permitted license. This does not restrict actions allowed by law, rights under open-source licenses or lawful use of generated results."
+          ]
         },
         {
-          "title": "Plans, payments and ending use",
-          "body": "Current plan amounts are previews. Paid subscriptions and credit purchases are not yet available, and no purchase is completed by selecting a preview. Before charging, the service must disclose the actual price, allowance, billing cycle, renewal, cancellation and refund terms. You may stop using the service; account deletion and termination procedures will be confirmed before these terms are finalised."
+          "title": "6. Subscriptions, credits and payments",
+          "paragraphs": [
+            "Current plans and prices are previews. Paid subscriptions and credit top-ups are not yet available, and preview actions do not charge you. The following purchase rules apply when paid features are actually enabled.",
+            "Plans and prices: Available plans, prices, currencies, credit allowances and features are those shown before purchase. The pricing page uses US dollars (USD); applicable taxes, discounts and the final amount payable are clearly shown at checkout. We do not make additional charges without authorization.",
+            "Use of credits: Credits are for AI research within SpeakQuant. They are not currency, investment assets or a means of paying third parties, and cannot be withdrawn, resold or transferred between users. Usage depends on models, tools, task complexity and the amount of content processed. Viewing existing conversations, strategies and backtest results uses no additional credits.",
+            "Credit allowances: Monthly plans provide credits for the relevant period. One-time top-ups do not start another subscription. Credit validity, rollover at ordinary renewal and other usage conditions must be shown before purchase. New rules cannot retrospectively reduce purchased entitlements, except where a change is required by law.",
+            "Plan changes: If credits run out, you can top up, upgrade to a higher monthly plan or wait for the next renewal. An upgrade preserves remaining credits and adds them to the new plan allowance. If already on Max, you cannot change plans before the period ends. Upgrade charges, effective dates and billing-period changes are shown before confirmation.",
+            "Payment and receipts: Checkout identifies the available payment methods, the actual seller or merchant of record, and the channel terms applicable to the transaction. Payments are handled by the relevant third-party channel, which handles collection, payment documents, taxes and refunds according to its role. SpeakQuant provides the purchased product service and support; third-party involvement does not exclude your statutory rights.",
+            "Delivery: Once payment is confirmed, purchased plan or credit entitlements are delivered to the SpeakQuant account linked to the order. Activation timing is stated before purchase. If payment succeeds but entitlements are missing, email us with your account and order details so we can investigate, provide the entitlements or handle a refund under applicable rules.",
+            "Price changes: Confirmed orders are fulfilled on the agreed terms. Changes to prices or plans affecting future renewals are communicated reasonably in advance of the next charge, with an opportunity to stop renewal. Longer notice periods or renewed consent required by law will be respected."
+          ]
         },
         {
-          "title": "Operator and governing terms",
-          "body": "The contracting entity, contact information, applicable law, dispute process and any limitations of liability will be completed after the operator and service jurisdictions are confirmed. This draft does not replace rights that cannot be excluded under applicable law."
+          "title": "7. Automatic renewal and stopping renewal",
+          "paragraphs": [
+            "Paid monthly plans renew automatically each month. The renewal interval, amount and charge date are disclosed before purchase, and charges require the necessary authorization. One-time credit top-ups do not renew automatically.",
+            "When paid subscriptions are enabled, we will provide subscription management in the workspace or access to the payment channel’s customer portal. You can turn off automatic renewal before the next charge. No subsequent renewals will be charged, and purchased plan benefits remain available until the end of the current period. You do not have to delete your account to stop renewal.",
+            "If payment fails, we may notify you to update the payment method and suspend the unpaid entitlements. An unconfirmed payment is not treated as a successful purchase."
+          ]
+        },
+        {
+          "title": "8. Refunds and statutory rights",
+          "paragraphs": [
+            "Subscriptions and credit top-ups are digital services and are generally non-refundable. For duplicate charges, payment errors, accidental purchases or failure to deliver a paid service as agreed, email us with your account, order details and a description of the issue. We will investigate and handle remedies or refunds according to the circumstances, applicable law and payment-channel rules.",
+            "Approved refunds are processed through the original payment channel and normally returned to the original payment method. If that is not possible, applicable law and channel rules govern the alternative. Receipt timing depends on the payment channel and receiving institution. We do not ask you to pay a separate refund handling fee or provide sign-in credentials.",
+            "These terms do not limit statutory rights concerning withdrawal from a purchase, service conformity, remedies or refunds, or mandatory payment-channel refund rules. Digital delivery alone does not extinguish those rights. Where the law requires separate express confirmation for immediate performance or a change to such rights, this will be explained and obtained separately during purchase."
+          ]
+        },
+        {
+          "title": "9. Your content and AI-generated results",
+          "paragraphs": [
+            "You retain the rights you already hold in submitted content. You grant us a non-exclusive permission to process it only as needed to provide research, retain history, support troubleshooting and improve the service, subject to the Privacy Policy. This permission does not include publicly displaying or selling your private research, or using it for model training.",
+            "You may use generated strategies, code and analysis for personal or commercial purposes to the extent permitted by applicable law and third-party rights. AI outputs may be the same as or similar to results provided to others. We do not guarantee originality, accuracy or freedom from third-party rights. Perform appropriate checks before using outputs; market data and open-source code remain subject to their licenses.",
+            "If you believe content in the service infringes your rights, email us with its location, the basis of your rights and contact details. We will investigate and respond as required by law."
+          ]
+        },
+        {
+          "title": "10. Intellectual property and license",
+          "paragraphs": [
+            "SpeakQuant branding, interface designs, non-user software and other service materials belong to us or their respective rights holders. Subject to these terms, you may use the service within your available features and entitlements. This license does not grant ownership of the brand, source code or rights not expressly granted.",
+            "Third-party software and open-source components are governed by their respective licenses. Relevant attributions and license information are available on the Open-source notices page. These terms do not restrict rights expressly granted by those licenses or change your rights in your content and lawfully generated results."
+          ]
+        },
+        {
+          "title": "11. Third-party services and privacy",
+          "paragraphs": [
+            "AI, market data, search, hosting, authentication and payment features may depend on third-party services. Their data, availability and usage conditions may affect the relevant features. Applicable third-party terms are provided in the relevant feature or transaction flow. Using a third party does not by itself remove our statutory responsibility for the product or service we provide to you.",
+            "The Privacy Policy explains personal information collection, use, retention, sharing and rights requests. Accepting these Terms of Service is not consent to every form of personal information processing. Separate consent is obtained where required by law."
+          ]
+        },
+        {
+          "title": "12. Suspension, termination and account deletion",
+          "paragraphs": [
+            "We may restrict features, suspend or terminate an account for a serious breach of these terms, false information that is not reasonably corrected, unauthorized access, fraud, persistent abuse or legal requirements. Except for urgent security risks, fraud or legal restrictions, we will explain the reason and offer an opportunity to correct or appeal where reasonably practicable. You may request a review by emailing us.",
+            "You may stop using the service and request account deletion by email. Existing lawful payment obligations, disputes and refunds due are handled under their applicable rules. Information retention and deletion follow the Privacy Policy.",
+            "If discontinuation of our service prevents us from fulfilling purchased entitlements, we will provide reasonable advance notice and remedies or refunds due for the unfulfilled portion under applicable law and the order terms. Account restrictions or termination do not automatically remove statutory refund, complaint or remedy rights."
+          ]
+        },
+        {
+          "title": "13. Research risks and disclaimers",
+          "paragraphs": [
+            "AI explanations, strategies and code may be incorrect, incomplete or unsuitable for your purpose. Historical backtests depend on data quality, costs, slippage, market conditions and execution assumptions, and cannot guarantee future returns. Outputs are not personalized investment advice. Independently review them and decide whether and how to use them. The phrase “3 minutes” is not a guaranteed completion time.",
+            "To the extent permitted by law, the service is provided with its existing functionality and as available. Maintenance, network issues and third-party failures may cause interruptions or delays. We do not guarantee uninterrupted availability, completely accurate outputs or any particular return. These qualifications do not remove our obligations for expressly promised paid services or statutory quality standards."
+          ]
+        },
+        {
+          "title": "14. Liability and limitations",
+          "paragraphs": [
+            "Each party is responsible under applicable law for losses caused by its breach of these terms or the law. To the extent the law permits, we are not liable for losses that could not reasonably be foreseen, or losses caused entirely by your unauthorized use, modifications, breach of these terms or independent third-party conduct that is not attributable to us.",
+            "Nothing in these terms excludes or limits liability that cannot lawfully be excluded, including applicable liability for fraud, willful misconduct, gross negligence, personal injury or statutory consumer rights. Any disclaimer or limitation applies only to the extent permitted by law and does not require you to waive statutory remedies."
+          ]
+        },
+        {
+          "title": "15. Applicable law and disputes",
+          "paragraphs": [
+            "Applicable law and jurisdiction are determined under the conflict-of-laws rules and mandatory provisions applied by the competent authority. As a consumer, you retain the protections of your country of habitual residence where legally applicable. These terms do not require you to waive those protections or remedies available by law.",
+            "You may first email us about a dispute so we can try to resolve it. Informal discussions are not a prerequisite to exercising statutory rights. If unresolved, either party may seek relief from a court or authority with lawful jurisdiction. These terms do not require mandatory arbitration or waiver of statutory rights to bring a claim."
+          ]
+        },
+        {
+          "title": "16. Changes and general provisions",
+          "paragraphs": [
+            "We may update these terms as the service or the law changes and show the updated date on this page. Changes materially affecting use or purchased entitlements will be communicated reasonably in advance by service notice or email. Publication of an update does not replace separate agreement where required. Price and renewal changes also follow the purchase rules above.",
+            "These terms, together with expressly applicable orders and supplemental terms, form the agreement for the relevant service. If a provision is found invalid, the remaining provisions continue to apply to the extent permitted by law. A delay in exercising a right is not a permanent waiver. No provision excludes rights or obligations that applicable law makes non-excludable."
+          ]
         }
       ]
-    }
+    },
+    "billingLinksTitle": "Related information",
+    "billingLinksBody": "See the following pages for plan prices, billing information and personal information processing.",
+    "billingLink": "View pricing and billing information"
   }
 }

@@ -5,7 +5,7 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 usePageSeo(
-  () => `${t('conversation.title')} · Trade Lab`,
+  () => `${t('conversation.title')} · SpeakQuant`,
   () => t('conversation.emptyDescription'),
 )
 </script>

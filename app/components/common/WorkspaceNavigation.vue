@@ -13,7 +13,7 @@ defineEmits<{
     <NuxtLink
       v-if="!collapsed"
       :to="localePath('/')"
-      aria-label="Trade Lab"
+      aria-label="SpeakQuant"
       @click="$emit('navigate')"
       ><CommonBrandMark
     /></NuxtLink>

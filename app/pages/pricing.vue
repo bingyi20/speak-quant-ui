@@ -3,14 +3,8 @@ import { PricingContent } from '~/features/billing'
 definePageMeta({ layout: 'public' })
 const { t } = useI18n()
 const localePath = useLocalePath()
-const creditExamples = computed(() =>
-  ['discussion', 'strategy', 'backtest'].map((key) => ({
-    task: t(`publicPricing.usage.${key}`),
-    amount: t(`publicPricing.usage.${key}Amount`),
-  })),
-)
 usePageSeo(
-  () => `${t('nav.pricing')} — Trade Lab`,
+  () => `${t('nav.pricing')} — SpeakQuant`,
   () => t('publicPricing.intro'),
   true,
 )
@@ -18,34 +12,39 @@ usePageSeo(
 <template>
   <div class="public-pricing-page">
     <PricingContent heading-tag="h1" />
-    <div class="public-pricing-details">
+    <section
+      class="public-pricing-details"
+      aria-labelledby="pricing-faq-title"
+    >
+      <h2
+        id="pricing-faq-title"
+        class="public-faq-title"
+      >
+        {{ $t('publicPricing.faqTitle') }}
+      </h2>
+      <section>
+        <h3>{{ $t('publicPricing.plansTitle') }}</h3>
+        <p>{{ $t('publicPricing.plansBody') }}</p>
+      </section>
       <section id="credits">
-        <h2>{{ $t('publicPricing.creditsTitle') }}</h2>
+        <h3>{{ $t('publicPricing.creditsTitle') }}</h3>
         <p>{{ $t('publicPricing.creditsBody') }}</p>
-        <dl class="public-credit-examples">
-          <div
-            v-for="example in creditExamples"
-            :key="example.task"
-          >
-            <dt>{{ example.task }}</dt>
-            <dd>{{ example.amount }}</dd>
-          </div>
-        </dl>
-        <p class="public-usage-note">{{ $t('publicPricing.usageNote') }}</p>
-        <p>{{ $t('publicPricing.readingBody') }}</p>
       </section>
       <section>
-        <h2>{{ $t('publicPricing.topUpTitle') }}</h2>
+        <h3>{{ $t('publicPricing.topUpTitle') }}</h3>
         <p>{{ $t('publicPricing.topUpBody') }}</p>
       </section>
       <section id="billing">
-        <h2>{{ $t('publicPricing.billingTitle') }}</h2>
+        <h3>{{ $t('publicPricing.billingTitle') }}</h3>
         <p>{{ $t('publicPricing.billingBody') }}</p>
+      </section>
+      <section id="refunds">
+        <h3>{{ $t('publicPricing.refundTitle') }}</h3>
         <p>{{ $t('publicPricing.refundBody') }}</p>
       </section>
       <NuxtLink :to="localePath('/contact')"
         >{{ $t('publicPricing.contactLink') }} <UIcon name="i-lucide-arrow-up-right"
       /></NuxtLink>
-    </div>
+    </section>
   </div>
 </template>

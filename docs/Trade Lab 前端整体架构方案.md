@@ -1,4 +1,4 @@
-# Trade Lab 前端整体架构方案
+# SpeakQuant 前端整体架构方案
 
 > 日期：2026-09-05  
 > 状态：工程架构已落地；本文维护跨模块约定与代码索引，业务完成度见 [项目入口](../AGENTS.md)。
@@ -93,7 +93,7 @@ SSR 请求后端时使用服务端配置的绝对 API 地址；该配置与浏�
 | `/new-task` | 工作台新研究页；workspace 布局，左侧历史、中间输入区 | 路由级 CSR | noindex、禁止共享缓存 |
 | `/login` | 登录及登录返回入口；auth 布局 | SSR 页面壳，客户端认证 | noindex、no-store |
 | `/conversations/:id` | 已创建的研究；workspace 布局，对话与资产面板 | 路由级 CSR | noindex、禁止共享缓存 |
-| `/pricing`、`/privacy`、`/terms`、`/contact`、`/open-source` 及对应 `/zh-CN/...` | 公共价格、政策／联系草案及开源说明 | SSR | 首页／价格／开源说明可索引；草案暂 noindex |
+| `/pricing`、`/privacy`、`/terms`、`/contact`、`/open-source` 及对应 `/zh-CN/...` | 公共价格、政策／联系及开源说明 | SSR | 首页／价格／开源说明可索引；政策与联系页 noindex |
 | `/refunds` 及 `/zh-CN/refunds` | 取消退款已合入价格页 | 301 跳转到同语言 `/pricing#billing` | 不单独索引 |
 | 后续公开内容路由 | SEO 文章、公开说明等；public 布局 | SSR 或预渲染，按内容选择 | 明确开放后加入 sitemap |
 
@@ -115,7 +115,7 @@ Nuxt 全局保持 SSR 开启，为 `/new-task` 和 `/conversations/**` 配置 `r
 
 共享入口为 conversation 模块公开导出的 `ResearchEntry`，嵌入方式见 [Agent 对话模块技术方案 §4.4](./Agent%20对话模块技术方案.md#44-落地页与-seo-页快速嵌入)。新增公开页面声明 `layout: 'public'` 并调用 `usePageSeo`。账户与套餐入口使用全局 overlay，不另建工作台业务路由。
 
-`usePageSeo` 已提供公共 SEO 封装；完整公开内容和 sitemap 仍待补齐。私有资源不能因为“做 SEO”开放读取。`noindex` 只控制搜索索引，资源权限仍由后端校验。
+`usePageSeo` 已提供公共 SEO 封装；双语公开页面与 sitemap 已实现，范围见公开站点技术方案。私有资源不能因为“做 SEO”开放读取。`noindex` 只控制搜索索引，资源权限仍由后端校验。
 
 ### 4.3 私有数据 SSR 的后续边界
 
@@ -260,7 +260,7 @@ features 的公开入口
 | 界面文案与国际化                  | `i18n/locales/zh-CN.json`、`en-US.json`、`i18n/i18n.config.ts`                                                                                                                    |
 | SSE、文件下载                     | `app/lib/sse/`、`app/lib/download/client.ts`                                                                                                                                      |
 | 图表、精度、Markdown、存储与遥测  | `app/lib/chart/`、`format/`、`storage/`、`telemetry/`                                                                                                                             |
-| 公开站点、协议、语言与 sitemap | `app/pages/index.vue`、`pricing.vue`、`privacy.vue`、`terms.vue`、`refunds.vue`、`contact.vue`、`layouts/public.vue`、`components/common/PublicDocument.vue`、`LegalDocument.vue`、`composables/useLanguage.ts`、`shared/public-site.ts`、`server/routes/`；[公开站点技术方案](公开站点技术方案.md) |
+| 公开站点、协议、语言与 sitemap | `app/pages/index.vue`、`pricing.vue`、`privacy.vue`、`terms.vue`、`refunds.vue`、`contact.vue`、`layouts/public.vue`、`components/common/PublicDocument.vue`、`LegalDocument.vue`、`composables/useLanguage.ts`、`composables/usePublicContact.ts`、`shared/public-site.ts`、`server/routes/`；[公开站点技术方案](公开站点技术方案.md) |
 | SEO 与公共生命周期工具            | `app/composables/usePageSeo.ts`、`useDisposableScope.ts`、`useChart.ts`                                                                                                           |
 | 测试与 HTTP Mock                  | `tests/unit/`、`tests/e2e/`、`tests/e2e/auth-fixtures.ts`、`history-data.ts`                                                                                                      |
 

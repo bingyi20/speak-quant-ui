@@ -22,7 +22,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => ideaObserver?.disconnect())
 usePageSeo(
-  () => `Trade Lab — ${t('landing.title1')} ${t('landing.title2')}${t('landing.period')}`,
+  () => `SpeakQuant — ${t('landing.title1')} ${t('landing.title2')}${t('landing.period')}`,
   () => t('landing.subtitle'),
   true,
 )

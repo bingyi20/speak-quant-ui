@@ -433,7 +433,16 @@
   text-wrap: balance;
 }
 .public-pricing-details {
-  margin-top: 60px;
+  width: min(100%, var(--conversation-width));
+  margin: 60px auto 0;
+}
+.public-faq-title {
+  margin-bottom: 36px;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: center;
 }
 .public-pricing-details section {
   width: 100%;
@@ -442,7 +451,7 @@
 .public-pricing-details section + section {
   margin-top: 32px;
 }
-.public-pricing-details h2,
+.public-pricing-details h3,
 .public-document-body h2 {
   font-size: 19px;
   font-weight: 500;
@@ -454,29 +463,19 @@
   color: var(--color-text-secondary);
   line-height: 1.9;
 }
-.public-pricing-details p + p {
+.public-pricing-details p + p,
+.public-document-body p + p {
   margin-top: 12px;
 }
-.public-credit-examples {
-  width: 100%;
-  margin: 20px 0 12px;
-}
-.public-credit-examples > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--color-border-default);
-}
-.public-credit-examples dt {
+.public-document-body ul {
+  margin-top: 12px;
+  padding-left: 20px;
+  list-style: disc;
   color: var(--color-text-secondary);
+  line-height: 1.9;
 }
-.public-credit-examples dd {
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-.public-pricing-details .public-usage-note {
-  font-size: 13px;
+.public-document-body li + li {
+  margin-top: 8px;
 }
 .public-pricing-details a,
 .public-document-body a {
@@ -488,11 +487,16 @@
   text-decoration: underline;
   text-underline-offset: 4px;
 }
+.public-document-body p a {
+  display: inline;
+  min-height: 0;
+  margin-top: 0;
+}
 .public-pricing-details > a {
   margin-top: 24px;
 }
 .public-document {
-  width: min(100%, 768px);
+  width: min(100%, calc(var(--conversation-width) + 48px));
   padding: 64px 24px 96px;
   margin: auto;
   overflow-wrap: anywhere;
@@ -668,7 +672,7 @@
     margin-top: 40px;
   }
   .public-document {
-    padding: 40px 24px 64px;
+    padding: 40px 20px 64px;
   }
 }
 @media (max-width: 380px) {

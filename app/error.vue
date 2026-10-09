@@ -5,7 +5,7 @@ useSeoMeta({ robots: 'noindex, nofollow' })
 </script>
 <template>
   <main class="error-page">
-    <span class="eyebrow">Trade Lab · {{ error.statusCode }}</span>
+    <span class="eyebrow">SpeakQuant · {{ error.statusCode }}</span>
     <h1>
       {{
         error.statusCode === 404

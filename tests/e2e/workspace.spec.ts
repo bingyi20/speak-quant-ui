@@ -58,7 +58,7 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
     width: 260,
     height: page.viewportSize()!.height,
   })
-  await expect(sidebar.getByRole('link', { name: 'Trade Lab' })).toHaveCount(0)
+  await expect(sidebar.getByRole('link', { name: 'SpeakQuant' })).toHaveCount(0)
   expect(await sidebar.locator('.new-research').boundingBox()).toEqual(expandedNavigation)
   expect(await sidebar.locator('.account-trigger').boundingBox()).toEqual(expandedProfile)
   expect(await main.boundingBox()).toEqual(collapsed)
@@ -70,7 +70,7 @@ test('collapsed sidebar previews without shifting content, pins on click and pre
   await expand.click()
   await expect(page.locator('.workspace-shell')).not.toHaveClass(/sidebar-collapsed/)
   await expect.poll(async () => (await main.boundingBox())?.x).toBe(260)
-  await expect(sidebar.getByRole('link', { name: 'Trade Lab' })).toBeVisible()
+  await expect(sidebar.getByRole('link', { name: 'SpeakQuant' })).toBeVisible()
   await page.getByRole('button', { name: '收起侧栏' }).click()
   await page.reload()
   await expect(page.locator('.workspace-shell')).toHaveClass(/sidebar-collapsed/)
@@ -243,7 +243,7 @@ test('mobile navigation has one brand header and a working close button', async 
   await expand.click()
   const nav = page.locator('.mobile-navigation')
   await expect(
-    nav.locator('.sidebar-top').getByRole('link', { name: 'Trade Lab', exact: true }),
+    nav.locator('.sidebar-top').getByRole('link', { name: 'SpeakQuant', exact: true }),
   ).toBeVisible()
   await expect(nav.locator('.brand')).toHaveCount(1)
   await expect(page.getByRole('dialog').locator('[data-slot="header"]')).toHaveCount(0)

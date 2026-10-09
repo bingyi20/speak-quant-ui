@@ -1,7 +1,7 @@
-# Trade Lab 落地页改造 PRD
+# SpeakQuant 落地页改造 PRD
 
 > Draft V3.0 · 2026-09-20 · 主体英文文案已确认，其余页面需求按既有范围执行\
-> 产品名：Trade Lab（暂定） · 域名：speakquant.com\
+> 产品名：SpeakQuant · 域名：speakquant.com\
 > 关联：[产品决策](./产品决策.md)、[MVP PRD](./Trade%20Lab%20MVP%20PRD.md)
 
 **本轮按用户提供的英文定稿更新落地页主体，沿用现有页头、页脚、配色和排版结构。** 保留真实研究输入框、四个快捷示例及下方三列研究流程。独立价格页、协议及联系信息仍属于此前确认的公开站点范围，本轮不重新设计其布局。
@@ -26,7 +26,7 @@ HOW IT WORKS
 DEVELOP YOUR HYPOTHESIS     BUILD & BACKTEST          ANALYZE & ITERATE
 第一步说明                 第二步说明               第三步说明
 
-Trade Lab is research software.
+SpeakQuant is research software.
 业务边界说明
 
 [沿用现有页脚]
@@ -81,7 +81,7 @@ then refine the hypothesis, test again,
 and compare the results.
 
 
-Trade Lab is research software.
+SpeakQuant is research software.
 We do not hold customer funds, execute trades,
 or provide brokerage services.
 ~~~
@@ -117,7 +117,7 @@ or provide brokerage services.
 | 01 标题与正文 | **形成交易假设**：从一个想法、市场观察或问题出发。AI 帮你梳理逻辑，形成可验证的交易假设。 |
 | 02 标题与正文 | **生成策略并回测**：AI 将假设转化为策略代码，并用历史行情进行回测。无需编写代码，也无需连接交易账户。 |
 | 03 标题与正文 | **分析并迭代**：回放交易，理解哪些有效、哪些失效，再调整假设、重新回测并比较结果。 |
-| 业务边界 | Trade Lab 是研究软件。我们不保管客户资金、不执行交易，也不提供经纪服务。 |
+| 业务边界 | SpeakQuant 是研究软件。我们不保管客户资金、不执行交易，也不提供经纪服务。 |
 
 ## 2. 核心交互与响应式
 
@@ -169,7 +169,7 @@ Reversal 对应趋势反转，不沿用原 Mean reversion／均值回归的预�
 
 ~~~text
 ┌─────────────────────────────────────────────────────────────────┐
-│ Trade Lab                             Pricing  EN⌄  Sign in      │
+│ SpeakQuant                            Pricing  EN⌄  Sign in      │
 │                                                                 │
 │                 Choose your research plan.                      │
 │        Strategy research, backtesting, Replay and AI insights.   │
@@ -249,4 +249,4 @@ SEO 首发基础：
 
 沿用现有视觉、输入与定价组件；只统计理解转化所需的访问、研究提交、登录、Replay 和真实购买事件，不采集策略原文。正式价格、协议与真实支付开通仍是独立依赖，页面完善不等于业务已获支付机构批准。
 
-参考资料（查阅于 2026-09-20）：[YouMind](https://youmind.com/zh-CN/overview)、[Stripe 网站信息要求](https://docs.stripe.com/get-started/checklist/website)、[Creem 审核说明](https://docs.creem.io/merchant-of-record/account-reviews/account-reviews)、[Google SEO](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)。具体准入研究见[支付调研](./海外支付准入调研-2026-09-20.md)。
+参考资料（查阅于 2026-09-20）：[YouMind](https://youmind.com/zh-CN/overview)、[Stripe 网站信息要求](https://docs.stripe.com/get-started/checklist/website)、[Creem 审核说明](https://docs.creem.io/merchant-of-record/account-reviews/account-reviews)、[Google SEO](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)。具体准入研究见[支付调研](../../pm/docs/海外支付准入调研-2026-09-20.md)。

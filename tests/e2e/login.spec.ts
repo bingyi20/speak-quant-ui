@@ -115,7 +115,7 @@ test('invalid code is announced, resend replaces the challenge and back retains 
   await page.getByRole('button', { name: '返回登录' }).click()
   await expect(page.getByLabel('邮箱地址')).toHaveValue('tester@example.com')
   expect(configs).toBe(1)
-  await page.getByRole('link', { name: 'Trade Lab · 返回首页' }).click()
+  await page.getByRole('link', { name: 'SpeakQuant · 返回首页' }).click()
   await expect(page).toHaveURL(/\/zh-CN$/)
 })
 

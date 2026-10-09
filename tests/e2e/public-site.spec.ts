@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/google/config', (route) => route.fulfill({ status: 503, json: {} }))
 })
 
-test('public language URLs render stable SSR, including legal drafts and pricing', async ({
+test('public language URLs render stable SSR, including policy content and pricing', async ({
   request,
 }) => {
   for (const [path, language, title] of [
@@ -43,6 +43,42 @@ test('public language URLs render stable SSR, including legal drafts and pricing
     expect(html).toContain('https://speakquant.com/social-card.png')
     if (/privacy|terms|refunds|contact/.test(path!))
       expect(html).toContain('content="noindex, nofollow"')
+    if (/privacy|terms|contact/.test(path!)) {
+      const article = html.match(/<article class="public-document"[\s\S]*?<\/article>/)?.[0]
+      expect(article).toBeTruthy()
+      expect(article).toContain('Nanhao Labs Inc')
+      if (path!.endsWith('/contact')) {
+        expect(article).toContain('2026-002089918')
+        expect(article).toContain('30 N Gould St Ste R, Sheridan, WY 82801, United States')
+      } else {
+        expect(article).not.toContain('2026-002089918')
+        expect(article).not.toContain('30 N Gould St')
+      }
+      expect(article).not.toContain('YI BANGYU')
+      expect(article).toContain('mailto:support@speakquant.com')
+      expect(article).not.toMatch(/public-document-draft|待确认草案|Draft for review|发布前补齐/)
+      if (path!.endsWith('/privacy')) {
+        expect(article).toMatch(/AI 与服务供应商|AI and service providers/)
+        expect(article).toMatch(
+          /不会将你的研究内容用于模型训练|does not use your research content to train models/,
+        )
+        expect(article).toContain('AWS')
+        expect(article).toContain('Cloudflare')
+      }
+      if (path!.endsWith('/terms')) {
+        expect(article).toMatch(/用户资格与声明|User representations/)
+        expect(article).toMatch(/责任与限制|Liability and limitations/)
+        expect(article).toContain('<ul>')
+        expect(article).not.toMatch(/Creem|Stripe/)
+        expect(article).toContain(
+          path!.startsWith('/zh-CN') ? '/zh-CN/pricing#billing' : '/pricing#billing',
+        )
+        expect(article).toContain(
+          `href="${path!.startsWith('/zh-CN') ? '/zh-CN/privacy' : '/privacy'}"`,
+        )
+      }
+      if (/privacy|terms/.test(path!)) expect(article).not.toMatch(/href="(?:\/zh-CN)?\/contact"/)
+    }
   }
 })
 
@@ -132,7 +168,7 @@ test('examples fill matching ideas without writes; navigating policies preserves
   await input.fill('A draft to keep')
   await page.getByRole('link', { name: 'Privacy Policy', exact: true }).click()
   await expect(page).toHaveURL(`${origin}/privacy`)
-  await page.getByRole('link', { name: 'Trade Lab', exact: true }).click()
+  await page.getByRole('link', { name: 'SpeakQuant', exact: true }).click()
   await expect(input).toHaveValue('A draft to keep')
   expect(writes).toEqual([])
 })
@@ -201,6 +237,8 @@ test('policies open in a new tab without cancelling the login operation', async 
   context,
 }) => {
   await page.goto('/login')
+  await expect(page.locator('.login-legal')).toContainText('you agree to the')
+  await expect(page.locator('.login-legal')).toContainText('acknowledge reading the')
   await page.getByRole('textbox', { name: 'Email address' }).fill('draft@example.com')
   const popupPromise = context.waitForEvent('page')
   await page.getByRole('link', { name: 'Privacy Policy' }).click()
@@ -227,21 +265,31 @@ test('pricing is an honest preview and Free has no research entry', async ({ pag
     await expect(page.getByRole('dialog')).toHaveCount(0)
   }
   await expect(page.locator('.pricing-plan')).toHaveCount(3)
-  await expect(page.locator('.public-credit-examples')).toContainText('About 10–30 credits / task')
-  await expect(page.locator('.public-usage-note')).toContainText('Illustrative usage only')
-  await expect(page.locator('#billing')).toContainText('Cancellation stops renewal')
+  await expect(
+    page.getByRole('heading', { name: 'Frequently asked questions', level: 2 }),
+  ).toBeVisible()
+  await expect(page.locator('.public-pricing-details h3')).toHaveCount(5)
+  await expect(page.locator('.public-pricing-details section')).toHaveCount(5)
+  await expect(page.locator('#credits')).toContainText(
+    'Usage varies with the model, tools and task complexity',
+  )
+  await expect(page.locator('#billing')).toContainText(
+    'Cancel before the next charge to stop renewal',
+  )
+  await expect(page.locator('#refunds')).toContainText('generally non-refundable')
+  await expect(page.locator('#refunds')).toContainText(
+    'duplicate charges, payment errors, accidental purchases',
+  )
+  await expect(page.locator('#refunds')).toContainText('failure to deliver a paid service')
+  await expect(page.locator('#refunds')).toContainText('Statutory consumer rights')
+  await expect(page.locator('.pricing-preview-note')).toContainText('USD')
   const cards = await page.locator('.pricing-plan-grid').boundingBox()
   expect(cards).not.toBeNull()
-  for (const selector of [
-    '.public-pricing-details',
-    '#credits',
-    '#billing',
-    '.public-credit-examples',
-  ]) {
+  for (const selector of ['.public-pricing-details', '#credits', '#billing', '#refunds']) {
     const details = await page.locator(selector).boundingBox()
     expect(details).not.toBeNull()
-    expect(Math.abs(cards!.x - details!.x)).toBeLessThan(1)
-    expect(Math.abs(cards!.width - details!.width)).toBeLessThan(1)
+    expect(details!.width).toBeCloseTo(Math.min(736, cards!.width), 0)
+    expect(details!.x + details!.width / 2).toBeCloseTo(cards!.x + cards!.width / 2, 0)
   }
   await expect(page.getByRole('button', { name: 'Free plan', exact: true })).toBeDisabled()
   await expect(page.getByRole('link', { name: 'Start research', exact: true })).toHaveCount(0)
@@ -422,6 +470,8 @@ test('public pages have no overflow or hydration errors at the configured viewpo
     '/pricing',
     '/zh-CN/pricing',
     '/privacy',
+    '/zh-CN/privacy',
+    '/terms',
     '/zh-CN/terms',
     '/refunds',
     '/zh-CN/contact',
@@ -429,6 +479,24 @@ test('public pages have no overflow or hydration errors at the configured viewpo
     await page.goto(path)
     await expect(page.locator('h1')).toBeVisible()
     await expect(page.locator('.public-footer')).toBeVisible()
+    if (/\/(privacy|terms)$/.test(path)) {
+      const viewportWidth = page.viewportSize()!.width
+      const readingWidth = Math.min(736, viewportWidth - (isMobile ? 40 : 48))
+      for (const selector of ['.public-document-heading', '.public-document-body']) {
+        const box = (await page.locator(selector).boundingBox())!
+        expect(box.width).toBeCloseTo(readingWidth, 0)
+        expect(box.x + box.width / 2).toBeCloseTo(viewportWidth / 2, 0)
+      }
+    }
+    if (path.endsWith('/pricing')) {
+      await expect(
+        page.getByRole('heading', {
+          name: path.startsWith('/zh-CN') ? '常见问题' : 'Frequently asked questions',
+          level: 2,
+          exact: true,
+        }),
+      ).toBeVisible()
+    }
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy()

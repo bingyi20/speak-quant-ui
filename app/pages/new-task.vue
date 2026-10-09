@@ -4,7 +4,7 @@ definePageMeta({ layout: 'workspace', middleware: 'auth' })
 defineI18nRoute(false)
 const { t } = useI18n()
 usePageSeo(
-  () => `${t('nav.new')} · Trade Lab`,
+  () => `${t('nav.new')} · SpeakQuant`,
   () => t('research.subtitle'),
 )
 </script>

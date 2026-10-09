@@ -1,15 +1,15 @@
-# Trade Lab MVP 交互方案
+# SpeakQuant MVP 交互方案
 
 > 文档状态：Confirmed V1.0  
 > 更新日期：2026-09-16\
 > 适用阶段：Crypto MVP  
-> 关联文档：[`Trade Lab MVP PRD.md`](./Trade%20Lab%20MVP%20PRD.md)、[`产品决策.md`](./产品决策.md)
+> 关联文档：[`SpeakQuant MVP PRD.md`](./Trade%20Lab%20MVP%20PRD.md)、[`产品决策.md`](./产品决策.md)
 
 ---
 
 ## 1. 文档目的
 
-本文档是 Trade Lab MVP 唯一的详细交互方案，用于统一定义各模块的页面布局、操作路径、状态切换、反馈、异常、响应式行为与交互验收标准。
+本文档是 SpeakQuant MVP 唯一的详细交互方案，用于统一定义各模块的页面布局、操作路径、状态切换、反馈、异常、响应式行为与交互验收标准。
 
 本文档描述产品应呈现的行为，不规定图表库、数据结构、播放器实现或其他技术方案。
 
@@ -46,7 +46,7 @@ Agent Conversation 沿用成熟对话产品交互；Strategy 详情、历史切�
 
 ## A1. 设计结论
 
-Trade Lab MVP 直接沿用 Claude / ChatGPT 已被用户熟悉的 Agent 产品交互框架：
+SpeakQuant MVP 直接沿用 Claude / ChatGPT 已被用户熟悉的 Agent 产品交互框架：
 
 - 左侧可收起导航栏
 - 新研究入口
@@ -55,7 +55,7 @@ Trade Lab MVP 直接沿用 Claude / ChatGPT 已被用户熟悉的 Agent 产品�
 - 底部固定对话输入框
 - 当前 Conversation 的右侧资产入口
 
-不为 Trade 场景重新设计交易终端式全局框架。Trade Lab 的产品差异集中体现在 Strategy、Agent 协作式回测、动态研究过程、Backtest 和 Runner，而不是全局导航。
+不为 Trade 场景重新设计交易终端式全局框架。SpeakQuant 的产品差异集中体现在 Strategy、Agent 协作式回测、动态研究过程、Backtest 和 Runner，而不是全局导航。
 
 本方案借鉴成熟产品的交互心智，不复制其品牌标识、视觉资产或具体样式。
 
@@ -63,7 +63,7 @@ Trade Lab MVP 直接沿用 Claude / ChatGPT 已被用户熟悉的 Agent 产品�
 
 ```text
 ┌───────────────┬──────────────────────────────────────────────────────┐
-│ Trade Lab     │                                               资产   │
+│ SpeakQuant    │                                               资产   │
 │               │                                                      │
 │ ＋ 新研究      │                                                      │
 │               │                 中央主内容区域                        │
@@ -112,7 +112,7 @@ Trade Lab MVP 直接沿用 Claude / ChatGPT 已被用户熟悉的 Agent 产品�
 ```text
 ┌──────────────────────────────────────────────────────────┐
 │                                                          │
-│                       Trade Lab                          │
+│                       SpeakQuant                         │
 │                                                          │
 │              3 分钟，验证你的交易想法                    │
 │                                                          │
@@ -169,7 +169,7 @@ Quick Examples 用于提供可编辑的策略输入，不用于介绍产品功�
 
 ### A5.1 顶部固定区
 
-- Trade Lab Logo / 名称
+- SpeakQuant Logo / 名称
 - “＋ 新研究”
 - 收起 / 展开侧栏
 
@@ -314,7 +314,7 @@ Backtest 新生成后可以自动打开右侧 Backtest Workspace。该行为不�
 - 赛博朋克霓虹
 - 交易所式复杂导航
 
-Trade Lab 的研究感通过以下部分形成：
+SpeakQuant 的研究感通过以下部分形成：
 
 - Strategy 和 Backtest 的差异化资产结构
 - 清晰的已验证 / 未验证状态
@@ -330,7 +330,7 @@ Desktop：
 
 - 左侧导航 + 中央 Conversation + 可选右侧资产。
 
-H5 是 Trade Lab MVP 的主要获客入口，不是只读兼容版本。H5 必须完整支持：
+H5 是 SpeakQuant MVP 的主要获客入口，不是只读兼容版本。H5 必须完整支持：
 
 - Landing 与 Quick Examples
 - 输入策略并在登录后恢复原始内容
@@ -827,7 +827,7 @@ Google 官方参考：
 
 ```text
 ┌──────────────────────────────────────┐
-│             登录 Trade Lab           │
+│             登录 SpeakQuant          │
 │                                      │
 │       [ G  使用 Google 继续 ]         │
 │                                      │
@@ -876,7 +876,7 @@ Google 按钮必须使用 Google Identity Services 提供的官方按钮，不�
 
 ## D1. Runner 下载入口
 
-Runner 只定义 Trade Lab 产品内的下载入口：
+Runner 只定义 SpeakQuant 产品内的下载入口：
 
 - 当前已完成回测的 Strategy 详情提供“下载 Runner”。
 - 历史 Strategy 详情提供“下载 Runner”。

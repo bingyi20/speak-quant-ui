@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { LEGAL_UPDATED_AT } from '#shared/public-site'
-defineProps<{ title: string; intro: string }>()
+defineProps<{ title: string; intro: string; draft?: boolean }>()
 </script>
 <template>
   <article class="public-document">
@@ -10,10 +10,15 @@ defineProps<{ title: string; intro: string }>()
         <time :datetime="LEGAL_UPDATED_AT">{{
           $t('publicSite.updated', { date: LEGAL_UPDATED_AT })
         }}</time>
-        · {{ $t('legal.draftLabel') }}
+        <span v-if="draft"> · {{ $t('legal.draftLabel') }}</span>
       </p>
       <p>{{ intro }}</p>
-      <p class="public-document-draft">{{ $t('publicSite.draft') }}</p>
+      <p
+        v-if="draft"
+        class="public-document-draft"
+      >
+        {{ $t('publicSite.draft') }}
+      </p>
     </header>
     <div class="public-document-body"><slot /></div>
   </article>

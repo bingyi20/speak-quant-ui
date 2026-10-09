@@ -40,7 +40,7 @@ watch(
         <NuxtLink
           :to="localePath('/')"
           class="public-brand-link"
-          aria-label="Trade Lab"
+          aria-label="SpeakQuant"
           ><CommonBrandMark
         /></NuxtLink>
         <nav :aria-label="$t('nav.product')">

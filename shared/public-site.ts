@@ -9,9 +9,9 @@ export const PUBLIC_PATHS = [
   '/contact',
   '/open-source',
 ] as const
-// Draft documents stay accessible for review, but are not advertised to search engines.
+// Legal and contact pages remain accessible without advertising them in search results.
 export const INDEXABLE_PATHS = ['/', '/pricing', '/open-source'] as const
-export const LEGAL_UPDATED_AT = '2026-09-20'
+export const LEGAL_UPDATED_AT = '2026-10-08'
 export const MANUAL_LOCALE_COOKIE = 'trade-locale-manual'
 export const isLocale = (value: unknown): value is Locale => value === 'en-US' || value === 'zh-CN'
 export function publicBasePath(path: string) {

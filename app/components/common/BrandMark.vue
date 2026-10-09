@@ -7,6 +7,6 @@ withDefaults(defineProps<{ wordmark?: boolean }>(), { wordmark: true })
       class="brand-mark"
       aria-hidden="true"
     />
-    <span v-if="wordmark">Trade Lab</span>
+    <span v-if="wordmark">SpeakQuant</span>
   </span>
 </template>

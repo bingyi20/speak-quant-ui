@@ -1,14 +1,9 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'public' })
 const { t } = useI18n()
-const config = useRuntimeConfig()
-const operator = computed(() => config.public.operatorName.trim())
-const email = computed(() => {
-  const value = config.public.supportEmail.trim()
-  return /^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(value) ? value : ''
-})
+const { operator, registrationNumber, registeredAddress, email, incomplete } = usePublicContact()
 usePageSeo(
-  () => `${t('publicSite.contact')} — Trade Lab`,
+  () => `${t('publicSite.contact')} — SpeakQuant`,
   () => t('publicSite.contactIntro'),
 )
 </script>
@@ -16,6 +11,7 @@ usePageSeo(
   <CommonPublicDocument
     :title="$t('publicSite.contact')"
     :intro="$t('publicSite.contactIntro')"
+    :draft="incomplete"
   >
     <section>
       <h2>{{ $t('publicSite.operator') }}</h2>
@@ -23,6 +19,12 @@ usePageSeo(
         {{
           operator ? $t('publicSite.brandRelation', { operator }) : $t('publicSite.pendingOperator')
         }}
+      </p>
+      <p v-if="registrationNumber">
+        {{ $t('publicSite.registrationNumber') }}: {{ registrationNumber }}
+      </p>
+      <p v-if="registeredAddress">
+        {{ $t('publicSite.registeredAddress') }}: {{ registeredAddress }}
       </p>
     </section>
     <section>
