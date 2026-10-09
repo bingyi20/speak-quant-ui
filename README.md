@@ -136,6 +136,8 @@ HOST=127.0.0.1 PORT=6002 node .output/server/index.mjs
 
 `/new-task`、`/conversations/**` 为 CSR + noindex + no-store，`/` 保留 SSR。后续公开页面放在 `app/pages`，声明 `layout: 'public'` 并调用 `usePageSeo`。已提供 `/sitemap.xml`、`/robots.txt`、双语 canonical/hreflang 和分享图；协议与联系页公开可访问，保持不索引。详见[公开站点技术方案](docs/公开站点技术方案.md)。
 
+生产环境的 systemd、Nginx、发布与排障流程见[生产部署](docs/生产部署.md)。
+
 ## 当前边界
 
 已实现可独立测试的 HTTP / 会话协调、幂等、取消、SSE parser 与重连、下载、Decimal 格式化、Markdown 清洗、偏好、全局弹层、响应式页面壳和 SEO 基础。
