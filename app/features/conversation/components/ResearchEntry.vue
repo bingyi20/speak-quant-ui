@@ -115,10 +115,7 @@ function chooseExample(n: number) {
             stroke="currentColor"
             stroke-width="1.6"
           /></svg
-        ><span
-          >{{ examples?.[n - 1]?.label ?? $t(`research.example${n}`)
-          }}<UIcon name="i-lucide-arrow-up-right"
-        /></span>
+        ><span>{{ examples?.[n - 1]?.label ?? $t(`research.example${n}`) }}</span>
       </button>
     </div>
   </div>

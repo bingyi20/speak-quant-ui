@@ -330,36 +330,36 @@ p {
 .quick-examples button {
   border: 1px solid var(--color-border-default);
   border-radius: 12px;
-  background: var(--color-bg-sidebar);
+  background: var(--color-bg-surface);
   text-align: left;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   padding: 16px;
   min-width: 0;
   transition:
     background-color var(--motion-fast),
-    border-color var(--motion-fast);
+    color var(--motion-fast);
 }
-.quick-examples button:hover {
+.quick-examples button:active:enabled {
+  background: var(--color-bg-menu-hover);
+}
+@media (hover: hover) {
+  .quick-examples button:hover:enabled {
+    background: var(--color-bg-menu-hover);
+  }
+}
+.quick-examples button:focus-visible:enabled {
   color: var(--color-brand);
-  background: var(--color-bg-selected);
-  border-color: var(--color-border-selected-hover);
 }
 .quick-examples svg {
   width: 50px;
   height: 27px;
   color: var(--color-brand);
-  opacity: 0.8;
   margin-bottom: 10px;
 }
 .quick-examples span {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 4px;
+  display: block;
   font-size: 13px;
-}
-.quick-examples .iconify {
-  flex-shrink: 0;
+  font-weight: 500;
 }
 .explore-link {
   display: inline-flex;
