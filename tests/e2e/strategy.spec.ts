@@ -95,7 +95,7 @@ test('all replays mark the selected version and returning from Replay preserves 
   await target.scrollIntoViewIfNeeded()
   const scroll = await panel.locator('.strategy-detail-body').evaluate((el) => el.scrollTop)
   await target.click()
-  await expect(panel.locator('.replay-summary-metrics')).toContainText('18.60%')
+  await expect(panel.locator('.replay-summary-metrics')).toContainText('18.6000%')
   await panel.getByRole('button', { name: '返回策略' }).click()
   await expect(panel.getByRole('button', { name: '仅看所选版本' })).toBeVisible()
   expect(await panel.locator('.strategy-detail-body').evaluate((el) => el.scrollTop)).toBeCloseTo(

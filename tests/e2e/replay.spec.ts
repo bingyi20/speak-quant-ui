@@ -1612,6 +1612,8 @@ test('follow latest pans smoothly at the user scale, respects cutoff and yields 
   await expect(chart).toHaveAttribute('data-visible-end', cutoff)
   await expect(panel.getByRole('button', { name: '播放', exact: true })).toBeVisible()
   await expect(control).toBeHidden()
+  // Returning to latest retains selection; deselect before locating the same trade again.
+  await panel.locator('[data-trade-id="t-1"]').click()
   // A gesture interrupts the return animation with no delayed snap-back.
   await panel.locator('[data-trade-id="t-1"]').click()
   await page.clock.runFor(50)
