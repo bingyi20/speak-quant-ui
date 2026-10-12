@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { anonymous, authResponse, envelope, stubHistory } from './auth-fixtures'
+import { anonymous, authResponse, envelope, stubHistory, stubGoogle } from './auth-fixtures'
 
 const origin = 'http://localhost:6002'
 test.beforeEach(async ({ page }) => {
+  await stubGoogle(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({ status: 401, json: anonymous }),
   )

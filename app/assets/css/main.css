@@ -1405,24 +1405,6 @@ p {
 .google-sign-in {
   min-height: 50px;
 }
-.google-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 50px;
-  padding: 12px 15px;
-  border: 1px solid var(--color-border-default);
-  border-radius: 10px;
-  background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
-  font-size: 16px;
-  transition: color 150ms ease;
-}
-.google-placeholder:hover,
-.google-placeholder:focus-visible {
-  color: var(--color-text-primary);
-}
 .google-button {
   height: 40px;
   width: calc(100% / var(--google-button-scale));

@@ -86,7 +86,7 @@ onBeforeUnmount(() => {
         >{{ $t('auth.googleLoading') }}</span
       >
       <template v-else>
-        <span>{{
+        <span role="alert">{{
           $t(status === 'expired' ? 'auth.googleExpired' : 'auth.googleUnavailable')
         }}</span>
         <button

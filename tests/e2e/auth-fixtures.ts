@@ -24,7 +24,7 @@ export async function stubGoogle(page: Page) {
       body: `
     window.google = { accounts: { id: {
       initialize(config) { this.config = config; },
-      renderButton(container) { const button = document.createElement('button'); button.type = 'button'; button.textContent = '使用 Google 继续'; button.onclick = () => this.config.callback({ credential: 'test-google-credential' }); container.append(button); },
+      renderButton(container, options) { const button = document.createElement('button'); button.type = 'button'; button.textContent = options.locale === 'zh_CN' ? '使用 Google 继续' : 'Continue with Google'; button.onclick = () => this.config.callback({ credential: 'test-google-credential' }); container.append(button); },
       disableAutoSelect() { window.googleSignedOut = true; }, cancel() {}
     } } };
   `,

@@ -1,6 +1,6 @@
 # SpeakQuant UI
 
-Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱登录、研究历史和 Agent 对话主流程；Google 入口暂为待上线提示；策略与回测详情工作区已接入；回测执行/重试/取消等写操作仍待实现。
+Nuxt 4 + Vue 3 + TypeScript 前端工程。已接入邮箱及 Google GIS 登录、研究历史和 Agent 对话主流程；策略与回测详情工作区已接入；回测执行/重试/取消等写操作仍待实现。
 
 产品名称统一为 **SpeakQuant**。仓库目录、既有文档路径和浏览器偏好／草稿的 `trade-*` 存储标识继续沿用，保留已有链接、偏好和未提交输入。
 
@@ -21,7 +21,7 @@ pnpm dev
 | `/pricing`、`/privacy`、`/terms`、`/contact` | SSR 价格及协议／联系页；中文对应 `/zh-CN/...`，双语政策已按用户提供信息重写，生产发布与提审核对见专项文档；取消退款已合入价格页，`/refunds` 跳转到对应语言的 `/pricing#billing` |
 | `/new-task`                                  | 客户端工作台新研究页                                                                                                                                                            |
 | `/conversations/:id`                         | 真实消息、Agent 流式回复、快捷问答与资产面板                                                                                                                                    |
-| `/login`                                     | 邮箱验证码登录；Google 入口暂为待上线提示                                                                                                                                                        |
+| `/login`                                     | Google 官方 GIS 按钮与邮箱验证码登录                                                                                                                                                        |
 
 工作台左下角打开个人信息与偏好弹窗；移动端展开侧栏后打开。侧栏账户行右侧“升级”默认打开月度套餐页，其余账户行区域打开设置；账户设置中的“升级套餐”打开全屏套餐页签，积分加购通过弹窗内页签切换。语言设置和侧栏折叠可保存。输入草稿按用户与会话保存在当前标签页；发送会创建真实对话，访客先登录后继续。登录页通过统一 HTTP 客户端连接真实接口。
 
@@ -50,11 +50,13 @@ pnpm dev
 
 本地统一使用 `localhost`，不要与 `127.0.0.1` 混用（Google 开发 OAuth 仅允许 localhost）。后端需允许 `http://localhost:6002` 的 CORS 凭据请求、业务方法及 Authorization / Idempotency-Key / X-Request-ID 等 Header，并暴露 Content-Disposition 供下载使用。开发 Cookie 关闭 Secure；生产 HTTPS Cookie 开启 Secure。前端不提供 API 代理或 BFF。
 
-`/login` 提供邮箱输入 → 六位验证码，以及保留点击提示的灰色 Google 按钮。验证码支持粘贴、自动提交、重发倒计时和错误重试。成功后返回安全的 `returnTo` 路径（默认 `/new-task`），并携带当前访客研究草稿。已有会话访问登录页会直接返回工作台。
+`/login` 提供 Google 官方 GIS 按钮及邮箱输入 → 六位验证码。验证码支持粘贴、自动提交、重发倒计时和错误重试。成功后返回安全的 `returnTo` 路径（默认 `/new-task`），并携带当前访客研究草稿。已有会话访问登录页会直接返回工作台。
 
-Google 底层实现保留：启用后从 `/auth/google/config` 获取 client ID 和 nonce，第三方邮箱补验提交 `/auth/google`；当前登录页不挂载 GIS 组件或发起 Google 请求，没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。退出成功后清理会话，并在已加载 GIS 时调用 `disableAutoSelect()`。
+Google 登录等待初始会话恢复结束后再挂载 GIS，避免游客 Refresh 401 清理请求时取消首次 Google 配置请求。随后从 `/auth/google/config` 获取 client ID 和 nonce，通过 `https://accounts.google.com/gsi/client` 加载官方 SDK，使用 FedCM 按钮；callback credential 提交 `/auth/google`。首次使用非 Gmail / Google Workspace 邮箱时，按后端返回邮箱发送验证码，再将同一 credential 与验证码一起提交 Google 登录接口。nonce 失效后重载按钮并获取新 challenge；准备失败时显示重试，邮箱入口保持可用。此流程只登录身份，不请求 Gmail、Drive 等额外权限，没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。退出成功后清理会话，并在已加载 GIS 时调用 `disableAutoSelect()`。
 
-登录页始终通过新标签页打开对应语言的条款、隐私页面，保留登录状态；入口及验证码步骤均提供同意服务条款、已阅读隐私政策的告知；尚未同步后端协议版本及同意记录，发布前需核对实际版本和可追溯接受流程。可选 `NUXT_PUBLIC_TERMS_URL`、`NUXT_PUBLIC_PRIVACY_URL` 用于正式外链覆盖。Google SDK 集成依据：[官方 JavaScript API](https://developers.google.com/identity/gsi/web/reference/js-reference)。
+Google Cloud 使用 Web application 客户端，在 Authorized JavaScript origins 中加入实际前端来源，正式站点为 `https://speakquant.com`；后端配置匹配的 `GOOGLE_CLIENT_ID` 与 `CORS_ORIGINS`。当前使用浏览器 callback，不需要为此流程新增 redirect URI 或 Client Secret。Google Auth Platform 的 Audience 发布状态、Branding 信息及可能的验证由控制台管理，前端没有 Testing / Production 开关。配置存在和模拟测试通过均不代表正式 Google 授权已验收。
+
+登录页始终通过新标签页打开对应语言的条款、隐私页面，保留登录状态；入口及验证码步骤均提供同意服务条款、已阅读隐私政策的告知。后端在登录事务中按 `TERMS_VERSION`、`PRIVACY_VERSION` 保存用户的接受记录；当前默认版本均为 `2026-10-08`，发布时核对生产环境与公开政策日期一致。可选 `NUXT_PUBLIC_TERMS_URL`、`NUXT_PUBLIC_PRIVACY_URL` 用于正式外链覆盖。Google SDK 集成依据：[官方 JavaScript API](https://developers.google.com/identity/gsi/web/reference/js-reference)。
 
 ## 目录职责
 
@@ -168,6 +170,6 @@ import { ResearchEntry } from '~/features/conversation'
 ## 登录联调验证
 
 - 2026-09-05：本地真实后端完成邮箱发码、校验登录、刷新恢复与退出；均成功返回。未保存验证码或 Token 到工程文件。
-- Google：2026-10-09 起页面入口暂为灰色按钮，点击在页面中上方居中提示“谷歌授权登录待上线 / Google sign-in is coming soon.”，与支付入口共用 `TransientNotice`，2.2 秒后淡出。保留键盘操作，不加载 GIS SDK 或请求 Google 认证接口。原组件及认证实现保留，恢复前需完成真实授权验证。
-- Playwright 在独立上下文拦截认证 API，不发送测试邮件；覆盖桌面与移动端的验证码、取消、重发、错误、跳转、会话恢复及工作台页面；Google 入口仅验证待上线提示及不触发授权。
-- 2026-10-09：Google 占位与统一提示调整后 lint、typecheck 和 10 项桌面／模拟手机登录、公开价格页及订阅提示回归通过；验证提示中上方居中、无图标或操作按钮、自动淡出，本地浏览器确认灰色按钮和点击提示。认证写请求使用 Mock，未重新验证真实邮箱或 Google 授权，未部署。
+- Google：2026-10-12 恢复官方 GIS 按钮及已有登录流程，取代 2026-10-09 的灰色待上线占位。保留原登录布局、邮箱入口、条款与隐私链接。
+- Playwright 在独立上下文拦截认证 API 与 GIS SDK，不发送测试邮件或执行真实 Google 授权。覆盖桌面与模拟手机的验证码、取消、重发、错误、跳转、会话恢复，以及 Google 登录、nonce 重载、第三方邮箱补验、退出清理和英文键盘操作。真实 GIS / FedCM 弹窗与正式域名 Cookie 仍需用真实账号另行验收。
+- 2026-10-12：恢复 GIS 入口并修复 Refresh 401 取消首次配置请求的竞争后，lint、typecheck、115 项单测和生产构建通过；登录、公共页面及工作台回归共 59 项通过、1 项按平台跳过（小屏/横屏用例只在 mobile 执行，该版本通过）。延迟 Refresh 401 用例在修复前复现提前发出 Google 配置请求，修复后桌面与模拟手机均验证恢复结束后只获取一次配置，无需重试即可登录。认证与 GIS 使用 Mock，未由这组测试验证真实 Google 授权或生产部署。
