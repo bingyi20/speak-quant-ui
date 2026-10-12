@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useNuxtApp, useRuntimeConfig } from '#app'
 import { useAuthStore } from '~/features/auth'
 import { createConversationApi } from './api'
@@ -9,8 +9,21 @@ export const useConversationHistoryStore = defineStore('conversation-history', (
   const auth = useAuthStore()
   const enabled = String(useRuntimeConfig().public.apiEnabled) === 'true'
   const state = createHistoryState(createConversationApi(useNuxtApp().$http))
-  const favoritesCollapsed = ref(false)
-  const historyCollapsed = ref(false)
+  // Follow each group's records until the user explicitly chooses its state.
+  const favoritesCollapsedOverride = ref<boolean | null>(null)
+  const historyCollapsedOverride = ref<boolean | null>(null)
+  const favoritesCollapsed = computed({
+    get: () =>
+      favoritesCollapsedOverride.value ??
+      !(state.favorites.value.length || state.pages.favorite.error),
+    set: (value: boolean) => (favoritesCollapsedOverride.value = value),
+  })
+  const historyCollapsed = computed({
+    get: () =>
+      historyCollapsedOverride.value ??
+      !(state.history.value.length || state.pages.non_favorite.error),
+    set: (value: boolean) => (historyCollapsedOverride.value = value),
+  })
   let owner: string | null = null
   // Reset synchronously on logout/account changes so previous records cannot reappear.
   watch(
@@ -19,6 +32,8 @@ export const useConversationHistoryStore = defineStore('conversation-history', (
       const next = authenticated && id ? id : null
       if (owner !== next) {
         state.reset()
+        favoritesCollapsedOverride.value = null
+        historyCollapsedOverride.value = null
         owner = next
       }
       if (import.meta.client && enabled && next) void state.ensureLoaded()

@@ -22,6 +22,50 @@ async function menu(nav: Locator, title: string, mobile: boolean) {
   await row.getByRole('button', { name: `管理研究：${title}` }).click()
 }
 
+for (const { name, populated } of [
+  { name: 'empty', populated: [] },
+  { name: 'only pinned', populated: ['favorite'] },
+  { name: 'only history', populated: ['non_favorite'] },
+]) {
+  test(`history groups default to collapsed unless populated: ${name}`, async ({
+    page,
+    isMobile,
+  }) => {
+    await page.route(/\/api\/conversations\?.*$/, async (route) => {
+      const scope = new URL(route.request().url()).searchParams.get('scope') ?? ''
+      if (populated.includes(scope)) await route.fallback()
+      else
+        await route.fulfill({
+          json: envelope({ items: [], page: 1, size: 20, total: 0, total_pages: 0 }),
+        })
+    })
+    const loaded = ['favorite', 'non_favorite'].map((scope) =>
+      page.waitForResponse((response) => {
+        const url = new URL(response.url())
+        return url.pathname === '/api/conversations' && url.searchParams.get('scope') === scope
+      }),
+    )
+    await page.goto('/new-task')
+    await Promise.all(loaded)
+    const nav = await navigation(page, isMobile)
+    for (const [index, scope] of ['favorite', 'non_favorite'].entries()) {
+      const group = nav.locator('.history-group').nth(index)
+      const toggle = group.locator('.history-group-toggle')
+      const hasRecords = populated.includes(scope)
+      await expect(group.locator('.history-row')).toHaveCount(hasRecords ? (index ? 9 : 3) : 0)
+      await expect(toggle).toHaveAttribute('aria-expanded', String(hasRecords))
+      await expect(group.locator('.history-group-items')).toBeVisible({ visible: hasRecords })
+      if (!hasRecords) {
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+        await expect(group.locator('.history-empty')).toBeVisible()
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      }
+    }
+  })
+}
+
 test('history groups collapse independently and selection follows navigation', async ({
   page,
   isMobile,
@@ -32,6 +76,8 @@ test('history groups collapse independently and selection follows navigation', a
   const recent = nav.locator('.history-group').nth(1)
   await expect(favorites.locator('.history-row')).toHaveCount(3)
   await expect(recent.locator('.history-row')).toHaveCount(9)
+  await expect(favorites.locator('.history-group-toggle')).toHaveAttribute('aria-expanded', 'true')
+  await expect(recent.locator('.history-group-toggle')).toHaveAttribute('aria-expanded', 'true')
   await favorites.getByRole('button', { name: '收藏', exact: true }).click()
   await expect(favorites.getByRole('link').first()).toBeHidden()
   await expect(recent.getByRole('link').first()).toBeVisible()

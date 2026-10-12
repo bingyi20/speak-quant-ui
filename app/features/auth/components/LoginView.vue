@@ -173,22 +173,6 @@ watch(step, (value) => {
       >
         {{ error }}
       </p>
-      <p class="login-legal">
-        {{ $t('auth.consent') }}
-        <a
-          :href="config.public.termsUrl || localePath('/terms')"
-          target="_blank"
-          rel="noopener noreferrer"
-          >{{ $t('auth.terms') }}</a
-        >
-        {{ $t('auth.privacyAcknowledgement') }}
-        <a
-          :href="config.public.privacyUrl || localePath('/privacy')"
-          target="_blank"
-          rel="noopener noreferrer"
-          >{{ $t('auth.privacy') }}</a
-        >
-      </p>
       <NuxtLink
         v-if="!enabled"
         to="/new-task"
@@ -196,5 +180,29 @@ watch(step, (value) => {
         >{{ $t('auth.scaffoldLink') }}</NuxtLink
       >
     </section>
+    <footer class="login-legal">
+      <i18n-t
+        keypath="auth.consent"
+        tag="p"
+        scope="global"
+      >
+        <template #terms>
+          <a
+            :href="config.public.termsUrl || localePath('/terms')"
+            target="_blank"
+            rel="noopener noreferrer"
+            >{{ $t('auth.terms') }}</a
+          >
+        </template>
+        <template #privacy>
+          <a
+            :href="config.public.privacyUrl || localePath('/privacy')"
+            target="_blank"
+            rel="noopener noreferrer"
+            >{{ $t('auth.privacy') }}</a
+          >
+        </template>
+      </i18n-t>
+    </footer>
   </div>
 </template>

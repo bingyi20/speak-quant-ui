@@ -238,8 +238,9 @@ test('policies open in a new tab without cancelling the login operation', async 
   context,
 }) => {
   await page.goto('/login')
-  await expect(page.locator('.login-legal')).toContainText('you agree to the')
-  await expect(page.locator('.login-legal')).toContainText('acknowledge reading the')
+  await expect(page.locator('.login-legal')).toHaveText(
+    'By continuing, you agree to our Terms of Service and have read our Privacy Policy.',
+  )
   await page.getByRole('textbox', { name: 'Email address' }).fill('draft@example.com')
   const popupPromise = context.waitForEvent('page')
   await page.getByRole('link', { name: 'Privacy Policy' }).click()

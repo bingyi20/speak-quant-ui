@@ -127,7 +127,7 @@
     "googleLoading": "正在准备 Google 登录…",
     "googleUnavailable": "Google 暂不可用，可使用邮箱继续",
     "googleExpired": "Google 登录已过期，请重新加载",
-    "consent": "继续登录即表示你同意",
+    "consent": "继续即表示你同意{terms}并已阅读{privacy}。",
     "terms": "服务条款",
     "and": "和",
     "privacy": "隐私政策",
@@ -145,8 +145,7 @@
       "network": "连接失败，请检查网络后重试。",
       "generic": "登录未完成，请重试。",
       "notEnabled": "当前为离线预览，启用 API 后即可登录。"
-    },
-    "privacyAcknowledgement": "并已阅读"
+    }
   },
   "settings": {
     "freePlan": "Free",

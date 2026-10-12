@@ -1306,8 +1306,10 @@ p {
   position: relative;
   min-height: 100svh;
   display: grid;
+  grid-template-rows: 1fr auto;
   align-items: center;
-  padding: 96px 24px;
+  gap: 48px;
+  padding: 96px 24px max(24px, env(safe-area-inset-bottom));
 }
 .auth-back-slot {
   position: absolute;
@@ -1429,11 +1431,12 @@ p {
   font-size: 12px;
 }
 .login-legal {
-  margin-top: 24px;
+  width: min(100%, 400px);
+  margin: 0 auto;
   color: var(--color-text-muted);
   font-size: 12px;
   text-align: center;
-  line-height: 1.8;
+  line-height: 1.6;
 }
 .login-legal a {
   text-decoration: underline;
@@ -1501,7 +1504,6 @@ p {
   }
   .login-page {
     padding-top: 76px;
-    padding-bottom: 80px;
   }
   .verification-code {
     gap: 8px;

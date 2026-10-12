@@ -127,7 +127,7 @@
     "googleLoading": "Preparing Google sign-in…",
     "googleUnavailable": "Google is unavailable. Continue with email.",
     "googleExpired": "Google sign-in expired. Please reload.",
-    "consent": "By continuing to sign in, you agree to the",
+    "consent": "By continuing, you agree to our {terms} and have read our {privacy}.",
     "terms": "Terms of Service",
     "and": "and",
     "privacy": "Privacy Policy",
@@ -145,8 +145,7 @@
       "network": "Connection failed. Check your network and try again.",
       "generic": "Sign-in did not complete. Please try again.",
       "notEnabled": "This is an offline preview. Enable the API to sign in."
-    },
-    "privacyAcknowledgement": "and acknowledge reading the"
+    }
   },
   "settings": {
     "freePlan": "Free",
