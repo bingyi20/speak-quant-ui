@@ -173,3 +173,4 @@ import { ResearchEntry } from '~/features/conversation'
 - Google：2026-10-12 恢复官方 GIS 按钮及已有登录流程，取代 2026-10-09 的灰色待上线占位。保留原登录布局、邮箱入口、条款与隐私链接。
 - Playwright 在独立上下文拦截认证 API 与 GIS SDK，不发送测试邮件或执行真实 Google 授权。覆盖桌面与模拟手机的验证码、取消、重发、错误、跳转、会话恢复，以及 Google 登录、nonce 重载、第三方邮箱补验、退出清理和英文键盘操作。真实 GIS / FedCM 弹窗与正式域名 Cookie 仍需用真实账号另行验收。
 - 2026-10-12：恢复 GIS 入口并修复 Refresh 401 取消首次配置请求的竞争后，lint、typecheck、115 项单测和生产构建通过；登录、公共页面及工作台回归共 59 项通过、1 项按平台跳过（小屏/横屏用例只在 mobile 执行，该版本通过）。延迟 Refresh 401 用例在修复前复现提前发出 Google 配置请求，修复后桌面与模拟手机均验证恢复结束后只获取一次配置，无需重试即可登录。认证与 GIS 使用 Mock，未由这组测试验证真实 Google 授权或生产部署。
+- 2026-10-12 生产更新：后端 `7fa3ba6`、前端 `bd9ff01` 已部署，正式域名路由、健康检查、Google 配置及安全 nonce Cookie 检查通过，Chrome 已显示真实官方 GIS 的 “Continue as” 按钮。Audience 已为 `In production`，域名所有权已验证；最终授权登录及其刷新/退出链路仍待用户确认页面条款后验收，support 企业账号登录与品牌提交仍未完成。详见[生产部署验收](docs/生产部署.md#验收与排查)。
