@@ -200,10 +200,10 @@ p {
 }
 .brand .brand-mark {
   width: 31px;
-  height: 36px;
+  height: 31px;
   background-color: var(--color-brand);
   flex-shrink: 0;
-  mask: url('/logo.svg') center / contain no-repeat;
+  mask: url('/logo.svg?v=idea-loop') center / contain no-repeat;
 }
 .public-header {
   max-width: 1320px;
@@ -428,6 +428,7 @@ p {
 }
 .sidebar-top .brand .brand-mark {
   width: 26px;
+  height: 26px;
 }
 .sidebar-top .icon-button {
   width: 32px;
@@ -1413,7 +1414,7 @@ p {
 }
 .login-brand .brand-mark {
   width: 38px;
-  height: 44px;
+  height: 38px;
 }
 .login-card h1 {
   font-family: var(--font-display);

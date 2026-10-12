@@ -94,9 +94,9 @@ SSE 使用 `openEventStream(http, streamUrl, { signal, onEvent, isTerminal })`�
 
 ## 替换 Logo
 
-页面图标统一使用 `public/logo.svg`，直接替换该文件即可更新各处 Logo。`BrandMark.vue` 只负责图标与 SpeakQuant 文字的组合，不再内嵌 SVG 路径。
+页面 Logo 与浏览器标签页图标统一使用独立文件 `public/logo.svg`：实心四角星嵌入左上开口的等厚正圆环，表达从 idea 到研究验证、迭代的闭环。`BrandMark.vue` 只负责图标与 SpeakQuant 文字的组合，不内嵌 SVG 路径。
 
-当前图标是单色 SVG，通过 CSS mask 使用主题品牌色；保持透明背景，文件中只放图形。若未来换成多色 Logo，再将组件改为图片引用。浏览器标签图标独立保存在 `public/favicon.svg`，更换品牌时可同步替换。
+当前图标是透明底、单色 SVG，页面通过 CSS mask 使用主题品牌色，标签页由 `nuxt.config.ts` 的 `rel="icon"` 引用同一文件，不再独立维护 favicon 图案。两处 URL 共用 `?v=idea-loop` 版本标识，后续替换资源时同步更新以刷新浏览器缓存；若未来换成多色 Logo，再将组件改为图片引用。
 
 ## 主题
 

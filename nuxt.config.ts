@@ -69,5 +69,5 @@ export default defineNuxtConfig({
     },
   },
   ignore: ['prototype/**'],
-  app: { head: { link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }] } },
+  app: { head: { link: [{ rel: 'icon', type: 'image/svg+xml', href: '/logo.svg?v=idea-loop' }] } },
 })

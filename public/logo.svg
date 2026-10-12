@@ -1,3 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" stroke="#986B2C" stroke-width="3" stroke-linecap="round">
-  <path d="M9 21v11m-4-6h8M20 8v28m-5-19h10M31 4v21m-4-12h8" />
+<svg width="84" height="84" xmlns="http://www.w3.org/2000/svg" viewBox="6 6 84 84" color="#986B2C" role="img" aria-labelledby="title">
+  <title id="title">SpeakQuant</title>
+  <g fill="currentColor">
+    <path d="M14.689 37.259A35 35 0 1 0 37.259 14.689Q36.029 15.111 36.474 16.332L40.031 26.105Q40.476 27.327 41.71 26.918A22 22 0 1 1 26.918 41.71Q27.327 40.476 26.105 40.031L16.332 36.474Q15.111 36.029 14.689 37.259Z"/>
+    <path d="M27.3 16.55L30.3 24.3L38.05 27.3L30.3 30.3L27.3 38.05L24.3 30.3L16.55 27.3L24.3 24.3Z"/>
+  </g>
 </svg>
