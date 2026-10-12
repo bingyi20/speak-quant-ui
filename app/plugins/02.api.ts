@@ -3,7 +3,12 @@ import { createHttpClient } from '~/lib/http/client'
 import { createAuthSession } from '~/lib/http/session'
 import { createAuthApi } from '~/features/auth/api'
 import { useAuthStore } from '~/features/auth'
-import { isLocale, MANUAL_LOCALE_COOKIE, publicLocale } from '#shared/public-site'
+import {
+  isLocale,
+  localizedPublicPath,
+  MANUAL_LOCALE_COOKIE,
+  publicLocale,
+} from '#shared/public-site'
 import type { User } from '~/features/auth'
 import type { AuthResponse } from '~/features/auth/types'
 import { usePreferencesStore } from '~/stores/preferences'
@@ -19,6 +24,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   const locale = () => preferences.locale
   const publicHttp = createHttpClient({ baseURL, origin, locale })
   const authApi = createAuthApi(publicHttp)
+  let clearingForLogout = false
   const session = createAuthSession<User>({
     refresh: authApi.refresh,
     onUser: (user) => {
@@ -35,6 +41,7 @@ export default defineNuxtPlugin((nuxtApp) => {
       if (import.meta.client) {
         clearNuxtData((key) => key.startsWith('private:'))
         if (
+          !clearingForLogout &&
           previousUser &&
           /^\/(new-task|conversations)(?:\/|$)/.test(router.currentRoute.value.path)
         ) {
@@ -65,8 +72,16 @@ export default defineNuxtPlugin((nuxtApp) => {
   async function logout() {
     // Clear browser state only after backend revocation succeeds; failures remain retryable.
     if (enabled && auth.isAuthenticated) await createAuthApi(http).logout()
-    session.clear()
-    if (import.meta.client) disableGoogleAutoSelect()
+    clearingForLogout = true
+    try {
+      session.clear()
+    } finally {
+      clearingForLogout = false
+    }
+    if (import.meta.client) {
+      disableGoogleAutoSelect()
+      await nuxtApp.runWithContext(() => navigateTo(localizedPublicPath('/', preferences.locale)))
+    }
   }
   if (import.meta.client) {
     if (enabled) void restoreAuth()

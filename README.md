@@ -52,7 +52,7 @@ pnpm dev
 
 `/login` 提供 Google 官方 GIS 按钮及邮箱输入 → 六位验证码。验证码支持粘贴、自动提交、重发倒计时和错误重试。成功后返回安全的 `returnTo` 路径（默认 `/new-task`），并携带当前访客研究草稿。已有会话访问登录页会直接返回工作台。
 
-Google 登录等待初始会话恢复结束后再挂载 GIS，避免游客 Refresh 401 清理请求时取消首次 Google 配置请求。随后从 `/auth/google/config` 获取 client ID 和 nonce，通过 `https://accounts.google.com/gsi/client` 加载官方 SDK，使用 FedCM 按钮；callback credential 提交 `/auth/google`。首次使用非 Gmail / Google Workspace 邮箱时，按后端返回邮箱发送验证码，再将同一 credential 与验证码一起提交 Google 登录接口。nonce 失效后重载按钮并获取新 challenge；准备失败时显示重试，邮箱入口保持可用。此流程只登录身份，不请求 Gmail、Drive 等额外权限，没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。退出成功后清理会话，并在已加载 GIS 时调用 `disableAutoSelect()`。
+Google 登录等待初始会话恢复结束后再挂载 GIS，避免游客 Refresh 401 清理请求时取消首次 Google 配置请求。随后从 `/auth/google/config` 获取 client ID 和 nonce，通过 `https://accounts.google.com/gsi/client` 加载官方 SDK，使用 FedCM 按钮；callback credential 提交 `/auth/google`。首次使用非 Gmail / Google Workspace 邮箱时，按后端返回邮箱发送验证码，再将同一 credential 与验证码一起提交 Google 登录接口。nonce 失效后重载按钮并获取新 challenge；准备失败时显示重试，邮箱入口保持可用。此流程只登录身份，不请求 Gmail、Drive 等额外权限，没有 Apple 登录。普通邮箱登录和 Google credential 均不经过 Pinia 或浏览器持久存储，登录响应交给 `$acceptAuth()`。刷新时通过 HttpOnly Refresh Cookie 恢复，站内导航复用内存 Token。工作台主动退出在服务端撤销成功后清理会话、返回当前语言落地页，并在已加载 GIS 时调用 `disableAutoSelect()`；撤销失败时不主动清理会话，可再次尝试，会话失效仍进入登录恢复流程。
 
 Google Cloud 使用 Web application 客户端，在 Authorized JavaScript origins 中加入实际前端来源，正式站点为 `https://speakquant.com`；后端配置匹配的 `GOOGLE_CLIENT_ID` 与 `CORS_ORIGINS`。当前使用浏览器 callback，不需要为此流程新增 redirect URI 或 Client Secret。Google Auth Platform 的 Audience 发布状态、Branding 信息及可能的验证由控制台管理，前端没有 Testing / Production 开关。配置存在和模拟测试通过均不代表正式 Google 授权已验收。
 
@@ -172,5 +172,6 @@ import { ResearchEntry } from '~/features/conversation'
 - 2026-09-05：本地真实后端完成邮箱发码、校验登录、刷新恢复与退出；均成功返回。未保存验证码或 Token 到工程文件。
 - Google：2026-10-12 恢复官方 GIS 按钮及已有登录流程，取代 2026-10-09 的灰色待上线占位。保留原登录布局、邮箱入口、条款与隐私链接。
 - Playwright 在独立上下文拦截认证 API 与 GIS SDK，不发送测试邮件或执行真实 Google 授权。覆盖桌面与模拟手机的验证码、取消、重发、错误、跳转、会话恢复，以及 Google 登录、nonce 重载、第三方邮箱补验、退出清理和英文键盘操作；正式域名真实授权结果单独记录于下方。
+- 2026-10-12 主动退出落地页：lint、typecheck、14 项 HTTP 单测及 30 项桌面／模拟手机 E2E 通过，覆盖邮箱／Google 登录后退出、对话页退出失败重试、中英文落地页、语言偏好保留、弹窗关闭和退出后私有页访问守卫。退出成功不经过登录页，刷新落地页保持游客状态。认证、历史和 GIS 使用测试拦截，未重新构建或部署。
 - 2026-10-12：恢复 GIS 入口并修复 Refresh 401 取消首次配置请求的竞争后，lint、typecheck、115 项单测和生产构建通过；登录、公共页面及工作台回归共 59 项通过、1 项按平台跳过（小屏/横屏用例只在 mobile 执行，该版本通过）。延迟 Refresh 401 用例在修复前复现提前发出 Google 配置请求，修复后桌面与模拟手机均验证恢复结束后只获取一次配置，无需重试即可登录。认证与 GIS 使用 Mock，未由这组测试验证真实 Google 授权或生产部署。
 - 2026-10-12 生产更新：后端 `7fa3ba6`、前端 `bd9ff01` 已部署，正式域名路由、健康检查、Google 配置及安全 nonce Cookie 检查通过。Chrome 真实 GIS/FedCM 登录、刷新恢复、退出后私有页返回登录页均成功；后端只读确认该账号的 Google 身份唯一且已验证、条款及隐私接受版本均为 `2026-10-08`，会话已通过 logout 撤销。Audience 已为 `In production`，域名所有权已验证，Google 品牌已验证并发布、正在向用户显示。公共用户支持邮箱及开发者联系邮箱均为 `support@speakquant.com`，配置管理使用 OAuth 专用权限 `roles/oauthconfig.editor`；首次 Cloud 确认与最终健康复验均已完成。后续更换 Logo 需重新验证并发布品牌。详见[生产部署验收](docs/生产部署.md#验收与排查)。

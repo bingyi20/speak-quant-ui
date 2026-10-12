@@ -9,13 +9,6 @@ const signedIn = computed(() => hydrated.value && auth.isAuthenticated)
 const localePath = useLocalePath()
 const { language } = useLanguage()
 const { t } = useI18n()
-const menuOpen = ref(false)
-const menuTrigger = useTemplateRef<HTMLButtonElement>('menuTrigger')
-function closeMenu() {
-  menuOpen.value = false
-  void nextTick(() => menuTrigger.value?.focus())
-}
-const route = useRoute()
 const languageOptions = [
   { label: 'EN', value: 'en-US' as const },
   { label: '中文', value: 'zh-CN' as const },
@@ -26,12 +19,6 @@ const footerLinks = computed(() => [
   { path: '/terms', label: t('auth.terms') },
   { path: '/contact', label: t('publicSite.contact') },
 ])
-watch(
-  () => route.fullPath,
-  () => {
-    menuOpen.value = false
-  },
-)
 </script>
 <template>
   <div class="public-shell">
@@ -62,29 +49,6 @@ watch(
           >
             {{ $t(signedIn ? 'nav.workspace' : 'nav.login') }}
           </NuxtLink>
-          <button
-            ref="menuTrigger"
-            class="icon-button public-menu-toggle"
-            :disabled="!hydrated"
-            :aria-label="$t('publicSite.menu')"
-            :aria-expanded="menuOpen"
-            aria-controls="public-mobile-menu"
-            @click="menuOpen = !menuOpen"
-            @keydown.esc.stop.prevent="closeMenu"
-          >
-            <UIcon :name="menuOpen ? 'i-lucide-x' : 'i-lucide-menu'" />
-          </button>
-        </nav>
-        <nav
-          v-if="menuOpen"
-          id="public-mobile-menu"
-          class="public-mobile-menu"
-          :aria-label="$t('publicSite.menu')"
-          @keydown.esc.stop.prevent="closeMenu"
-        >
-          <NuxtLink :to="signedIn ? '/new-task' : '/login'">{{
-            $t(signedIn ? 'nav.workspace' : 'nav.login')
-          }}</NuxtLink>
         </nav>
       </div>
     </header>

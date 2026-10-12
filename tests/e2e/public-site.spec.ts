@@ -139,7 +139,11 @@ test('language switch changes the address, preserves a draft and persists throug
     .filter({ visible: true })
     .click()
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Sign in or sign up' })).toBeVisible()
+  await expect(page).toHaveURL(origin + '/')
+  await expect(page.locator('.public-account-link')).toHaveText('Sign in')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Test your trading ideain 3 minutes.',
+  )
   expect(
     (await page.context().cookies()).find((cookie) => cookie.name === 'trade-locale-manual')?.value,
   ).toBe('en-US')
@@ -201,7 +205,6 @@ test('public language menu keeps the header stable when opening, closing and cha
           '.public-pricing-link',
           '.preference-select',
           '.public-account-link',
-          '.public-menu-toggle',
         ].map((selector) => {
           const { x, y, width, height } = document.querySelector(selector)!.getBoundingClientRect()
           return { x, y, width, height }
@@ -535,11 +538,8 @@ test('public pages have no overflow or hydration errors at the configured viewpo
   })
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
   if (isMobile) {
-    await expect(page.locator('.public-account-link')).toBeHidden()
-    await page.getByRole('button', { name: 'Menu', exact: true }).click()
-    await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(page.locator('#public-mobile-menu')).toHaveCount(0)
+    await expect(header.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
+    await expect(header.getByRole('button', { name: 'Menu', exact: true })).toHaveCount(0)
     expect(
       await page
         .locator('.quick-examples')
@@ -576,6 +576,75 @@ test('sitemap only contains reviewed public entries and invalid routes are real 
   for (const path of ['/missing-page', '/zh-CN/missing-page', '/zh-CN/new-task']) {
     const response = await request.get(path)
     expect(response.status()).toBe(404)
+  }
+})
+
+test('mobile header keeps login and workspace visible across widths and languages', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Compact public header')
+  test.setTimeout(60_000)
+  await stubHistory(page)
+  for (const signedIn of [false, true]) {
+    await page.route('**/api/auth/refresh', (route) =>
+      route.fulfill(signedIn ? { json: envelope(authResponse) } : { status: 401, json: anonymous }),
+    )
+    for (const width of [320, 360, 361, 375, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      for (const path of ['/', '/zh-CN']) {
+        await page.goto(path)
+        const header = page.locator('.public-header')
+        const account = header.locator('.public-account-link')
+        const label =
+          path === '/' ? (signedIn ? 'Workspace' : 'Sign in') : signedIn ? '工作台' : '登录'
+        await expect(header.locator('.preference-select')).toBeEnabled()
+        await expect(header.locator('.brand-mark')).toHaveCSS(
+          'width',
+          width <= 360 ? '22px' : '24px',
+        )
+        await expect(account).toHaveText(label)
+        await expect(account).toBeVisible()
+        await expect(account).toHaveAttribute('href', signedIn ? '/new-task' : '/login')
+        await expect(header.getByRole('button', { name: /^(Menu|菜单)$/ })).toHaveCount(0)
+        const boxes = await header.evaluate((el) =>
+          [
+            '.public-brand-link',
+            '.public-pricing-link',
+            '.preference-select',
+            '.public-account-link',
+          ].map((selector) => {
+            const element = el.querySelector<HTMLElement>(selector)!
+            const { x, y, width, height, right, bottom } = element.getBoundingClientRect()
+            return {
+              x,
+              y,
+              width,
+              height,
+              right,
+              bottom,
+              clipped: element.scrollWidth > element.clientWidth,
+            }
+          }),
+        )
+        for (const [index, box] of boxes.entries()) {
+          expect(box.x).toBeGreaterThanOrEqual(0)
+          expect(box.right).toBeLessThanOrEqual(width)
+          expect(box.y).toBeGreaterThanOrEqual(0)
+          expect(box.bottom).toBeLessThanOrEqual(60)
+          expect(box.height).toBe(44)
+          expect(box.clipped).toBe(false)
+          if (index) expect(box.x).toBeGreaterThanOrEqual(boxes[index - 1]!.right)
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        )
+        if (width === 320) {
+          await account.click()
+          await expect(page).toHaveURL(`${origin}${signedIn ? '/new-task' : '/login'}`)
+        }
+      }
+    }
   }
 })
 

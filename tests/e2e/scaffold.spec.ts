@@ -68,7 +68,6 @@ test('public landing renders on the server and links into the workspace', async 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(page.locator('.process-idea-spark svg')).toHaveCSS('animation-name', 'none')
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  if (isMobile) await page.getByRole('button', { name: '菜单', exact: true }).click()
   await page.getByRole('link', { name: '工作台', exact: true }).first().click()
   await expect(page).toHaveURL(/\/new-task$/)
   await expect(page.getByRole('heading', { name: '今天，想验证什么？' })).toBeVisible()

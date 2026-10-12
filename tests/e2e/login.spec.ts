@@ -83,7 +83,11 @@ test('email login submits once, preserves draft, restores the session and signs 
   await (await settingsTrigger(page)).click()
   await expect(page.getByRole('dialog').last().getByText('tester@example.com')).toBeVisible()
   await page.getByRole('button', { name: '退出登录' }).click()
-  await expect(page).toHaveURL(/\/login/)
+  await expect(page).toHaveURL('http://localhost:6002/zh-CN')
+  await expect(page.locator('.public-account-link')).toHaveText('登录')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.goto('/new-task')
+  await expect(page).toHaveURL('http://localhost:6002/login?returnTo=/new-task')
 })
 
 test('invalid code is announced, resend replaces the challenge and back retains email', async ({
@@ -157,8 +161,54 @@ test('Google sign-in uses the nonce, preserves the draft, rejects an external re
   expect(storage).not.toContain('test-memory-access')
   await (await settingsTrigger(page)).click()
   await page.getByRole('button', { name: '退出登录' }).click()
-  await expect(page).toHaveURL(/\/login/)
+  await expect(page).toHaveURL('http://localhost:6002/zh-CN')
+  await expect(page.locator('.public-account-link')).toHaveText('登录')
   expect(await page.evaluate(() => Reflect.get(window, 'googleSignedOut'))).toBe(true)
+})
+
+test('workspace logout failure preserves the session and retry returns to the landing page', async ({
+  page,
+}) => {
+  let signedIn = true
+  let failLogout = true
+  let logoutCount = 0
+  await page.route('**/api/auth/refresh', (route) =>
+    route.fulfill(signedIn ? { json: envelope(authResponse) } : { status: 401, json: anonymous }),
+  )
+  await page.route('**/api/auth/logout', (route) => {
+    logoutCount++
+    if (failLogout)
+      return route.fulfill({
+        status: 503,
+        json: { code: 50300, error: { key: 'SERVICE_UNAVAILABLE' } },
+      })
+    signedIn = false
+    return route.fulfill({ json: envelope({ logged_out: true }) })
+  })
+  const navigatedPaths: string[] = []
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigatedPaths.push(new URL(frame.url()).pathname)
+  })
+  await page.goto('/conversations/preview')
+  await (await settingsTrigger(page)).click()
+  const dialog = page.getByRole('dialog', { name: '账户设置' })
+  const logout = dialog.getByRole('button', { name: '退出登录', exact: true })
+  await logout.click()
+  await expect(dialog.getByRole('alert')).toBeVisible()
+  await expect(dialog.getByText('tester@example.com', { exact: true })).toBeVisible()
+  await expect(logout).toBeEnabled()
+  await expect(page).toHaveURL('http://localhost:6002/conversations/preview')
+  failLogout = false
+  await logout.click()
+  await expect(page).toHaveURL('http://localhost:6002/zh-CN')
+  await expect(page.locator('.public-account-link')).toHaveText('登录')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(logoutCount).toBe(2)
+  expect(navigatedPaths).not.toContain('/login')
+  await page.reload()
+  await expect(page.locator('.public-account-link')).toHaveText('登录')
+  await page.goto('/conversations/preview')
+  await expect(page).toHaveURL('http://localhost:6002/login?returnTo=/conversations/preview')
 })
 
 test('attempt limit disables verification, and resending unlocks a fresh code', async ({
