@@ -230,7 +230,7 @@ test('profile uses account details and falls back to a default image on load fai
   await expect(profile).toContainText('tester@example.com')
   await expect(profile.locator('img')).toHaveAttribute('src', '/avatar-default.svg')
   await profile.click()
-  await expect(page.getByRole('heading', { name: '个人信息与偏好' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '常规', exact: true })).toBeVisible()
 })
 
 test('mobile navigation has one brand header and a working close button', async ({

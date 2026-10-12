@@ -440,17 +440,6 @@
 .account-topup {
   position: absolute;
   right: 8px;
-  padding: 5px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--color-brand);
-  color: var(--color-brand-on);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 22px;
-}
-.account-topup:hover {
-  background: var(--color-brand-hover);
 }
 @media (max-width: 900px) {
   .pricing-plan {

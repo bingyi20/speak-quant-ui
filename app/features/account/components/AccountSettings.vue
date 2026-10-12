@@ -17,14 +17,8 @@ const tabs = computed(() => [
   {
     id: 'account',
     label: t('settings.accountTab'),
-    title: t('settings.title'),
+    title: t('settings.accountTab'),
     icon: 'i-lucide-user-round',
-  },
-  {
-    id: 'subscription',
-    label: t('settings.subscriptionTab'),
-    title: t('settings.subscriptionTab'),
-    icon: 'i-lucide-credit-card',
   },
   {
     id: 'usage',
@@ -35,14 +29,17 @@ const tabs = computed(() => [
 ])
 const currentTab = computed(() => tabs.value.find((tab) => tab.id === activeTab.value)!)
 const themeValue = computed({ get: () => theme.preference.value, set: theme.setTheme })
-const themeOptions = computed<{ label: string; value: ThemePreference }[]>(() => [
-  { label: t('settings.light'), value: 'light' },
-  ...(theme.allowDark
-    ? [
-        { label: t('settings.dark'), value: 'dark' as const },
-        { label: t('settings.system'), value: 'system' as const },
-      ]
-    : []),
+const themeOptions = computed<
+  { label: string; value: ThemePreference; icon: string; disabled: boolean }[]
+>(() => [
+  { label: t('settings.light'), value: 'light', icon: 'i-lucide-sun', disabled: false },
+  { label: t('settings.dark'), value: 'dark', icon: 'i-lucide-moon', disabled: !theme.allowDark },
+  {
+    label: t('settings.system'),
+    value: 'system',
+    icon: 'i-lucide-contrast',
+    disabled: !theme.allowDark,
+  },
 ])
 const localeOptions: { label: string; value: Locale }[] = [
   { label: '简体中文', value: 'zh-CN' },
@@ -137,84 +134,100 @@ async function logout() {
             }}</strong>
             <p>{{ auth.user?.email || $t('settings.profileHint') }}</p>
           </div>
-        </div>
-        <div class="settings-plan-summary">
-          <div>
-            <strong>{{ $t('settings.freePlan') }}</strong>
-            <p>{{ $t('settings.planPreview') }}</p>
+          <div class="settings-signout">
+            <UTooltip
+              v-if="auth.isAuthenticated"
+              :text="$t('auth.logout')"
+              :delay-duration="400"
+              :content="{ side: 'top', sideOffset: 8 }"
+              :ui="{ content: 'settings-signout-tooltip ring-0' }"
+              :disabled="loggingOut"
+            >
+              <button
+                type="button"
+                class="settings-secondary-button settings-signout-button"
+                :aria-label="$t('auth.logout')"
+                :disabled="loggingOut"
+                @click="logout"
+              >
+                <UIcon
+                  name="i-lucide-log-out"
+                  aria-hidden="true"
+                />
+              </button>
+            </UTooltip>
+            <NuxtLink
+              v-else
+              to="/login"
+              class="settings-secondary-button"
+              @click="overlays.close()"
+              >{{ $t('nav.login') }}</NuxtLink
+            >
           </div>
-          <button
-            type="button"
-            class="settings-secondary-button"
-            @click="overlays.openPricing()"
-          >
-            {{ $t('settings.viewPlans') }}
-          </button>
         </div>
-        <div class="setting-row">
-          <span>{{ $t('settings.theme') }}</span>
-          <PreferenceSelect
-            v-model="themeValue"
-            :label="$t('settings.theme')"
-            :options="themeOptions"
-          />
+        <p
+          v-if="logoutError"
+          role="alert"
+          class="settings-error"
+        >
+          {{ $t('errors.network') }}
+        </p>
+        <div class="settings-plan-summary">
+          <div class="settings-plan-heading">
+            <strong>{{ $t('settings.freePlan') }}</strong>
+            <button
+              type="button"
+              class="settings-upgrade-button"
+              @click="overlays.openPricing()"
+            >
+              {{ $t('settings.viewPlans') }}
+            </button>
+          </div>
+          <div class="settings-credit-row">
+            <span class="settings-credit-label">
+              <UIcon name="i-lucide-sparkles" />{{ $t('settings.creditBalance') }}
+            </span>
+            <strong aria-hidden="true">—</strong>
+            <span class="sr-only">{{ $t('settings.notAvailable') }}</span>
+          </div>
         </div>
-        <div class="setting-row">
-          <span>{{ $t('settings.language') }}</span>
+        <div class="settings-preference settings-language">
+          <h3 class="settings-preference-title">{{ $t('settings.language') }}</h3>
           <PreferenceSelect
             v-model="language"
             :label="$t('settings.language')"
             :options="localeOptions"
           />
         </div>
-        <div class="settings-signout">
-          <button
-            v-if="auth.isAuthenticated"
-            type="button"
-            class="settings-secondary-button"
-            :disabled="loggingOut"
-            @click="logout"
+        <div class="settings-preference">
+          <h3
+            :id="`${instanceId}-theme-label`"
+            class="settings-preference-title"
           >
-            <UIcon name="i-lucide-log-out" />{{ $t('auth.logout') }}
-          </button>
-          <NuxtLink
-            v-else
-            to="/login"
-            class="settings-secondary-button"
-            @click="overlays.close()"
-            >{{ $t('nav.login') }}</NuxtLink
+            {{ $t('settings.theme') }}
+          </h3>
+          <div
+            role="radiogroup"
+            :aria-labelledby="`${instanceId}-theme-label`"
+            class="settings-theme-options"
           >
-          <p
-            v-if="logoutError"
-            role="alert"
-            class="settings-error"
-          >
-            {{ $t('errors.network') }}
-          </p>
-        </div>
-      </template>
-      <template v-else-if="activeTab === 'subscription'">
-        <div class="settings-subscription-card">
-          <div class="settings-subscription-heading">
-            <span>{{ $t('settings.planLabel') }}</span>
-            <button
-              type="button"
-              class="settings-secondary-button"
-              @click="overlays.openPricing()"
+            <label
+              v-for="option in themeOptions"
+              :key="option.value"
+              class="settings-theme-option"
             >
-              {{ $t('settings.viewPlans') }}
-            </button>
+              <input
+                v-model="themeValue"
+                type="radio"
+                :name="`${instanceId}-theme`"
+                :value="option.value"
+                :disabled="option.disabled"
+                class="sr-only"
+              />
+              <UIcon :name="option.icon" />
+              <span>{{ option.label }}</span>
+            </label>
           </div>
-          <strong class="settings-plan-name">{{ $t('settings.freePlan') }}</strong>
-          <p class="setting-hint">{{ $t('settings.subscriptionHint') }}</p>
-        </div>
-        <div class="setting-row settings-credit-row">
-          <div>
-            <span>{{ $t('settings.creditBalance') }}</span>
-            <p class="setting-hint">{{ $t('settings.creditsHint') }}</p>
-          </div>
-          <strong aria-hidden="true">—</strong
-          ><span class="sr-only">{{ $t('settings.notAvailable') }}</span>
         </div>
       </template>
       <template v-else>

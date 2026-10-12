@@ -172,31 +172,25 @@ test('top-ups validate input, keep edits across tabs, and notify without changin
   await expect(input).toHaveValue('5')
 })
 
-test('settings entries open the intended tab and return to the subscription section', async ({
-  page,
-}) => {
+test('account upgrade opens plans and returns focus to the account section', async ({ page }) => {
   await page.goto('/conversations/preview')
   await (await settingsTrigger(page)).click()
   const settings = page.getByRole('dialog', { name: '账户设置', exact: true })
-  await settings.getByRole('tab', { name: '订阅与积分' }).click()
+  const accountTab = settings.getByRole('tab', { name: '常规', exact: true })
+  await expect(accountTab).toHaveAttribute('aria-selected', 'true')
+  await expect(settings.getByRole('tab')).toHaveCount(2)
+  const entry = settings.getByRole('button', { name: '升级', exact: true })
+  await entry.click()
   const pricing = page.getByRole('dialog', { name: '选择适合你的套餐', exact: true })
-  for (const name of ['升级套餐']) {
-    const entry = settings.getByRole('button', { name, exact: true })
-    await entry.click()
-    await expect(
-      pricing.getByRole('tab', {
-        name: name === '升级套餐' ? '会员套餐' : '积分加购',
-        exact: true,
-      }),
-    ).toHaveAttribute('aria-selected', 'true')
-    await page.keyboard.press('Escape')
-    await expect(pricing).toBeHidden()
-    await expect(entry).toBeFocused()
-    await expect(settings.getByRole('tab', { name: '订阅与积分' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-  }
+  await expect(pricing).toBeVisible()
+  await expect(pricing.getByRole('tab', { name: '会员套餐', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await page.keyboard.press('Escape')
+  await expect(pricing).toBeHidden()
+  await expect(entry).toBeFocused()
+  await expect(accountTab).toHaveAttribute('aria-selected', 'true')
   await expect(page).toHaveURL(/\/conversations\/preview$/)
 })
 

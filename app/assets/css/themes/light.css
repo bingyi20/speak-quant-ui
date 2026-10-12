@@ -16,6 +16,12 @@
   --color-text-secondary: #68685f;
   --color-text-muted: #74746b;
   --color-border-default: #e5e3dc;
+  --color-bg-settings-control: #f0efeb;
+  --color-bg-settings-selected: #eeede7;
+  --color-bg-settings-hover: #e7e6df;
+  --color-border-settings-control: #d7d5ce;
+  --color-border-settings-selected: var(--color-text-primary);
+  --color-text-settings-disabled: var(--color-text-muted);
   --color-diagram-connector: #d8d0c1;
   --color-idea-glow: radial-gradient(circle, #d6ad6650 0%, #d6ad6600 70%);
   --color-border-focus: var(--color-text-muted);

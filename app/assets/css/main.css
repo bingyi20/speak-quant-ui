@@ -980,7 +980,7 @@ p {
 .runner-placeholder button {
   margin-left: auto;
 }
-/* Account settings share one dialog shell across all three sections. */
+/* Account settings share one dialog shell across both sections. */
 .settings-modal {
   width: min(880px, calc(100vw - 64px));
   max-width: none;
@@ -1045,12 +1045,13 @@ p {
   height: 18px;
   flex-shrink: 0;
 }
-.settings-tab:hover,
-.settings-tab[aria-selected='true'] {
-  background: var(--color-bg-sidebar-interactive);
+.settings-tab:hover {
+  background: var(--color-bg-settings-hover);
   color: var(--color-text-primary);
 }
 .settings-tab[aria-selected='true'] {
+  background: var(--color-bg-settings-selected);
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 .settings-panel {
@@ -1079,8 +1080,15 @@ p {
   flex-shrink: 0;
 }
 .settings-profile-identity {
+  flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+}
+.settings-profile-identity strong,
+.settings-profile-identity p {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .settings-profile strong {
   font-size: 15px;
@@ -1092,22 +1100,21 @@ p {
   margin-top: 3px;
 }
 .settings-plan-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
   border-radius: 10px;
-  background: var(--color-bg-canvas);
+  background: var(--color-bg-surface);
   margin-bottom: 14px;
 }
 .settings-plan-summary strong {
   font-size: 16px;
   font-weight: 500;
 }
-.settings-plan-summary p {
-  font-size: 12px;
-  color: var(--color-text-muted);
+.settings-plan-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .settings-secondary-button {
   display: inline-flex;
@@ -1124,21 +1131,90 @@ p {
   flex-shrink: 0;
 }
 .settings-secondary-button:hover:not(:disabled) {
-  background: var(--color-bg-menu-hover);
+  background: var(--color-bg-settings-hover);
 }
 .settings-secondary-button .iconify {
   width: 16px;
   height: 16px;
 }
-.setting-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  min-height: 66px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--color-border-default);
+.settings-upgrade-button,
+.account-topup {
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: var(--color-brand);
+  color: var(--color-brand-on);
+  font-size: 12px;
+  font-weight: 500;
+}
+.settings-upgrade-button:hover,
+.account-topup:hover {
+  background: var(--color-brand-hover);
+}
+.settings-preference {
+  margin-top: 26px;
+}
+.settings-preference-title {
+  margin-bottom: 10px;
   font-size: 14px;
+  font-weight: 500;
+}
+.settings-language .preference-select {
+  width: min(280px, 100%);
+  min-height: 40px;
+  justify-content: space-between;
+  margin-right: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--color-bg-settings-control);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+.settings-language .preference-select:hover,
+.settings-language .preference-select[data-state='open'] {
+  background: var(--color-bg-settings-hover);
+}
+.settings-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 420px;
+}
+.settings-theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 78px;
+  padding: 10px 6px;
+  border: 1px solid var(--color-border-settings-control);
+  border-radius: 10px;
+  background: var(--color-bg-surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.settings-theme-option .iconify {
+  width: 20px;
+  height: 20px;
+}
+.settings-theme-option:has(input:checked) {
+  border-width: 2px;
+  border-color: var(--color-border-settings-selected);
+  color: var(--color-text-primary);
+}
+.settings-theme-option:hover:has(input:enabled:not(:checked)) {
+  background: var(--color-bg-settings-hover);
+}
+.settings-theme-option:has(input:focus-visible) {
+  color: var(--color-brand);
+}
+.settings-theme-option:has(input:disabled) {
+  color: var(--color-text-settings-disabled);
+  cursor: not-allowed;
 }
 .setting-hint {
   color: var(--color-text-muted);
@@ -1146,12 +1222,27 @@ p {
   line-height: 1.7;
 }
 .settings-signout {
-  margin-top: 28px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.settings-signout-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--color-bg-surface);
+}
+.settings-signout-tooltip {
+  z-index: 80;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--color-text-primary);
+  color: var(--color-bg-surface);
+  font-size: 12px;
 }
 .settings-error {
   color: var(--color-danger);
   font-size: 13px;
-  margin-top: 8px;
+  margin: -12px 0 20px;
 }
 .preference-select {
   display: inline-flex;
@@ -1204,37 +1295,25 @@ p {
   height: 17px;
   color: var(--color-text-primary);
 }
-.settings-subscription-card {
-  padding: 22px;
-  border: 1px solid var(--color-border-default);
-  border-radius: 12px;
-  background: var(--color-bg-canvas);
-}
-.settings-subscription-heading {
+.settings-credit-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--color-border-default);
   font-size: 13px;
+}
+.settings-credit-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-credit-label .iconify {
+  width: 16px;
+  height: 16px;
   color: var(--color-text-secondary);
-}
-.settings-plan-name {
-  display: block;
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 400;
-  margin: 12px 0 4px;
-}
-.settings-credit-row {
-  margin-top: 20px;
-  min-height: 94px;
-}
-.settings-credit-row .setting-hint {
-  margin-top: 6px;
-}
-.settings-credit-row > strong {
-  font-size: 24px;
-  font-weight: 400;
 }
 .settings-empty {
   display: flex;
@@ -1831,8 +1910,28 @@ p {
     padding-bottom: 18px;
     margin-bottom: 20px;
   }
+  .settings-profile {
+    gap: 10px;
+  }
+  .settings-profile .avatar {
+    width: 40px;
+    height: 40px;
+  }
+  .settings-profile-identity p {
+    font-size: 12px;
+  }
+  .settings-signout .settings-signout-button {
+    width: 40px;
+    height: 40px;
+  }
   .settings-plan-summary {
     padding: 12px;
+  }
+  .settings-theme-options {
+    gap: 8px;
+  }
+  .settings-theme-option {
+    min-height: 74px;
   }
   .preference-select {
     min-height: 44px;
@@ -1842,9 +1941,6 @@ p {
   }
   .settings-empty {
     padding: 44px 4px 20px;
-  }
-  .settings-subscription-card {
-    padding: 18px;
   }
   .research-composer {
     padding: 16px;

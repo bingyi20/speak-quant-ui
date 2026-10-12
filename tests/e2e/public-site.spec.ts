@@ -110,7 +110,7 @@ test('language switch changes the address, preserves a draft and persists throug
   await page.getByRole('button', { name: 'Reversal', exact: true }).click()
   const draft = 'My edited reversal hypothesis'
   await page.getByRole('textbox', { name: 'Trading idea' }).fill(draft)
-  await page.getByRole('button', { name: 'Interface language', exact: true }).click()
+  await page.getByRole('button', { name: 'Language', exact: true }).click()
   await page.getByRole('menuitemcheckbox', { name: '中文', exact: true }).click()
   await expect(page).toHaveURL(`${origin}/zh-CN`)
   await expect(page.getByRole('textbox', { name: '交易想法' })).toHaveValue(draft)
@@ -121,7 +121,7 @@ test('language switch changes the address, preserves a draft and persists throug
   await expect(page.getByRole('textbox', { name: '交易想法' })).toHaveValue(draft)
   await page.getByRole('link', { name: '价格', exact: true }).first().click()
   await expect(page).toHaveURL(`${origin}/zh-CN/pricing`)
-  await page.getByRole('button', { name: '界面语言', exact: true }).click()
+  await page.getByRole('button', { name: '语言', exact: true }).click()
   await page.getByRole('menuitemcheckbox', { name: 'EN', exact: true }).click()
   await expect(page).toHaveURL(`${origin}/pricing`)
   await page.route('**/api/auth/refresh', (route) =>
@@ -506,7 +506,7 @@ test('public pages have no overflow or hydration errors at the configured viewpo
   await page.goto('/')
   const header = page.locator('.public-header')
   const language = header.getByRole('button', {
-    name: 'Interface language',
+    name: 'Language',
     exact: true,
     includeHidden: true,
   })
