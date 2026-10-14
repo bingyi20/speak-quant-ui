@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/features/auth'
+import { useBillingStore } from '~/features/billing/stores/billing'
+import UsageHistory from '~/features/billing/components/UsageHistory.vue'
+import { formatDecimal } from '~/lib/format'
 import { useOverlaysStore } from '~/stores/overlays'
 import PreferenceSelect from '~/components/ui/PreferenceSelect.vue'
 import type { ThemePreference, Locale } from '#shared/types/http'
 const { language } = useLanguage()
 const auth = useAuthStore()
+const billing = useBillingStore()
 const overlays = useOverlaysStore()
 const theme = useTheme()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const planName = computed(() => {
+  const code = billing.account?.subscription?.plan_code
+  return code ? code[0]!.toUpperCase() + code.slice(1) : billing.account ? 'Free' : '—'
+})
 const { $logout } = useNuxtApp()
 const logoutError = ref(false)
 const loggingOut = ref(false)
@@ -174,7 +182,7 @@ async function logout() {
         </p>
         <div class="settings-plan-summary">
           <div class="settings-plan-heading">
-            <strong>{{ $t('settings.freePlan') }}</strong>
+            <strong>{{ planName }}</strong>
             <button
               type="button"
               class="settings-upgrade-button"
@@ -187,9 +195,24 @@ async function logout() {
             <span class="settings-credit-label">
               <UIcon name="i-lucide-sparkles" />{{ $t('settings.creditBalance') }}
             </span>
-            <strong aria-hidden="true">—</strong>
-            <span class="sr-only">{{ $t('settings.notAvailable') }}</span>
+            <strong>{{ formatDecimal(billing.balance?.available_credits, locale, 0) }}</strong>
           </div>
+          <p
+            v-if="billing.error"
+            role="alert"
+            class="settings-error"
+          >
+            {{ billing.error }}
+          </p>
+          <button
+            v-if="billing.error"
+            type="button"
+            class="settings-secondary-button"
+            :disabled="billing.loading"
+            @click="billing.refreshEntitlements()"
+          >
+            {{ $t('common.retry') }}
+          </button>
         </div>
         <div class="settings-preference settings-language">
           <h3 class="settings-preference-title">{{ $t('settings.language') }}</h3>
@@ -230,14 +253,7 @@ async function logout() {
           </div>
         </div>
       </template>
-      <template v-else>
-        <p class="setting-hint">{{ $t('settings.usageDescription') }}</p>
-        <div class="settings-empty">
-          <span class="settings-empty-icon"><UIcon name="i-lucide-chart-no-axes-column" /></span>
-          <h3>{{ $t('settings.usageSoon') }}</h3>
-          <p>{{ $t('settings.usageHint') }}</p>
-        </div>
-      </template>
+      <UsageHistory v-else />
     </section>
   </div>
 </template>

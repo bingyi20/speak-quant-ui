@@ -6,6 +6,7 @@ import type {
   SnapshotMessage,
   ToolStatus,
   ClarificationData,
+  AgentRunError,
 } from './types'
 
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -13,6 +14,8 @@ export const isRecord = (v: unknown): v is Record<string, unknown> =>
 const text = (v: unknown): v is string => typeof v === 'string'
 const id = (v: unknown): v is string => text(v) && v.length > 0
 const nullableText = (v: unknown) => v === null || text(v)
+const isRunError = (v: unknown) =>
+  v === undefined || v === null || (isRecord(v) && nullableText(v.key) && nullableText(v.message))
 export const isRunStatus = (v: unknown): v is RunStatus =>
   ['queued', 'running', 'waiting_user', 'completed', 'failed', 'cancelled'].includes(String(v))
 export const isTerminal = (v: RunStatus) => v !== 'queued' && v !== 'running'
@@ -88,7 +91,7 @@ export type AgentEvent = { occurred_at?: string } & (
   | {
       type: 'run.snapshot'
       payload: {
-        run: { id: string; status: RunStatus }
+        run: { id: string; status: RunStatus; error?: AgentRunError | null }
         messages: SnapshotMessage[]
         active_tools: ToolStatus[]
       }
@@ -99,7 +102,10 @@ export type AgentEvent = { occurred_at?: string } & (
     }
   | { type: 'card.upsert'; payload: { message_id: string; card: MessageCard } }
   | { type: 'tool.status'; payload: ToolStatus }
-  | { type: 'run.finished'; payload: { status: RunStatus } }
+  | {
+      type: 'run.finished'
+      payload: { status: RunStatus; error?: AgentRunError | null }
+    }
 )
 export function protocolError(): never {
   throw new ApiError('Invalid conversation event', { kind: 'protocol' })
@@ -137,6 +143,7 @@ export function parseAgentEvent(
         !isRecord(p.run) ||
         p.run.id !== runId ||
         !isRunStatus(p.run.status) ||
+        !isRunError(p.run.error) ||
         !Array.isArray(p.messages) ||
         !p.messages.every(isMessage) ||
         new Set(p.messages.map((m) => m.id)).size !== p.messages.length ||
@@ -163,7 +170,8 @@ export function parseAgentEvent(
       if (!isTool(p)) return protocolError()
       break
     case 'run.finished':
-      if (!isRunStatus(p.status) || !isTerminal(p.status)) return protocolError()
+      if (!isRunStatus(p.status) || !isTerminal(p.status) || !isRunError(p.error))
+        return protocolError()
   }
   return { type: frame.event, payload: p, occurred_at: value.occurred_at } as AgentEvent
 }

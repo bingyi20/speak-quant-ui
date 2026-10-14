@@ -1,0 +1,92 @@
+.credit-history {
+  container-type: inline-size;
+  font-size: 14px;
+}
+.credit-history-summary {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.credit-history-state {
+  display: flex;
+  min-height: 160px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--color-text-muted);
+}
+.credit-history-state .iconify {
+  width: 18px;
+  height: 18px;
+}
+.credit-history-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  margin-bottom: 12px;
+  color: var(--color-danger);
+}
+.credit-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.credit-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(45%);
+  align-items: center;
+  gap: 24px;
+  min-height: 76px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border-default);
+}
+.credit-history-event {
+  min-width: 0;
+}
+.credit-history-activity {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+.credit-history-date {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.credit-history-number {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: right;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.credit-history-number.is-increase {
+  color: var(--color-credit-increase);
+}
+.credit-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+.credit-history-pagination > span {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+@container (max-width: 560px) {
+  .credit-history-pagination .settings-secondary-button {
+    min-height: 44px;
+  }
+}

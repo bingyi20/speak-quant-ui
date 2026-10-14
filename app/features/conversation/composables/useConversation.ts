@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, toRaw } from 'vue'
 import { useNuxtApp, useRuntimeConfig } from '#app'
 import { useAuthStore } from '~/features/auth'
+import { useBillingStore } from '~/features/billing/stores/billing'
 import { ApiError } from '~/lib/http/error'
 import { createConversationApi } from '../api'
 import { useConversationHistoryStore } from '../history-store'
@@ -15,6 +16,8 @@ import {
 import { useResearchDraft } from './useResearchDraft'
 import { clearClarificationDrafts } from './useClarification'
 import { useAgentRun } from './useAgentRun'
+import { conversationBillingError } from '../billing-errors'
+import { isTerminal } from '../agent-events'
 import type { ReplayQuestionReference } from '~/features/replay/types'
 import type {
   ConversationAssets,
@@ -28,6 +31,7 @@ export function useConversation(id: string) {
   const api = createConversationApi($http)
   const auth = useAuthStore()
   const historyStore = useConversationHistoryStore()
+  const billing = useBillingStore()
   const enabled = String(useRuntimeConfig().public.apiEnabled) === 'true'
   const draft = useResearchDraft(id)
   const replayReference = ref<ReplayQuestionReference | null>(null)
@@ -61,6 +65,8 @@ export function useConversation(id: string) {
     id,
     () => history.value,
     async () => {
+      // Release/settlement can change available credits even when final history cannot load.
+      void billing.refreshEntitlements(true).catch(() => {})
       await syncHistory()
       if (!valid()) return
       Object.assign(run.state, { messages: new Map(), lengths: new Map(), tools: new Map() })
@@ -97,6 +103,7 @@ export function useConversation(id: string) {
   const waiting = computed(
     () =>
       run.active.value &&
+      !isTerminal(run.state.status) &&
       !run.reconnecting.value &&
       !run.error.value &&
       ![...run.state.messages.values()].some((m) => m.content || m.cards.length) &&
@@ -209,16 +216,23 @@ export function useConversation(id: string) {
         ...intent,
         phase: 'failed',
         rejected:
-          cause instanceof ApiError && [400, 403, 404, 409, 422].includes(cause.status ?? 0),
+          cause instanceof ApiError && [400, 402, 403, 404, 409, 422].includes(cause.status ?? 0),
       })
       localFailed.value = true
       sendError.value =
-        cause instanceof ApiError && [400, 422].includes(cause.status ?? 0)
+        (cause instanceof ApiError && conversationBillingError(cause.key)) ||
+        (cause instanceof ApiError && [400, 422].includes(cause.status ?? 0)
           ? 'chat.invalidAnswer'
           : cause instanceof ApiError && cause.status === 409
             ? 'chat.conflict'
-            : 'chat.sendFailed'
-      if (cause instanceof ApiError && cause.status === 409) {
+            : 'chat.sendFailed')
+      if (cause instanceof ApiError && conversationBillingError(cause.key))
+        void billing.refreshEntitlements().catch(() => {})
+      if (
+        cause instanceof ApiError &&
+        cause.status === 409 &&
+        !conversationBillingError(cause.key)
+      ) {
         const activeRun = await syncHistory().catch(() => null)
         if (activeRun && valid()) void run.connect(activeRun)
       }

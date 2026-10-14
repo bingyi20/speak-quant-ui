@@ -43,7 +43,9 @@ export default defineNuxtPlugin((nuxtApp) => {
         if (
           !clearingForLogout &&
           previousUser &&
-          /^\/(new-task|conversations)(?:\/|$)/.test(router.currentRoute.value.path)
+          /^\/(new-task|conversations|billing\/payment-return)(?:\/|$)/.test(
+            router.currentRoute.value.path,
+          )
         ) {
           void nuxtApp.runWithContext(() =>
             navigateTo({ path: '/login', query: { returnTo: router.currentRoute.value.fullPath } }),

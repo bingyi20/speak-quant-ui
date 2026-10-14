@@ -92,6 +92,7 @@ SSR 请求后端时使用服务端配置的绝对 API 地址；该配置与浏�
 | `/`、`/zh-CN` | 英文／中文产品落地页；public 布局，品牌导航、产品介绍、研究输入框与示例 | SSR 公共内容；客户端增强输入与认证入口 | 公共内容可索引 |
 | `/new-task` | 工作台新研究页；workspace 布局，左侧历史、中间输入区 | 路由级 CSR | noindex、禁止共享缓存 |
 | `/login` | 登录及登录返回入口；auth 布局 | SSR 页面壳，客户端认证 | noindex、no-store |
+| `/billing/payment-return` | 内部支付回站，恢复认证后回原页面；无业务结果页 | CSR，不生成语言前缀 | noindex、no-store |
 | `/conversations/:id` | 已创建的研究；workspace 布局，对话与资产面板 | 路由级 CSR | noindex、禁止共享缓存 |
 | `/pricing`、`/privacy`、`/terms`、`/contact`、`/open-source` 及对应 `/zh-CN/...` | 公共价格、政策／联系及开源说明 | SSR | 首页／价格／开源说明可索引；政策与联系页 noindex |
 | `/refunds` 及 `/zh-CN/refunds` | 取消退款已合入价格页 | 301 跳转到同语言 `/pricing#billing` | 不单独索引 |
@@ -244,20 +245,20 @@ features 的公开入口
 | 历史菜单、重命名与删除交互        | `app/features/conversation/components/ResearchHistory.vue`、`HistoryRenameInput.vue`                                                                                              |
 | 工作台侧栏、Hover、折叠与 H5 抽屉 | `app/layouts/workspace.vue`、`app/components/common/WorkspaceNavigation.vue`                                                                                                      |
 | 新研究输入与草稿                  | `app/features/conversation/components/ResearchEntry.vue`、`composables/useResearchEntry.ts`、`useResearchDraft.ts`                                                                |
-| 对话与流式状态                    | `app/features/conversation/composables/useConversation.ts`、`useAgentRun.ts`、`useStreamingText.ts`、`useConversationScroll.ts`、`message-state.ts`、`agent-events.ts`                                                               |
+| 对话与流式状态                    | `app/features/conversation/composables/useConversation.ts`、`useAgentRun.ts`、`useStreamingText.ts`、`useConversationScroll.ts`、`message-state.ts`、`agent-events.ts`、`billing-errors.ts`                                                               |
 | 快捷问答与未决提交                | `app/features/conversation/clarification.ts`、`composables/useClarification.ts`、`submission.ts`                                                                                  |
 | 问答交互预览（仅本地测试） | `tests/preview/playwright.config.ts`、`tests/preview/questions.spec.ts`；`pnpm preview:questions` 复用测试夹具、独立浏览器上下文拦截 API，不增加生产路由 |
-| 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationAssetListPanel.vue`、`ConversationAssetDetailPanel.vue` 分别维护列表与详情的布局和过渡；聊天与列表共用 `cards/MessageCard.vue`；`app/components/common/SplitPane.vue` 只处理列表固定宽度及详情比例调宽；样式 `app/assets/css/conversation.css` |
+| 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationCreditNotice.vue`、`ConversationAssetListPanel.vue`、`ConversationAssetDetailPanel.vue` 分别维护列表与详情的布局和过渡；聊天与列表共用 `cards/MessageCard.vue`；`app/components/common/SplitPane.vue` 只处理列表固定宽度及详情比例调宽；样式 `app/assets/css/conversation.css` |
 | 策略详情与历史版本 | `app/features/strategy/api.ts`、`types.ts`、`detail-state.ts`、`composables/useStrategyDetail.ts`、`components/`（`StrategyReplayList.vue` 承载回测记录行）；契约见[策略详情模块技术方案](策略详情模块技术方案.md) |
 | 回测详情工作区 | `app/features/replay/api.ts`、`types.ts`、`normalize.ts`、`data-state.ts`、`events.ts`、`playback-state.ts`、`visibility.ts`、`historical-result.ts`、`composables/useReplayDetail.ts` 与 `components/`；桌面交易卡片的连续滚动、虚拟窗口与独立右侧跟随位于 `composables/useReplayTradeStrip.ts`；图表 SDK 位于 `app/lib/chart/lightweight.ts`，PC 独立交易明细弹窗位于 `app/features/replay/components/ReplayTradeDialog.vue`，共享洞察正文位于 `app/features/replay/components/ReplayInsightContent.vue`，买卖 TAG 与底部洞察圆点 primitive 位于 `app/lib/chart/trade-tags.ts`，桌面时间轴浮层 primitive 位于 `app/lib/chart/time-label.ts`，成交浮层四向定位位于 `app/lib/chart/tooltip-position.ts`，默认与证据区间视野策略位于 `app/lib/chart/viewport.ts`。职责与状态契约见[回测详情模块技术方案](回测详情模块技术方案.md) |
 | 运行包与开源声明 | `app/features/runner/api.ts`、`components/RunnerDownloadDialog.vue` 复用下载基础设施；`app/pages/open-source.vue` 与 `public/licenses/` 提供图表署名和许可证 |
 | 详情样式与复制 | `app/assets/css/asset-details.css`、`app/components/ui/CopyButton.vue`；Python 高亮组件按需加载，配色在主题文件 |
 | 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
-| 订阅套餐、积分加购与支付待上线提示 | `app/features/billing/index.ts`、`catalog.ts`、`components/`、`app/assets/css/billing.css`；复用契约和验证见[订阅与积分模块技术方案](订阅与积分模块技术方案.md) |
+| 订阅权益、套餐、报价、支付与积分流水 | `app/features/billing/types.ts`、`api.ts`、`stores/billing.ts`、`payment.ts`、`return-context.ts`、`catalog.ts`、`composables/useBillingAction.ts`、`useCreditHistory.ts`、`components/`（含共享 `PlanSelection.vue`、账户设置 `UsageHistory.vue`）、`app/plugins/03.billing.client.ts`、`app/pages/billing/payment-return.vue`、`app/assets/css/billing.css`、`usage-history.css`；实现与验证见[订阅与积分模块技术方案](订阅与积分模块技术方案.md) |
 | 全局偏好、主题及语言恢复          | `app/stores/preferences.ts`、`app/plugins/01.preferences.ts`、`app/composables/useTheme.ts`、`public/theme-init.js`                                                               |
 | 尺寸、字体、配色与页面样式        | `app/assets/css/tokens.css`、`themes/light.css`、`themes/dark.css`、`main.css`、`public.css`；Nuxt UI 配置在 `app/app.config.ts`                                                                |
 | 品牌、头像与公共控件              | `public/logo.svg`（页面与标签页图标共用）、`public/avatar-default.svg`、`app/components/common/`、`app/components/ui/`                                                              |
-| 页面中上方短提示 | `app/components/ui/TransientNotice.vue`、`app/assets/css/main.css`；订阅支付待上线提示，组件统一管理显示、重复点击计时和卸载清理 |
+| 页面中上方短提示 | `app/components/ui/TransientNotice.vue`、`app/assets/css/main.css`；通用短提示，组件统一管理显示、重复点击计时和卸载清理 |
 | 界面文案与国际化                  | `i18n/locales/zh-CN.json`、`en-US.json`、`i18n/i18n.config.ts`                                                                                                                    |
 | SSE、文件下载                     | `app/lib/sse/`、`app/lib/download/client.ts`                                                                                                                                      |
 | 图表、精度、Markdown、存储与遥测  | `app/lib/chart/`、`format/`、`storage/`、`telemetry/`                                                                                                                             |

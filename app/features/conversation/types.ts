@@ -27,6 +27,10 @@ export interface DeleteConversationResponse {
 }
 
 export type RunStatus = 'queued' | 'running' | 'waiting_user' | 'completed' | 'failed' | 'cancelled'
+export interface AgentRunError {
+  key: string | null
+  message: string | null
+}
 export interface AgentRun {
   id: string
   status: RunStatus
@@ -34,7 +38,7 @@ export interface AgentRun {
 }
 export interface AgentRunDetail extends AgentRun {
   conversation_id: string
-  error: { key: string; message: string } | null
+  error: AgentRunError | null
   started_at: string | null
   finished_at: string | null
 }

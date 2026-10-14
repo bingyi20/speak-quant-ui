@@ -13,6 +13,7 @@ const props = defineProps<{
   tools: ToolStatus[]
   selectedCardId?: string
   activeQuestionMessageId?: string
+  waiting?: boolean
 }>()
 defineEmits<{ open: [card: MessageCard] }>()
 const rendered = useStreamingText(
@@ -32,6 +33,15 @@ const previousQuestions = computed(() =>
       ? [data]
       : []
   }),
+)
+const hasCards = computed(() => !!(cards.value.length || previousQuestions.value.length))
+const awaitingFirstText = computed(
+  () =>
+    !rendered.value &&
+    !props.tools.length &&
+    !cards.value.length &&
+    !previousQuestions.value.length &&
+    (props.waiting || !!props.message.content),
 )
 const { locale, t } = useI18n()
 const ready = computed(
@@ -74,13 +84,23 @@ onBeforeUnmount(() => {
     :tabindex="ready ? 0 : undefined"
     :aria-label="$t('chat.assistant')"
   >
+    <div
+      v-if="awaitingFirstText"
+      class="reply-waiting"
+      role="status"
+    >
+      <UIcon
+        name="i-lucide-loader-circle"
+        class="chat-spinner"
+      /><span class="sr-only">{{ $t('chat.replying') }}</span>
+    </div>
     <MarkdownContent
       v-if="rendered"
       class="markdown-prose"
       :content="rendered"
     />
     <ul
-      v-if="message.status === 'streaming' || tools.length"
+      v-if="tools.length || (!ready && !hasCards)"
       class="tool-statuses"
       :class="{ 'is-empty': !tools.length }"
       aria-live="polite"
@@ -143,14 +163,16 @@ onBeforeUnmount(() => {
       {{ $t(message.status === 'failed' ? 'chat.replyFailed' : 'chat.replyCancelled') }}
     </p>
     <footer
-      v-if="ready && (message.content || cards.length || previousQuestions.length)"
+      v-if="(ready || hasCards) && (message.content || hasCards)"
       class="assistant-message-footer"
-      :class="{ 'is-latest': latest }"
+      :class="{ 'is-latest': latest, 'is-pending': !ready }"
+      :inert="!ready"
+      :aria-hidden="!ready || undefined"
     >
       <button
         type="button"
         class="message-copy"
-        :disabled="!message.content || copying"
+        :disabled="!ready || !message.content || copying"
         :aria-label="t('chat.copyMarkdown')"
         :title="t('chat.copyMarkdown')"
         @click="copyMarkdown"

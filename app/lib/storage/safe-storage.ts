@@ -25,7 +25,9 @@ export function writeStorage(
 export function safeReturnPath(value: unknown, fallback = '/new-task'): string {
   if (
     typeof value !== 'string' ||
-    !/^\/(new-task|conversations\/[A-Za-z0-9_-]+)(?:\?.*)?$/.test(value) ||
+    !/^\/(new-task|conversations\/[A-Za-z0-9_-]+|(?:zh-CN\/)?pricing|billing\/payment-return)(?:\?[^#]*)?(?:#[A-Za-z0-9_-]+)?$/.test(
+      value,
+    ) ||
     Array.from(value).some((char) => char.charCodeAt(0) < 32 || char === '\\')
   )
     return fallback

@@ -4,6 +4,8 @@
   --color-brand: #986b2c;
   --color-brand-hover: #795222;
   --color-brand-on: #ffffff;
+  --color-brand-disabled: color-mix(in srgb, var(--color-brand) 50%, var(--color-bg-surface));
+  --color-credit-increase: #9e6b15;
   --color-bg-canvas: #faf9f6;
   --color-bg-public-header: rgb(250 249 246 / 82%);
   --color-bg-sidebar: #f1f0eb;
@@ -52,6 +54,7 @@
   --shadow-composer: 0 4px 20px rgb(48 49 46 / 3%);
   --shadow-composer-active: 0 4px 22px rgb(48 49 46 / 7%);
   --shadow-panel: 0 6px 30px rgb(48 49 46 / 5%);
+  --shadow-credit-notice: 0 5px 24px rgb(48 49 46 / 10%);
   /* Theme-dependent derived values stay here, never in business styles. */
   --color-bg-control-hover: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
   --shadow-chart-tooltip: 0 2px 8px rgb(48 49 46 / 12%), 0 8px 24px rgb(48 49 46 / 18%);

@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { anonymous, authResponse, envelope, stubHistory, stubGoogle } from './auth-fixtures'
+import { stubBilling } from './billing-fixtures'
 
 const origin = 'http://localhost:6002'
 test.beforeEach(async ({ page }) => {
   await stubGoogle(page)
+  await stubBilling(page)
   await page.route('**/api/auth/refresh', (route) =>
     route.fulfill({ status: 401, json: anonymous }),
   )
@@ -220,7 +222,7 @@ test('public language menu keeps the header stable when opening, closing and cha
     await expect(language).toBeFocused()
     expect(await geometry()).toEqual(before)
     await language.click()
-    await page.getByRole('heading', { name: 'Free', exact: true }).click()
+    await page.getByRole('heading', { name: 'Basic', exact: true }).click()
     await expect(page.getByRole('menu')).toBeHidden()
     expect(await geometry()).toEqual(before)
     for (const [label, pathname] of [
@@ -256,19 +258,16 @@ test('policies open in a new tab without cancelling the login operation', async 
   await popup.close()
 })
 
-test('pricing is an honest preview and Free has no research entry', async ({ page }) => {
+test('public pricing presents paid plans and sends anonymous purchases to sign-in', async ({
+  page,
+}) => {
   await page.goto('/pricing')
   await expect(page.getByText('Current plan', { exact: true })).toHaveCount(0)
-  await expect(page.getByRole('tab', { name: 'Membership plans', exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
-  await expect(page.getByRole('tab', { name: 'Credit top-ups', exact: true })).toBeVisible()
-  for (const plan of ['Pro', 'Max']) {
-    await page.getByRole('button', { name: `Choose ${plan}`, exact: true }).click()
-    await expect(page.getByText('Payments coming soon', { exact: true })).toBeVisible()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-  }
+  await expect(page.getByRole('tab')).toHaveCount(0)
+  await expect(page.locator('.pricing-account-summary')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Refresh benefits', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('article', { name: 'Basic', exact: true })).toBeVisible()
+  await expect(page.getByRole('article', { name: 'Free', exact: true })).toHaveCount(0)
   await expect(page.locator('.pricing-plan')).toHaveCount(3)
   await expect(
     page.getByRole('heading', { name: 'Frequently asked questions', level: 2 }),
@@ -296,11 +295,13 @@ test('pricing is an honest preview and Free has no research entry', async ({ pag
     expect(details!.width).toBeCloseTo(Math.min(736, cards!.width), 0)
     expect(details!.x + details!.width / 2).toBeCloseTo(cards!.x + cards!.width / 2, 0)
   }
-  await expect(page.getByRole('button', { name: 'Free plan', exact: true })).toBeDisabled()
   await expect(page.getByRole('link', { name: 'Start research', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Choose Basic', exact: true }).click()
+  await expect(page).toHaveURL(/\/login\?/)
+  expect(new URL(page.url()).searchParams.get('returnTo')).toBe('/pricing')
 })
 
-test('pricing tabs keep the same surface from server-only first paint through hydration', async ({
+test('pricing renders only plans for anonymous visitors before and after hydration', async ({
   browser,
   page,
 }) => {
@@ -312,29 +313,16 @@ test('pricing tabs keep the same surface from server-only first paint through hy
     const serverPage = await context.newPage()
     for (const path of ['/pricing', '/zh-CN/pricing']) {
       await serverPage.goto(`${origin}${path}`)
-      const trigger = serverPage.locator('.pricing-tab-trigger[data-state="active"]')
-      await expect(trigger).toBeVisible()
-      await expect(serverPage.locator('.pricing-tab-indicator')).toHaveCount(0)
-      const firstPaint = await trigger.evaluate((element) => ({
-        background: getComputedStyle(element, '::before').backgroundColor,
-        radius: getComputedStyle(element, '::before').borderRadius,
-        shadow: getComputedStyle(element, '::before').boxShadow,
-        opacity: getComputedStyle(element).opacity,
-        surface: getComputedStyle(document.querySelector('.pricing-plan')!).backgroundColor,
-      }))
-      expect(firstPaint.background).toBe(firstPaint.surface)
-      expect(firstPaint.opacity).toBe('1')
+      await expect(serverPage.getByRole('tab')).toHaveCount(0)
+      await expect(serverPage.locator('.pricing-plan')).toHaveCount(3)
       await serverPage.screenshot({
         path: test.info().outputPath(`pricing-ssr-${path.includes('zh-CN') ? 'zh' : 'en'}.png`),
       })
-
       await page.goto(path)
-      await expect(page.locator('.pricing-tab-trigger[data-state="active"]')).toBeEnabled()
-      const indicator = page.locator('.pricing-tab-indicator')
-      await expect(indicator).toBeVisible()
-      await expect(indicator).toHaveCSS('background-color', firstPaint.background)
-      await expect(indicator).toHaveCSS('border-radius', firstPaint.radius)
-      await expect(indicator).toHaveCSS('box-shadow', firstPaint.shadow)
+      await expect(page.getByRole('tab')).toHaveCount(0)
+      await expect(page.locator('.pricing-plan')).toHaveCount(3)
+      await expect(page.locator('.pricing-account-summary')).toHaveCount(0)
+      await expect(page.locator('.pricing-order-status')).toHaveCount(0)
     }
   } finally {
     await context.close()
@@ -344,6 +332,7 @@ test('pricing tabs keep the same surface from server-only first paint through hy
 test('pricing updates the current plan after delayed session restoration without a research CTA', async ({
   page,
 }) => {
+  await stubBilling(page, { plan: 'basic' })
   const errors: string[] = []
   page.on('console', (message) => {
     if (/hydration.*mismatch/i.test(message.text())) errors.push(message.text())
@@ -358,8 +347,8 @@ test('pricing updates the current plan after delayed session restoration without
   })
   await page.goto('/pricing', { waitUntil: 'domcontentloaded' })
   try {
-    await expect(page.getByRole('tab', { name: 'Membership plans', exact: true })).toBeEnabled()
-    await expect(page.getByRole('button', { name: 'Free plan', exact: true })).toBeDisabled()
+    await expect(page.getByRole('tab')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Choose Basic', exact: true })).toBeVisible()
     await expect(page.getByText('Start research', { exact: true })).toHaveCount(0)
   } finally {
     restore()
@@ -371,31 +360,28 @@ test('pricing updates the current plan after delayed session restoration without
   expect(errors).toEqual([])
 })
 
-test('public pricing shares the credit calculator, tab state and payment preview in both languages', async ({
+test('public pricing uses server credit quotes and keeps edited amounts across tabs in both languages', async ({
   page,
   isMobile,
 }) => {
-  const writes: string[] = []
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && !request.url().endsWith('/auth/refresh'))
-      writes.push(request.url())
-  })
+  const billing = await stubBilling(page, { plan: 'basic' })
+  await page.route('**/api/auth/refresh', (route) =>
+    route.fulfill({ json: envelope(authResponse) }),
+  )
   for (const copy of [
     {
       path: '/pricing',
       plans: 'Membership plans',
       credits: 'Credit top-ups',
       input: 'Top-up amount',
-      preview: 'Top-up rate preview',
-      notice: 'Payments coming soon',
+      membership: 'Current membership',
     },
     {
       path: '/zh-CN/pricing',
       plans: '会员套餐',
       credits: '积分加购',
       input: '加购金额',
-      preview: '加购单价示例',
-      notice: '支付功能待上线',
+      membership: '当前会员',
     },
   ]) {
     await page.goto(copy.path)
@@ -405,32 +391,32 @@ test('public pricing shares the credit calculator, tab state and payment preview
     await plans.focus()
     await plans.press('ArrowRight')
     await expect(credits).toHaveAttribute('aria-selected', 'true')
-    await expect(page.getByText(copy.preview, { exact: true })).toBeVisible()
+    await expect(page.getByText(copy.membership, { exact: true })).toBeVisible()
     const input = page.getByRole('textbox', { name: copy.input, exact: true })
-    await expect(input).toHaveValue('5')
-    await page.getByRole('button', { name: '$10', exact: true }).click()
-    await expect(page.locator('.pricing-topup-result strong')).toContainText('666')
     await input.fill('')
     await expect(input).toHaveAttribute('aria-invalid', 'true')
     await expect(page.locator('.pricing-topup button[type="submit"]')).toBeDisabled()
-    await input.fill('75')
-    await expect(page.locator('.pricing-topup-result strong')).toContainText('5,000')
+    await input.fill('10.25')
     await plans.click()
     await credits.click()
-    await expect(input).toHaveValue('75')
+    await expect(input).toHaveValue('10.25')
     await input.press('Enter')
-    await expect(page.getByText(copy.notice, { exact: true })).toBeVisible()
-    await expect(input).toBeFocused()
+    await expect(page.locator('.pricing-topup-result strong')).toContainText('6,789')
+    await expect(page.locator('.pricing-topup-submit')).toContainText('10.25')
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(page).toHaveURL(`${origin}${copy.path}`)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await expect(page.getByText(copy.notice, { exact: true })).toBeHidden()
     await page.screenshot({
       path: `/tmp/trade-public-topup-${copy.path.startsWith('/zh-CN') ? 'zh' : 'en'}-${isMobile ? 'mobile' : 'desktop'}.png`,
       fullPage: true,
     })
   }
-  expect(writes).toEqual([])
+  expect(billing.requests.filter((item) => item.path === '/api/billing/topup-quotes')).toHaveLength(
+    2,
+  )
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/checkouts/topup'),
+  ).toHaveLength(0)
 })
 
 test('refund links reach pricing and open-source notices remain accessible through terms', async ({

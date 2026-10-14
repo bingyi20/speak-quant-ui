@@ -1,94 +1,85 @@
 <script setup lang="ts">
-import { formatDecimal } from '~/lib/format'
-import type { CheckoutSelection, PricingPlan } from '../catalog'
-const props = defineProps<{ plan: PricingPlan; current: boolean; disabled?: boolean }>()
-const emit = defineEmits<{ select: [selection: CheckoutSelection] }>()
+import Decimal from 'decimal.js'
+import { formatDecimal, formatQuantity } from '~/lib/format'
+import { planName, topUpRatePer1000 } from '../catalog'
+import type { Plan, PlanCatalog } from '../types'
+
+const props = defineProps<{
+  plan: Plan
+  catalog: PlanCatalog
+  current: boolean
+  disabled?: boolean
+  loading?: boolean
+  buttonLabel?: string
+}>()
+const emit = defineEmits<{ select: [code: Plan['code']] }>()
 const { t, locale } = useI18n()
-const number = (value: number, digits = 0) => formatDecimal(String(value), locale.value, digits)
-const featureKeys = computed(() =>
-  props.plan.id === 'free'
-    ? ['conversation', 'history', 'iteration']
-    : ['allowance', 'flexibility', 'topUp'],
+const number = (value: string, digits = 0) => formatDecimal(value, locale.value, digits)
+const includedRate = computed(() =>
+  new Decimal(props.plan.price_usd).times(1000).div(props.plan.monthly_credits).toString(),
 )
-function select() {
-  emit('select', {
-    kind: 'subscription',
-    planId: props.plan.id,
-    planName: props.plan.name,
-    amountCents: props.plan.monthlyPriceCents,
-    credits: props.plan.monthlyCredits,
-  })
-}
+const topUpRate = computed(() => topUpRatePer1000(props.plan, props.catalog))
+const label = computed(() =>
+  props.current
+    ? t('billing.currentPlan')
+    : props.buttonLabel || t('billing.choosePlan', { plan: planName(props.plan.code) }),
+)
 </script>
 
 <template>
   <article
     class="pricing-plan"
-    :class="{ 'is-recommended': plan.recommended }"
-    :aria-label="plan.name"
+    :aria-label="planName(plan.code)"
   >
     <div class="pricing-plan-heading">
-      <h3>{{ plan.name }}</h3>
-      <span
-        v-if="plan.recommended"
-        class="pricing-badge"
-        >{{ t('billing.recommended') }}</span
-      >
+      <h3>{{ planName(plan.code) }}</h3>
     </div>
-    <p class="pricing-plan-description">{{ t(`billing.plans.${plan.id}.description`) }}</p>
+    <p class="pricing-plan-description">{{ t(`billing.plans.${plan.code}.description`) }}</p>
     <div class="pricing-price">
-      <span class="pricing-currency">$</span
-      ><strong>{{ number(plan.monthlyPriceCents / 100) }}</strong
-      ><span>{{ t('billing.perMonth') }}</span>
+      <span class="pricing-currency">$</span>
+      <strong>{{ formatQuantity(plan.price_usd, locale) }}</strong>
+      <span>{{ t('billing.perMonth') }}</span>
     </div>
     <div class="pricing-credit-box">
       <div>
         <UIcon
           name="i-lucide-sparkle"
           aria-hidden="true"
-        /><strong>{{ t('billing.creditCount', { count: number(plan.monthlyCredits) }) }}</strong
-        ><span>{{ t('billing.everyMonth') }}</span>
+        />
+        <strong>{{ t('billing.creditCount', { count: number(plan.monthly_credits) }) }}</strong>
+        <span>{{ t('billing.everyMonth') }}</span>
       </div>
-      <p>
-        {{
-          plan.monthlyPriceCents === 0
-            ? t('billing.freeCredits')
-            : t('billing.unitPrice', {
-                price: number(plan.monthlyPriceCents / plan.monthlyCredits, 2),
-              })
-        }}
-      </p>
+      <p>{{ t('billing.unitPrice', { price: number(includedRate, 2) }) }}</p>
     </div>
     <button
       type="button"
       class="pricing-button"
-      :disabled="disabled || current || plan.id === 'free'"
-      @click="select"
+      :disabled="disabled || current || loading"
+      :aria-label="label"
+      :aria-busy="!!loading"
+      :data-loading="!!loading"
+      @click="emit('select', plan.code)"
     >
-      {{
-        current
-          ? t('billing.currentPlan')
-          : plan.id === 'free'
-            ? t('billing.freePlan')
-            : t('billing.choosePlan', { plan: plan.name })
-      }}
+      <span :class="{ invisible: loading }">{{ label }}</span>
+      <UIcon
+        v-if="loading"
+        name="i-lucide-loader-circle"
+        class="pricing-button-spinner spin"
+        aria-hidden="true"
+      />
     </button>
     <div class="pricing-plan-features">
-      <p>{{ t(`billing.plans.${plan.id}.includes`) }}</p>
+      <p>{{ t('billing.researchIncluded') }}</p>
       <ul>
         <li
-          v-for="key in featureKeys"
+          v-for="key in ['conversation', 'history', 'iteration']"
           :key="key"
         >
           <UIcon
             name="i-lucide-check"
             aria-hidden="true"
-          /><span>{{
-            t(`billing.features.${key}`, {
-              count: number(plan.monthlyCredits),
-              price: number(plan.topUpCentsPer100 / 100, 2),
-            })
-          }}</span>
+          />
+          <span>{{ t(`billing.features.${key}`) }}</span>
         </li>
       </ul>
     </div>
@@ -96,7 +87,8 @@ function select() {
       <UIcon
         name="i-lucide-sparkle"
         aria-hidden="true"
-      /><span>{{ t('billing.topUpRate', { price: number(plan.topUpCentsPer100 / 100, 2) }) }}</span>
+      />
+      <span>{{ t('billing.topUpRate', { price: number(topUpRate, 2) }) }}</span>
     </div>
   </article>
 </template>

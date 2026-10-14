@@ -8,14 +8,16 @@ test.beforeEach(async ({ page }) => {
   )
 })
 
-test('account tabs keep the conversation and present unavailable billing honestly', async ({
+test('account tabs keep the conversation and show the loaded credit balance', async ({
   page,
   isMobile,
 }) => {
   const writes: string[] = []
+  const historyReads: string[] = []
   page.on('request', (request) => {
     if (request.method() === 'POST' && !request.url().endsWith('/auth/refresh'))
       writes.push(request.url())
+    if (request.url().includes('/api/credits/ledger')) historyReads.push(request.url())
   })
   await page.goto('/conversations/preview')
   await (await settingsTrigger(page)).click()
@@ -33,8 +35,8 @@ test('account tabs keep the conversation and present unavailable billing honestl
   const summary = dialog.locator('.settings-plan-summary')
   await expect(summary.getByText('Free', { exact: true })).toBeVisible()
   await expect(summary.getByText('积分', { exact: true })).toBeVisible()
-  await expect(summary.getByText('—', { exact: true })).toHaveAttribute('aria-hidden', 'true')
-  await expect(summary.getByText('暂未开放', { exact: true })).toHaveClass('sr-only')
+  await expect(summary.getByText('2,750', { exact: true })).toBeVisible()
+  await expect(summary.getByText('暂未开放', { exact: true })).toHaveCount(0)
   await expect(summary).not.toContainText(/套餐预览|每日|重置时间/)
   // Sample both tabs in the same frame while the dialog entrance animates.
   const [accountBounds, usageBounds] = await dialog.getByRole('tab').evaluateAll((tabs) =>
@@ -85,15 +87,20 @@ test('account tabs keep the conversation and present unavailable billing honestl
   await upgrade.click()
   const pricing = page.getByRole('dialog', { name: '选择适合你的套餐', exact: true })
   await expect(pricing).toBeVisible()
+  await expect(pricing.getByRole('tab')).toHaveCount(0)
+  await expect(pricing.locator('.pricing-account-summary')).toHaveCount(0)
+  await expect(pricing.getByRole('button', { name: '刷新权益', exact: true })).toHaveCount(0)
   await pricing.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(dialog.getByRole('button', { name: '升级', exact: true })).toBeFocused()
   await expect(dialog.getByRole('button', { name: '查看消耗记录' })).toHaveCount(0)
   await expect(dialog.getByRole('button', { name: '积分加购' })).toHaveCount(0)
+  expect(historyReads).toEqual([])
   await accountTab.focus()
   await accountTab.press('ArrowRight')
   await expect(usageTab).toBeFocused()
   await expect(usageTab).toHaveAttribute('aria-selected', 'true')
-  await expect(dialog.getByRole('heading', { name: '消耗记录即将开放' })).toBeVisible()
+  await expect(dialog.getByText('暂无积分记录', { exact: true })).toBeVisible()
+  expect(historyReads).toHaveLength(1)
   await expect(page).toHaveURL(/\/conversations\/preview$/)
   await usageTab.press('ArrowRight')
   await expect(accountTab).toBeFocused()

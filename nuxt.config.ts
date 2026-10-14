@@ -45,6 +45,10 @@ export default defineNuxtConfig({
       headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' },
     },
     '/login': { headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' } },
+    '/billing/**': {
+      ssr: false,
+      headers: { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' },
+    },
   },
   i18n: {
     strategy: 'prefix_except_default',

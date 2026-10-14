@@ -32,7 +32,12 @@ test('history actions reveal on hover or keyboard and copy raw Markdown after st
   await input.press('Enter')
   const reply = page.locator('[data-message-id="assistant-1"]')
   await expect(reply).toBeVisible()
-  await expect(reply.locator('footer')).toHaveCount(0)
+  await expect(reply.locator('.message-cards')).toBeVisible()
+  await expect(reply.locator('footer')).toBeHidden()
+  await expect(reply.locator('footer')).toHaveAttribute('inert', '')
+  await expect(
+    reply.getByRole('button', { name: '复制 Markdown', includeHidden: true }),
+  ).toBeDisabled()
   await expect(reply.locator('footer')).toBeVisible()
   await reply.getByRole('button', { name: '复制 Markdown' }).click()
   await expect

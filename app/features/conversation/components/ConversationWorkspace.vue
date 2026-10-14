@@ -16,6 +16,7 @@ import type { MessageCard } from '../types'
 import type { ReplayQuestionReference } from '~/features/replay/types'
 import MessageList from './MessageList.vue'
 import MessageComposer from './MessageComposer.vue'
+import ConversationCreditNotice from './ConversationCreditNotice.vue'
 import ClarificationQuestions from './ClarificationQuestions.vue'
 import ConversationAssetListPanel from './ConversationAssetListPanel.vue'
 import ConversationAssetDetailPanel from './ConversationAssetDetailPanel.vue'
@@ -50,6 +51,10 @@ const {
   loadAssets,
 } = useConversation(props.conversationId)
 const { active, reconnecting, error: runError, state } = run
+const insufficientCredits = computed(
+  () =>
+    state.error?.key === 'CREDITS_INSUFFICIENT' || sendError.value === 'chat.creditsInsufficient',
+)
 const assetRevision = ref(0)
 watch(active, (value, previous) => {
   if (previous && !value) assetRevision.value++
@@ -464,7 +469,13 @@ onBeforeUnmount(() => {
               />{{ $t('chat.reconnecting') }}
             </div>
             <div
-              v-if="runError && (active || !messages.some((m) => m.status === 'failed'))"
+              v-if="
+                runError &&
+                runError !== 'chat.creditsInsufficient' &&
+                (active ||
+                  runError !== 'chat.runFailed' ||
+                  !messages.some((m) => m.status === 'failed'))
+              "
               class="chat-error chat-inline-actions"
               role="alert"
             >
@@ -482,7 +493,9 @@ onBeforeUnmount(() => {
               class="chat-error"
               role="alert"
             >
-              {{ $t(sendError) }}
+              <template v-if="sendError !== 'chat.creditsInsufficient'">{{
+                $t(sendError)
+              }}</template>
               <NuxtLink
                 v-if="otherPending"
                 :to="otherPending"
@@ -509,6 +522,7 @@ onBeforeUnmount(() => {
                 </button>
               </div>
             </div>
+            <ConversationCreditNotice v-if="insufficientCredits" />
             <ClarificationQuestions
               v-if="questions"
               :key="questions.messageId"

@@ -1,6 +1,12 @@
 import type { AgentEvent } from './agent-events'
 import { isTerminal, protocolError } from './agent-events'
-import type { ConversationMessage, DisplayMessage, RunStatus, ToolStatus } from './types'
+import type {
+  AgentRunError,
+  ConversationMessage,
+  DisplayMessage,
+  RunStatus,
+  ToolStatus,
+} from './types'
 
 export interface RunMessages {
   messages: Map<string, DisplayMessage>
@@ -8,6 +14,7 @@ export interface RunMessages {
   tools: Map<string, ToolStatus>
   status: RunStatus
   receivedSnapshot: boolean
+  error: AgentRunError | null
 }
 export function emptyRun(): RunMessages {
   return {
@@ -16,6 +23,7 @@ export function emptyRun(): RunMessages {
     tools: new Map(),
     status: 'queued',
     receivedSnapshot: false,
+    error: null,
   }
 }
 function ensureMessage(state: RunMessages, id: string, history: ConversationMessage[]) {
@@ -30,8 +38,13 @@ function ensureMessage(state: RunMessages, id: string, history: ConversationMess
   }
   return message
 }
-export function finishRun(state: RunMessages, status: RunStatus) {
+export function finishRun(
+  state: RunMessages,
+  status: RunStatus,
+  error: AgentRunError | null = null,
+) {
   state.status = status
+  state.error = status === 'failed' ? error : null
   state.tools.clear()
   for (const message of state.messages.values()) {
     if (message.status === 'streaming')
@@ -61,14 +74,15 @@ export function applyAgentEvent(
       event.payload.active_tools.filter((t) => t.status === 'running').map((t) => [t.id, t]),
     )
     state.status = event.payload.run.status
+    state.error = event.payload.run.error ?? null
     state.receivedSnapshot = true
     for (const tool of state.tools.values()) ensureMessage(state, tool.message_id, history)
-    if (isTerminal(state.status)) finishRun(state, state.status)
+    if (isTerminal(state.status)) finishRun(state, state.status, state.error)
     return
   }
   if (!state.receivedSnapshot) return protocolError()
   if (event.type === 'run.finished') {
-    finishRun(state, event.payload.status)
+    finishRun(state, event.payload.status, event.payload.error)
     return
   }
   if (isTerminal(state.status)) return

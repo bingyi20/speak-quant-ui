@@ -6,6 +6,8 @@ import { createConversationApi } from '../api'
 import { useConversationHistoryStore } from '../history-store'
 import { writeStorage } from '~/lib/storage/safe-storage'
 import { ApiError } from '~/lib/http/error'
+import { useBillingStore } from '~/features/billing/stores/billing'
+import { conversationBillingError } from '../billing-errors'
 import {
   readSubmission,
   saveSubmission,
@@ -19,6 +21,7 @@ export function useResearchEntry() {
   const { $http, $restoreAuth } = useNuxtApp()
   const api = createConversationApi($http)
   const history = useConversationHistoryStore()
+  const billing = useBillingStore()
   const router = useRouter()
   const route = useRoute()
   const enabled = String(useRuntimeConfig().public.apiEnabled) === 'true'
@@ -90,12 +93,15 @@ export function useResearchEntry() {
         ...intent.value!,
         phase: intent.value?.acceptedConversationId ? 'accepted' : 'failed',
         rejected:
-          cause instanceof ApiError && [400, 403, 404, 409, 422].includes(cause.status ?? 0),
+          cause instanceof ApiError && [400, 402, 403, 404, 409, 422].includes(cause.status ?? 0),
       })
       error.value =
-        cause instanceof ApiError && cause.status === 422
+        (cause instanceof ApiError && conversationBillingError(cause.key)) ||
+        (cause instanceof ApiError && cause.status === 422
           ? 'chat.invalidContent'
-          : 'chat.createFailed'
+          : 'chat.createFailed')
+      if (cause instanceof ApiError && conversationBillingError(cause.key))
+        void billing.refreshEntitlements().catch(() => {})
     } finally {
       if (busyKey.value === pending.key) busyKey.value = ''
     }

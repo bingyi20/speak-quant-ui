@@ -2,6 +2,7 @@
 import { useTemplateRef } from 'vue'
 import { useResearchEntry } from '../composables/useResearchEntry'
 import MessageComposer from './MessageComposer.vue'
+import ConversationCreditNotice from './ConversationCreditNotice.vue'
 const props = withDefaults(
   defineProps<{
     compact?: boolean
@@ -33,6 +34,7 @@ function chooseExample(n: number) {
 </script>
 <template>
   <div class="research-entry">
+    <ConversationCreditNotice v-if="error === 'chat.creditsInsufficient'" />
     <MessageComposer
       ref="composer"
       v-model="draft"
@@ -48,7 +50,7 @@ function chooseExample(n: number) {
     >
       <p class="entry-submission-text">{{ intent.display }}</p>
       <p
-        v-if="error"
+        v-if="error && error !== 'chat.creditsInsufficient'"
         class="chat-error"
         role="alert"
       >

@@ -21,7 +21,7 @@ const open = defineModel<boolean>('open', { default: false })
           ><UIcon name="i-lucide-x"
         /></UiIconButton>
       </div>
-      <div class="subscription-modal-scroll">
+      <div class="subscription-modal-body">
         <PricingContent :initial-tab="initialTab" />
       </div>
     </template>

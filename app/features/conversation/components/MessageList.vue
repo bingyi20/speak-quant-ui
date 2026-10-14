@@ -19,6 +19,13 @@ const props = defineProps<{
 }>()
 defineEmits<{ open: [messageId: string, card: MessageCard]; retry: [] }>()
 const latestAssistantId = computed(() => props.messages.findLast((m) => m.role === 'assistant')?.id)
+const waitingAssistantId = computed(() => {
+  if (!props.waiting) return undefined
+  const message = props.messages.findLast((item) => item.role === 'assistant')
+  return message?.status === 'streaming' && !message.content && !message.cards.length
+    ? message.id
+    : undefined
+})
 const today = ref(new Date())
 let dateTimer: ReturnType<typeof setTimeout> | undefined
 function refreshDate() {
@@ -112,6 +119,7 @@ defineExpose({ bottom })
             :tools="tools.filter((t) => t.message_id === message.id)"
             :selected-card-id="selectedCardId"
             :active-question-message-id="activeQuestionMessageId"
+            :waiting="message.id === waitingAssistantId"
             @open="$emit('open', message.id, $event)"
           />
           <p
@@ -122,14 +130,23 @@ defineExpose({ bottom })
           </p>
         </template>
         <div
-          v-if="waiting || loading"
-          class="reply-waiting"
-          role="status"
+          v-if="(waiting && !waitingAssistantId) || loading"
+          class="assistant-message"
         >
-          <UIcon
-            name="i-lucide-loader-circle"
-            class="chat-spinner"
-          /><span class="sr-only">{{ $t('chat.replying') }}</span>
+          <div
+            class="reply-waiting"
+            role="status"
+          >
+            <UIcon
+              name="i-lucide-loader-circle"
+              class="chat-spinner"
+            /><span class="sr-only">{{ $t('chat.replying') }}</span>
+          </div>
+          <ul
+            v-if="waiting"
+            class="tool-statuses is-empty"
+            aria-hidden="true"
+          />
         </div>
       </div>
     </div>

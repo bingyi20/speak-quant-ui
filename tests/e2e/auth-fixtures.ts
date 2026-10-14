@@ -41,6 +41,8 @@ export async function settingsTrigger(page: Page) {
 
 /** HTTP boundary fixture: application code always uses the real API module. */
 export async function stubHistory(page: Page) {
+  const { stubBilling } = await import('./billing-fixtures')
+  await stubBilling(page)
   const { createMockHistory } = await import('./history-data')
   let rows = createMockHistory()
   const calls: { method: string; path: string; body: unknown; headers: Record<string, string> }[] =

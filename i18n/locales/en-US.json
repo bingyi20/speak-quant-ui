@@ -169,9 +169,37 @@
     "viewPlans": "Upgrade",
     "creditBalance": "Credits",
     "notAvailable": "Not available yet",
-    "usageDescription": "Review credit usage and returns for each research.",
-    "usageSoon": "Usage history is coming soon",
-    "usageHint": "Once available, the date, credits used, and details of each research will appear here."
+    "usageLoadError": "Unable to load credit history. Please try again.",
+    "usage": {
+      "summary": "{plan} · {credits} credits remaining",
+      "loading": "Loading…",
+      "empty": "No credit history yet",
+      "date": "Date (UTC)",
+      "activity": "Activity",
+      "change": "Credit change",
+      "pagination": "Credit history pages",
+      "previous": "Previous page",
+      "next": "Next page",
+      "page": "{page} / {pages}",
+      "activities": {
+        "signupBonus": "New user registration bonus",
+        "topup": "Credit top-up",
+        "subscriptionBasic": "Basic subscription",
+        "subscriptionPro": "Pro subscription",
+        "subscriptionMax": "Max subscription",
+        "compensation": "Credit compensation",
+        "grant": "Credits granted",
+        "reserve": "Credits reserved",
+        "consume": "Credits used",
+        "release": "Reservation released",
+        "releaseExpired": "Expired reservation removed",
+        "expired": "Credits expired",
+        "superseded": "Credits replaced on upgrade",
+        "revoke": "Credits revoked",
+        "restore": "Credits restored",
+        "other": "Other activity"
+      }
+    }
   },
   "errors": {
     "generic": "Unable to load. Please try again.",
@@ -217,6 +245,12 @@
     "replyFailed": "This response could not finish. Generated content has been kept.",
     "replyCancelled": "This response has ended.",
     "runFailed": "This response could not finish. Please try again later.",
+    "creditsInsufficient": "Not enough credits to continue this task.",
+    "creditsResumeManually": "Start the task again after your payment is credited. Your output is saved.",
+    "rechargeCredits": "Add credits",
+    "creditsRiskBlocked": "Your account benefits are restricted. Contact support before trying again.",
+    "billingReconciliationPending": "The model cost is being verified. Please try again later.",
+    "llmPriceNotConfigured": "Pricing for this model is not configured. Please contact support.",
     "reconnecting": "Restoring connection…",
     "connectionFailed": "Connection interrupted. Retry to resume this response.",
     "loadFailed": "Could not load this conversation. Please retry.",
@@ -266,53 +300,112 @@
     "title": "Choose the right plan for you",
     "plansTab": "Membership plans",
     "creditsTab": "Credit top-ups",
-    "recommended": "Recommended",
     "perMonth": "/ month",
     "everyMonth": "/ month",
     "creditCount": "{count} credits",
-    "freeCredits": "Free monthly allowance",
-    "unitPrice": "${price} / 100 credits",
-    "topUpRate": "Top-ups: ${price} / 100 credits",
+    "unitPrice": "${price} / 1,000 credits",
+    "topUpRate": "Top-ups: ${price} / 1,000 credits",
     "currentPlan": "Current plan",
-    "freePlan": "Free plan",
     "choosePlan": "Choose {plan}",
-    "previewNote": "Prices are in USD. Plans and membership are previews; payments are not yet available.",
     "plans": {
-      "free": {
-        "description": "Start with your first trading idea",
-        "includes": "Your research essentials"
+      "basic": {
+        "description": "Build your research practice from a trading idea"
       },
       "pro": {
-        "description": "For ongoing exploration and iteration",
-        "includes": "Everything in Free, plus"
+        "description": "For ongoing exploration and iteration"
       },
       "max": {
-        "description": "More capacity for intensive research",
-        "includes": "Everything in Pro, plus"
+        "description": "More capacity for intensive research"
       }
     },
     "features": {
       "conversation": "Explore trading ideas with AI",
       "history": "Save and organize research history",
-      "iteration": "Refine your strategy through conversation",
-      "allowance": "{count} research credits each month",
-      "flexibility": "Top up credits whenever you need more",
-      "topUp": "Lower rates on additional credits"
+      "iteration": "Refine your strategy through conversation"
     },
+    "researchIncluded": "Every plan includes",
     "currentMembership": "Current membership",
     "topUpAmount": "Top-up amount",
-    "amountHint": "Minimum ${min}",
+    "amountHint": "Minimum ${min} USD",
     "presetAmounts": "Quick top-up amounts",
-    "invalidAmount": "Enter a whole amount between {min} and {max}.",
-    "youReceive": "Estimated credits",
+    "invalidAmount": "Enter at least ${min}, with up to two decimal places.",
+    "quotedCredits": "Credits in this purchase",
     "credits": "credits",
-    "roundingNote": "Final credit amounts will be confirmed at checkout once payments launch.",
-    "continueAmount": "Continue · ${amount}",
-    "enterAmount": "Enter a valid amount",
-    "membershipUnavailable": "Membership information is unavailable. Please try again later.",
-    "paymentSoon": "Payments coming soon",
+    "payTopUpAmount": "Pay ${amount}",
+    "confirmPaymentAmount": "Pay · ${amount}",
+    "membershipUnavailable": "Membership information is unavailable. Refresh and try again.",
     "recharge": "Upgrade",
-    "topUpPreview": "Top-up rate preview"
+    "noSubscription": "No subscription",
+    "availableCredits": "Available credits: {count}",
+    "periodEnds": "Valid until {date}",
+    "canceledRenewalUntil": "Renewal canceled. Valid until {date}",
+    "accountRestricted": "Your account is restricted. Contact support; a top-up does not automatically remove the restriction.",
+    "pendingChange": "A subscription change is being verified. New changes and top-ups are temporarily unavailable.",
+    "refreshStatus": "Refresh benefits",
+    "manageBilling": "Manage billing",
+    "resumeRenewal": "Resume renewal",
+    "cancelRenewal": "Cancel renewal",
+    "retryOriginalOperation": "Recover original operation",
+    "recoveryRequired": "The previous operation is unresolved. Recover it to check the result.",
+    "continuePayment": "Continue payment",
+    "checkPayment": "Check payment status",
+    "processing": "Processing, please wait…",
+    "downgradeUnavailable": "Downgrades unavailable this period",
+    "upgradePlan": "Upgrade to {plan}",
+    "confirmUpgrade": "Confirm upgrade",
+    "upgradeQuoteTitle": "Upgrade to {plan}",
+    "upgradeTotal": "Pay ${amount} USD for {credits} credits",
+    "upgradeFullPrice": "The full monthly price of the new plan is charged immediately, without a credit for the old plan.",
+    "upgradeMonthlyExpires": "Unused monthly credits from your old plan expire when payment succeeds.",
+    "upgradeCycleReset": "A new monthly billing period begins when payment succeeds.",
+    "upgradePreserved": "Remaining signup and separately purchased credits are preserved.",
+    "quoteExpires": "Quote valid until {date}",
+    "topUpLoginRequired": "Sign in and subscribe to an active paid plan to purchase credits at your plan’s rate.",
+    "topUpNotEligible": "Credit top-ups require an active paid subscription with no pending change. Choose a plan or resolve your subscription in billing management.",
+    "viewPlans": "View membership plans",
+    "purchaseNote": "Prices are in USD. Monthly plans renew automatically; you can cancel renewal. Monthly credits expire at period end. Signup and top-up credits do not expire.",
+    "orderAmount": "Order total: ${amount} USD",
+    "returnTitle": "Payment status",
+    "returnSuccess": "Payment successful. Your benefits are available.",
+    "returnFulfilling": "Payment confirmed. Your benefits are still being processed.",
+    "returnClosed": "Payment was not completed. No benefits were issued.",
+    "returnPending": "Checking your payment. Please wait.",
+    "returnCancelled": "You have returned. Your original order will still be verified; if unpaid, continue payment from the original page.",
+    "subscriptionStatus": {
+      "active": "Subscription active",
+      "past_due": "Payment overdue; manage your billing",
+      "unpaid": "Invoice unpaid",
+      "paused": "Subscription paused",
+      "canceled": "Subscription canceled"
+    },
+    "order": {
+      "fulfilled": "Payment successful. Your benefits are available.",
+      "superseded": "Payment verified. These historical benefits were superseded; your current benefits have been refreshed.",
+      "paidPending": "Payment confirmed. Your benefits are being processed.",
+      "requiresAction": "Payment is pending. Complete checkout in the new tab.",
+      "processing": "Payment is being verified. Your benefits will update automatically.",
+      "failed": "Payment failed. No benefits were issued.",
+      "expired": "Payment expired. No benefits were issued.",
+      "canceled": "Payment canceled. No benefits were issued.",
+      "closed": "Payment closed. No benefits were issued.",
+      "refunded": "Order refunded. Your current credits and subscription have been refreshed.",
+      "partially_refunded": "Order partially refunded. Check your current benefits.",
+      "disputed": "This payment is disputed. Contact support."
+    },
+    "errors": {
+      "network": "Connection unavailable. Retry or recover the original operation.",
+      "notConfigured": "Payments are temporarily unavailable. Try again later or contact support.",
+      "reconciliation": "Payment or billing is being verified. Keep your original order and check its status.",
+      "notEligible": "Your subscription does not support this action. Refresh benefits or manage billing.",
+      "alreadySubscribed": "A subscription or checkout already exists. Check your current benefits and order.",
+      "inProgress": "A subscription change is pending. Recover the original operation or refresh its status.",
+      "quoteStale": "This quote is no longer valid. Request and confirm a new quote.",
+      "paymentMismatch": "Payment details could not be verified. Check the original order or contact support.",
+      "restricted": "Your account is restricted. Contact support.",
+      "generic": "The action was not completed. Refresh the status and try again.",
+      "popupBlocked": "The payment tab could not open. Select “Continue payment” to reopen it.",
+      "loginRequired": "Sign in to purchase."
+    }
   },
   "strategy": {
     "current": "Current strategy",
@@ -664,11 +757,11 @@
     "plansTitle": "How do the plans differ?",
     "plansBody": "All plans support AI-assisted strategy research, historical backtesting and result analysis. They differ in monthly credits and top-up rates. The current online workspace does not hold funds or place orders for you.",
     "creditsTitle": "How are credits used?",
-    "creditsBody": "Credits are used to process your AI research requests. Usage varies with the model, tools and task complexity. More complex tasks and more content generally use more credits. Viewing existing conversations, strategies and backtest results uses no additional credits.",
+    "creditsBody": "Credits are used to process your AI research requests. Usage varies with the model, tools and task complexity. More complex tasks and more content generally use more credits. Viewing existing conversations, strategies and backtest results uses no additional credits. Signup credits are issued once. Monthly credits expire without rollover; signup and separately purchased credits do not expire.",
     "topUpTitle": "What if I run out of credits?",
-    "topUpBody": "You can buy a one-time credit top-up, upgrade to a higher monthly plan, or wait for your next renewal to refresh your credits. When you upgrade, your remaining credits are added to your new plan's allowance. On Max, you cannot change plans until the current billing period ends; you can top up or wait for renewal.",
+    "topUpBody": "An active paid subscription lets you buy additional credits, upgrade to a higher monthly plan, or wait for renewal. Upgrades charge the full new monthly price without crediting the old plan. After payment, unused old monthly credits expire and a new billing period starts; remaining signup and separately purchased credits are preserved. Max subscribers can top up or wait for renewal.",
     "billingTitle": "Do subscriptions renew automatically, and how do I cancel?",
-    "billingBody": "The proposed paid plans renew monthly. Cancel before the next charge to stop renewal; your plan benefits remain available until the end of the current billing period.",
+    "billingBody": "Paid plans renew monthly. Cancel before the next charge to stop renewal; your benefits remain until the paid period ends. Manage invoices and payment methods in billing management, or resume renewal before the subscription ends.",
     "refundTitle": "Can I request a refund?",
     "refundBody": "Subscriptions and credit top-ups are digital services and are generally non-refundable. Contact support about duplicate charges, payment errors, accidental purchases or failure to deliver a paid service as agreed, so we can investigate and handle remedies or refunds. Statutory consumer rights and mandatory payment-channel rules remain unaffected.",
     "contactLink": "Questions? Contact us"
@@ -691,7 +784,7 @@
         {
           "title": "How we use information",
           "paragraphs": [
-            "We use this information to authenticate users, provide AI conversations and strategy research, run historical backtests, save research, offer support, and maintain service security and reliability. When paid features become available, we will also process orders, subscriptions and credit entitlements.",
+            "We use this information to authenticate users, provide AI conversations and strategy research, run historical backtests, save research, offer support, and maintain service security and reliability. When you use paid features, we also process orders, subscriptions and credit entitlements.",
             "Where applicable law requires a legal basis, we rely on what is necessary to provide and perform the service, meet legal obligations, and pursue legitimate interests in security and product improvement. Where consent is required, we obtain it separately; using the service alone does not replace that consent."
           ]
         },
@@ -712,7 +805,7 @@
         {
           "title": "Payment information",
           "paragraphs": [
-            "Paid features are not currently available. When enabled, checkout will identify the provider processing the transaction. You submit payment card details directly to that provider; do not submit full card numbers or security codes in research conversations or support messages.",
+            "Availability of paid features follows the actual purchase entry points and checkout flow. Payments are processed by the provider identified at checkout, currently through Stripe-hosted pages. You submit payment card details directly to that provider; do not submit full card numbers or security codes in research conversations or support messages.",
             "We may share or receive names, email addresses, country or region, order and customer identifiers, subscription details, amounts, currencies, and payment or refund status to deliver entitlements, reconcile transactions, provide support and meet legal obligations. Checkout identifies the actual payment provider or merchant of record and provides its applicable privacy notice. Processing it performs under its own legal obligations is also governed by that notice."
           ]
         },
@@ -720,7 +813,7 @@
           "title": "Cookies and browser storage",
           "paragraphs": [
             "We use cookies for sign-in and preferences such as language and appearance. Some cookies remain after you close the browser. Preference cookies last up to one year; sign-in cookies are retained according to the authentication settings and cleared when you sign out.",
-            "Local browser storage saves interface preferences, while tab session storage holds unsent drafts and pending submissions. You can clear or restrict this data in your browser, but may need to sign in or set preferences again. Clearing browser data does not automatically delete research saved in your account."
+            "Browser local storage saves interface preferences and account-specific records of unresolved payment operations and order identifiers so queries can resume after a page reload. Session storage in the current tab saves unsent drafts and pending submissions. You can clear or restrict these through browser settings, but may need to sign in again, reset preferences or recover payment queries through order records. Clearing browser data does not automatically delete research stored in your account."
           ]
         },
         {
@@ -817,11 +910,11 @@
         {
           "title": "6. Subscriptions, credits and payments",
           "paragraphs": [
-            "Current plans and prices are previews. Paid subscriptions and credit top-ups are not yet available, and preview actions do not charge you. The following purchase rules apply when paid features are actually enabled.",
+            "Availability of paid subscriptions and credit top-ups follows the purchase entry points and checkout flow deployed in the service. The following rules apply to purchases initiated through those entry points. Creating an order or returning to our site does not by itself confirm payment; payment and entitlement status depend on verification of the order.",
             "Plans and prices: Available plans, prices, currencies, credit allowances and features are those shown before purchase. The pricing page uses US dollars (USD); applicable taxes, discounts and the final amount payable are clearly shown at checkout. We do not make additional charges without authorization.",
             "Use of credits: Credits are for AI research within SpeakQuant. They are not currency, investment assets or a means of paying third parties, and cannot be withdrawn, resold or transferred between users. Usage depends on models, tools, task complexity and the amount of content processed. Viewing existing conversations, strategies and backtest results uses no additional credits.",
-            "Credit allowances: Monthly plans provide credits for the relevant period. One-time top-ups do not start another subscription. Credit validity, rollover at ordinary renewal and other usage conditions must be shown before purchase. New rules cannot retrospectively reduce purchased entitlements, except where a change is required by law.",
-            "Plan changes: If credits run out, you can top up, upgrade to a higher monthly plan or wait for the next renewal. An upgrade preserves remaining credits and adds them to the new plan allowance. If already on Max, you cannot change plans before the period ends. Upgrade charges, effective dates and billing-period changes are shown before confirmation.",
+            "Credit allowances: Signup credits are issued once, with no recurring free monthly refresh. Paid monthly plans issue credits for each paid period. Monthly credits expire at that period’s end and do not roll over; signup and separately purchased credits do not expire. Top-ups require an active paid subscription with no pending subscription change and do not start another subscription. Other usage conditions are shown before purchase. New rules cannot retrospectively reduce purchased entitlements, except where a change is required by law.",
+            "Plan changes: An active paid subscription lets you top up, upgrade to a higher monthly plan or wait for renewal. Upgrades immediately charge the full new monthly price without crediting the old plan. When payment succeeds, unused old monthly credits expire and a new monthly billing period begins; remaining signup and separately purchased credits are preserved. Downgrades are unavailable during an active period. Max subscribers can top up or wait for renewal. Upgrade charges and changes to benefits are shown before payment confirmation.",
             "Payment and receipts: Checkout identifies the available payment methods, the actual seller or merchant of record, and the channel terms applicable to the transaction. Payments are handled by the relevant third-party channel, which handles collection, payment documents, taxes and refunds according to its role. SpeakQuant provides the purchased product service and support; third-party involvement does not exclude your statutory rights.",
             "Delivery: Once payment is confirmed, purchased plan or credit entitlements are delivered to the SpeakQuant account linked to the order. Activation timing is stated before purchase. If payment succeeds but entitlements are missing, email us with your account and order details so we can investigate, provide the entitlements or handle a refund under applicable rules.",
             "Price changes: Confirmed orders are fulfilled on the agreed terms. Changes to prices or plans affecting future renewals are communicated reasonably in advance of the next charge, with an opportunity to stop renewal. Longer notice periods or renewed consent required by law will be respected."
@@ -831,7 +924,7 @@
           "title": "7. Automatic renewal and stopping renewal",
           "paragraphs": [
             "Paid monthly plans renew automatically each month. The renewal interval, amount and charge date are disclosed before purchase, and charges require the necessary authorization. One-time credit top-ups do not renew automatically.",
-            "When paid subscriptions are enabled, we will provide subscription management in the workspace or access to the payment channel’s customer portal. You can turn off automatic renewal before the next charge. No subsequent renewals will be charged, and purchased plan benefits remain available until the end of the current period. You do not have to delete your account to stop renewal.",
+            "You can turn off automatic renewal through subscription management in the workspace or billing management before the next charge. No subsequent renewals will be charged, and purchased plan benefits remain available until the paid period ends. Renewal can be resumed while the subscription has not ended. You do not have to delete your account to stop renewal.",
             "If payment fails, we may notify you to update the payment method and suspend the unpaid entitlements. An unconfirmed payment is not treated as a successful purchase."
           ]
         },

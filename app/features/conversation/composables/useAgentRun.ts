@@ -1,6 +1,7 @@
 import { onScopeDispose, reactive, ref } from 'vue'
 import { parseAgentEvent, isTerminal } from '../agent-events'
 import { applyAgentEvent, emptyRun, finishRun } from '../message-state'
+import { conversationBillingError } from '../billing-errors'
 import type { ConversationApi } from '../api'
 import type { AgentRun, ConversationMessage, MessageCard } from '../types'
 
@@ -135,7 +136,7 @@ export function useAgentRun(
               throw new Error('Run owner mismatch', { cause })
             url = detail.stream_url
             if (isTerminal(detail.status)) {
-              finishRun(state, detail.status)
+              finishRun(state, detail.status, detail.error)
               break
             }
           } catch {
@@ -146,11 +147,23 @@ export function useAgentRun(
       }
       if (signal.aborted || generation !== version) return
       clearTimers()
+      // A restored terminal snapshot may omit the optional error; GET Run is authoritative.
+      if (state.status === 'failed' && !state.error) {
+        try {
+          const detail = await api.run(run.id, signal)
+          if (signal.aborted || generation !== version) return
+          if (detail.conversation_id === conversationId && detail.status === 'failed')
+            finishRun(state, detail.status, detail.error)
+        } catch {
+          if (signal.aborted || generation !== version) return
+        }
+      }
+      if (state.status === 'failed')
+        error.value = conversationBillingError(state.error?.key) ?? 'chat.runFailed'
       await onFinished()
       if (signal.aborted || generation !== version) return
       active.value = false
       reconnecting.value = false
-      if (state.status === 'failed') error.value = 'chat.runFailed'
     } catch {
       if (signal.aborted || generation !== version) return
       reconnecting.value = false
