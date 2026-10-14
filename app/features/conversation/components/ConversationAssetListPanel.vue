@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import LoadingState from '~/components/common/LoadingState.vue'
 import type { ConversationAssets, MessageCard } from '../types'
 import AssetCard from './cards/MessageCard.vue'
 const props = defineProps<{
@@ -60,14 +61,16 @@ const replayCards = computed<MessageCard[]>(() =>
       <header>
         <h2>{{ $t('conversation.assetTitle') }}</h2>
       </header>
-      <div class="panel-content">
-        <p
+      <div
+        class="panel-content"
+        :class="{ 'is-initial-loading': loading && !assets }"
+        :aria-busy="loading"
+      >
+        <LoadingState
           v-if="loading && !assets"
-          class="chat-muted"
-          role="status"
-        >
-          {{ $t('common.loading') }}
-        </p>
+          class="asset-list-loading"
+          fill
+        />
         <div
           v-if="error"
           class="chat-error"
@@ -134,6 +137,12 @@ const replayCards = computed<MessageCard[]>(() =>
 }
 .panel-content {
   padding: 12px 20px 20px;
+}
+.panel-content.is-initial-loading {
+  display: flex;
+}
+.asset-list-loading {
+  flex: 1;
 }
 .message-card + .message-card {
   margin-top: 10px;

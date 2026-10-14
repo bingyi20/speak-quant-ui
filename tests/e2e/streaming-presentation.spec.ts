@@ -142,7 +142,7 @@ for (const manyMessages of [false, true])
       })
     })
     const spinnerOrigin = () =>
-      page.locator('.reply-waiting .iconify').evaluate((element) => {
+      page.locator('.reply-waiting .loading-spinner').evaluate((element) => {
         const icon = element.getBoundingClientRect()
         const line = element.closest('.reply-waiting')!.getBoundingClientRect()
         const list = element.closest('.message-list')!.getBoundingClientRect()
@@ -169,6 +169,7 @@ for (const manyMessages of [false, true])
       await expect.poll(() => requested).toBe(true)
       await expect(page.locator('.reply-waiting')).toHaveCount(1)
       await expect(page.locator('[data-message-id="assistant-1"]')).toHaveCount(0)
+      await expect(page.locator('.reply-waiting .loading-spinner')).toBeVisible()
       await expectAtBottom()
       const pending = await spinnerOrigin()
 
@@ -176,6 +177,11 @@ for (const manyMessages of [false, true])
       const assistant = page.locator('[data-message-id="assistant-1"]')
       await expect(assistant.locator('.reply-waiting')).toBeVisible()
       await expect(page.locator('.reply-waiting')).toHaveCount(1)
+      expect(
+        await assistant
+          .locator('.reply-waiting .loading-spinner')
+          .evaluate((element) => getComputedStyle(element).visibility),
+      ).toBe('visible')
       await expectAtBottom()
       const emptyReply = await spinnerOrigin()
       expect(emptyReply.left).toBeCloseTo(pending.left, 1)

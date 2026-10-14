@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ApiError } from '~/lib/http/error'
+import LoadingState from './LoadingState.vue'
 const props = defineProps<{
   status: 'idle' | 'pending' | 'success' | 'error'
   error?: unknown
@@ -14,17 +15,10 @@ const message = computed(() =>
 )
 </script>
 <template>
-  <div
+  <LoadingState
     v-if="status === 'pending'"
     class="async-state"
-    role="status"
-  >
-    <UIcon
-      name="i-lucide-loader-circle"
-      class="spin"
-    />
-    {{ $t('common.loading') }}
-  </div>
+  />
   <div
     v-else-if="status === 'error'"
     class="async-state"

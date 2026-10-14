@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ReplayInsightContent from './ReplayInsightContent.vue'
+import LoadingState from '~/components/common/LoadingState.vue'
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import type {
   ChartAdapter,
@@ -32,6 +33,9 @@ const props = defineProps<{
   range: (ChartViewportRequest & { revision: number }) | null
   volume: boolean
   symbol: string
+  loading?: boolean
+  emptyLabel?: string
+  loadError?: string
 }>()
 const emit = defineEmits<{
   select: [time: number, markerId?: string]
@@ -39,11 +43,13 @@ const emit = defineEmits<{
   interact: []
   follow: []
   hover: [time: number | null]
+  retry: []
 }>()
 const { t, locale } = useI18n()
 const host = useTemplateRef<HTMLElement>('host'),
   hover = ref<ReplayBar | null>(null),
   failure = ref(false),
+  mounting = ref(true),
   canReturn = ref(false)
 const cluster = ref<ReplayEvent[]>([])
 const hoveredTag = ref<ChartMarkerHit | null>(null)
@@ -271,6 +277,7 @@ function draw() {
 }
 async function mount() {
   failure.value = false
+  mounting.value = true
   try {
     const { createLightweightChart } = await import('~/lib/chart/lightweight')
     if (!alive || !host.value) return
@@ -312,6 +319,8 @@ async function mount() {
     if (props.range) applyRange(props.range)
   } catch {
     failure.value = true
+  } finally {
+    if (alive) mounting.value = false
   }
 }
 function chooseEvent(event: ReplayEvent) {
@@ -514,10 +523,36 @@ onBeforeUnmount(() => {
       :data-visible-start="bars[0]?.time"
       :data-visible-end="bars.at(-1)?.time"
       :aria-label="t('replay.chartLabel', { symbol, timeframe })"
+      :aria-busy="loading || mounting"
       @pointerdown="interact"
       @wheel.passive="interact"
       @pointerleave="scheduleFillClose"
     />
+    <LoadingState
+      v-if="!failure && (loading || mounting)"
+      class="replay-chart-loading"
+      fill
+    />
+    <div
+      v-else-if="!failure && !bars.length && loadError"
+      class="replay-chart-empty"
+      role="alert"
+    >
+      <span>{{ t(loadError) }}</span>
+      <button
+        class="text-button"
+        @click="emit('retry')"
+      >
+        {{ t('common.retry') }}
+      </button>
+    </div>
+    <div
+      v-else-if="!failure && !bars.length && emptyLabel"
+      class="replay-chart-empty"
+      role="status"
+    >
+      {{ emptyLabel }}
+    </div>
     <UTooltip
       v-if="canReturn && bars.length && !failure"
       :text="t('replay.followLatest')"

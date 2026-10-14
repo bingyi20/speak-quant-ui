@@ -3,6 +3,8 @@ import { computed, nextTick, ref, watch, useTemplateRef } from 'vue'
 import { formatDate, formatDecimal, formatRatio } from '~/lib/format'
 import ReplayTradeDialog from './ReplayTradeDialog.vue'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
+import LoadingState from '~/components/common/LoadingState.vue'
+import LoadingSkeleton from '~/components/ui/LoadingSkeleton.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
 import { fillActionKey } from '../events'
 import { useReplayTradeStrip } from '../composables/useReplayTradeStrip'
@@ -28,6 +30,7 @@ const {
   selectedTrade,
   selection,
   tradesComplete,
+  initializing,
 } = props.state
 const cardsElement = useTemplateRef<HTMLElement>('cardsElement')
 const detailsTradeId = ref<string | null>(null)
@@ -70,6 +73,14 @@ watch(
   },
 )
 const displayTab = computed(() => (props.desktop ? 'trades' : tab.value))
+const tradesLoading = computed(
+  () =>
+    !trades.value.length &&
+    (phases.trades === 'loading' || (initializing.value && phases.candles === 'loading')),
+)
+const tradeCount = computed(() =>
+  initializing.value || !tradesComplete.value ? '—' : trades.value.length,
+)
 const scope = ref<'global' | 'runtime'>('global'),
   direction = ref('all'),
   exitReason = ref('all'),
@@ -221,7 +232,7 @@ const pnlClass = (value: string | null) =>
       </div>
       <div class="replay-cards-heading">
         <h3>
-          {{ t('replay.tradesTitle') }} <span>{{ trades.length }}</span>
+          {{ t('replay.tradesTitle') }} <span>{{ tradeCount }}</span>
         </h3>
         <button
           v-if="canReturn"
@@ -312,7 +323,7 @@ const pnlClass = (value: string | null) =>
         aria-controls="replay-evidence-content"
         @click="changeTab('trades')"
       >
-        {{ t('replay.tradeRecords') }}<span>{{ trades.length }}</span>
+        {{ t('replay.tradeRecords') }}<span>{{ tradeCount }}</span>
       </button>
       <button
         v-if="expanded"
@@ -348,9 +359,16 @@ const pnlClass = (value: string | null) =>
         v-if="!desktop && !expanded"
         class="replay-event-summary"
       >
-        <span class="replay-summary-text">{{
-          tab === 'insights' ? summary : t('replay.tradeCount', { count: trades.length })
-        }}</span
+        <LoadingSkeleton
+          v-if="phases[tab] === 'loading' || (initializing && !errors.candles)"
+          class="replay-evidence-summary-skeleton"
+        />
+        <span
+          v-else
+          class="replay-summary-text"
+          >{{
+            tab === 'insights' ? summary : t('replay.tradeCount', { count: trades.length })
+          }}</span
         ><button
           class="text-button"
           @click="expanded = true"
@@ -372,14 +390,11 @@ const pnlClass = (value: string | null) =>
             {{ insights.filter((insight) => insight.scope === value).length }}
           </button>
         </div>
-        <p
-          v-if="phases.insights === 'loading'"
-          class="replay-muted"
-          role="status"
-        >
-          {{ t('common.loading') }}
-        </p>
-        <div v-else-if="!filteredInsights.length">
+        <LoadingState
+          v-if="phases.insights === 'loading' && !filteredInsights.length"
+          class="replay-resource-loading"
+        />
+        <div v-else-if="!filteredInsights.length && !errors.insights">
           <MarkdownContent
             v-if="atEnd && scope === 'global' && detail?.result_summary"
             :content="detail.result_summary"
@@ -469,15 +484,13 @@ const pnlClass = (value: string | null) =>
             size="sm"
           />
         </div>
+        <LoadingState
+          v-if="tradesLoading"
+          class="replay-resource-loading"
+          :label="t('replay.loadingTrades')"
+        />
         <p
-          v-if="!tradesComplete && phases.trades === 'loading'"
-          class="replay-muted"
-          role="status"
-        >
-          {{ t('replay.loadingTrades') }}
-        </p>
-        <p
-          v-if="!filteredTrades.length && phases.trades !== 'loading'"
+          v-if="!filteredTrades.length && !tradesLoading && !errors.trades && !initializing"
           class="replay-muted"
         >
           {{ t(atEnd ? 'replay.noTrades' : 'replay.noTradesYet') }}

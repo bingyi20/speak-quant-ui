@@ -4,6 +4,8 @@ import { pendingClarification } from '../clarification'
 import UserMessage from './UserMessage.vue'
 import AssistantMessage from './AssistantMessage.vue'
 import { useConversationScroll } from '../composables/useConversationScroll'
+import LoadingState from '~/components/common/LoadingState.vue'
+import LoadingSpinner from '~/components/ui/LoadingSpinner.vue'
 import type { DisplayMessage, MessageCard, ToolStatus } from '../types'
 const props = defineProps<{
   messages: DisplayMessage[]
@@ -26,6 +28,14 @@ const waitingAssistantId = computed(() => {
     ? message.id
     : undefined
 })
+const waitingStartedAt = ref<number>()
+watch(
+  () => props.waiting,
+  (waiting) => {
+    waitingStartedAt.value = waiting ? Date.now() : undefined
+  },
+  { immediate: true, flush: 'sync' },
+)
 const today = ref(new Date())
 let dateTimer: ReturnType<typeof setTimeout> | undefined
 function refreshDate() {
@@ -77,9 +87,16 @@ defineExpose({ bottom })
       ref="viewport"
       class="message-scroll"
       :aria-label="$t('chat.messages')"
+      :aria-busy="loading"
       @scroll.passive="onScroll"
     >
+      <LoadingState
+        v-if="loading && !messages.length"
+        fill
+        class="message-loading"
+      />
       <div
+        v-show="!loading || messages.length"
         ref="content"
         class="message-list"
       >
@@ -120,6 +137,7 @@ defineExpose({ bottom })
             :selected-card-id="selectedCardId"
             :active-question-message-id="activeQuestionMessageId"
             :waiting="message.id === waitingAssistantId"
+            :waiting-started-at="waitingStartedAt"
             @open="$emit('open', message.id, $event)"
           />
           <p
@@ -130,16 +148,17 @@ defineExpose({ bottom })
           </p>
         </template>
         <div
-          v-if="(waiting && !waitingAssistantId) || loading"
+          v-if="waiting && !waitingAssistantId"
           class="assistant-message"
         >
           <div
             class="reply-waiting"
             role="status"
           >
-            <UIcon
-              name="i-lucide-loader-circle"
+            <LoadingSpinner
+              size="sm"
               class="chat-spinner"
+              :started-at="waitingStartedAt"
             /><span class="sr-only">{{ $t('chat.replying') }}</span>
           </div>
           <ul

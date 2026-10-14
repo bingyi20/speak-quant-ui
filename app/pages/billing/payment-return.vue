@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LoadingState from '~/components/common/LoadingState.vue'
 import { useBillingStore } from '~/features/billing/stores/billing'
 import { useAuthStore } from '~/features/auth'
 import { isOrderTerminal } from '~/features/billing/payment'
@@ -74,19 +75,10 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <div
-    class="payment-return-loading"
-    role="status"
-  >
-    {{ $t('common.loading') }}
-  </div>
+  <LoadingState class="payment-return-loading" />
 </template>
 <style scoped>
 .payment-return-loading {
-  display: grid;
   min-height: 100dvh;
-  place-items: center;
-  color: var(--color-text-secondary);
-  font-size: 14px;
 }
 </style>

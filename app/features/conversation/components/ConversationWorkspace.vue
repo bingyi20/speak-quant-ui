@@ -10,6 +10,7 @@ import {
   watch,
 } from 'vue'
 import SplitPane from '~/components/common/SplitPane.vue'
+import LoadingSpinner from '~/components/ui/LoadingSpinner.vue'
 import { useConversation } from '../composables/useConversation'
 import { pendingClarification } from '../clarification'
 import type { MessageCard } from '../types'
@@ -463,8 +464,8 @@ onBeforeUnmount(() => {
               class="chat-connection"
               role="status"
             >
-              <UIcon
-                name="i-lucide-loader-circle"
+              <LoadingSpinner
+                size="sm"
                 class="chat-spinner"
               />{{ $t('chat.reconnecting') }}
             </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LoadingState from '~/components/common/LoadingState.vue'
 import Decimal from 'decimal.js'
 import { formatQuantity } from '~/lib/format'
 import { planName } from '../catalog'
@@ -107,18 +108,11 @@ async function changePage(page: number) {
         {{ t('common.retry') }}
       </button>
     </div>
-    <div
+    <LoadingState
       v-else-if="loading && !ledger"
       class="credit-history-state"
-      role="status"
-    >
-      <UIcon
-        name="i-lucide-loader-circle"
-        class="spin"
-        aria-hidden="true"
-      />
-      {{ t('settings.usage.loading') }}
-    </div>
+      :label="t('settings.usage.loading')"
+    />
     <div
       v-else-if="ledger && !ledger.items.length"
       class="credit-history-state"

@@ -5,6 +5,7 @@ import { decimal } from '../normalize'
 import { EQUITY_RATE_DIGITS } from '../historical-result'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
 import CopyButton from '~/components/ui/CopyButton.vue'
+import LoadingState from '~/components/common/LoadingState.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
 const props = defineProps<{ state: ReplayDetailState; historical?: boolean }>()
 const kind = defineModel<'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | null>({
@@ -195,12 +196,10 @@ const warnings = computed(
   >
     <template #body>
       <template v-if="kind === 'report'">
-        <p
+        <LoadingState
           v-if="phases.report === 'loading'"
-          role="status"
-        >
-          {{ t('common.loading') }}
-        </p>
+          class="replay-resource-loading"
+        />
         <div
           v-else-if="errors.report"
           role="alert"

@@ -329,35 +329,110 @@ test('pricing renders only plans for anonymous visitors before and after hydrati
   }
 })
 
-test('pricing updates the current plan after delayed session restoration without a research CTA', async ({
+for (const subscribed of [true, false]) {
+  test(`pricing keeps its layout while resolving a delayed ${subscribed ? 'paid' : 'anonymous'} session`, async ({
+    page,
+  }) => {
+    await stubBilling(page, { plan: subscribed ? 'basic' : null })
+    const errors: string[] = []
+    page.on('console', (message) => {
+      if (/hydration.*mismatch/i.test(message.text())) errors.push(message.text())
+    })
+    let restore!: () => void
+    const restored = new Promise<void>((resolve) => {
+      restore = resolve
+    })
+    await page.route('**/api/auth/refresh', async (route) => {
+      await restored
+      await route.fulfill(
+        subscribed ? { json: envelope(authResponse) } : { status: 401, json: anonymous },
+      )
+    })
+    await page.goto('/pricing', { waitUntil: 'domcontentloaded' })
+    const geometry = () =>
+      page
+        .locator('.pricing-plan-grid, .public-pricing-details, .pricing-plan .pricing-button')
+        .evaluateAll((elements) =>
+          elements.map((element) => {
+            const { x, y, width, height } = element.getBoundingClientRect()
+            return { x, y, width, height }
+          }),
+        )
+    let pendingGeometry: Awaited<ReturnType<typeof geometry>>
+    let pendingTabs: Awaited<ReturnType<ReturnType<typeof page.locator>['boundingBox']>>
+    try {
+      await expect(page.getByRole('tab')).toHaveCount(0)
+      await expect(page.locator('.pricing-tab-placeholder [role="status"]')).toBeVisible()
+      await expect(page.locator('.pricing-tab-skeleton .loading-skeleton')).toBeVisible()
+      await expect(page.locator('.pricing-tab-placeholder .loading-spinner')).toHaveCount(0)
+      await expect(page.locator('.pricing-button-placeholder')).toHaveCount(3)
+      await expect(page.getByRole('button', { name: 'Choose Basic', exact: true })).toHaveCount(0)
+      await expect(page.getByRole('article', { name: 'Basic', exact: true })).toBeVisible()
+      await expect(page.getByText('Start research', { exact: true })).toHaveCount(0)
+      await page.evaluate(() => document.fonts.ready)
+      const placeholders = await page
+        .locator('.pricing-button-placeholder')
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            skeleton: element.getBoundingClientRect().height,
+            button: element.parentElement!.getBoundingClientRect().height,
+          })),
+        )
+      for (const placeholder of placeholders)
+        expect(placeholder.skeleton).toBeCloseTo(placeholder.button, 0)
+      pendingGeometry = await geometry()
+      pendingTabs = await page.locator('.pricing-tab-skeleton').boundingBox()
+      expect(pendingTabs!.height).toBe(52)
+      await page.screenshot({ path: test.info().outputPath('pricing-pending.png') })
+    } finally {
+      restore()
+    }
+    await expect(page.locator('.pricing-button-placeholder')).toHaveCount(0)
+    await expect(page.locator('.pricing-tab-placeholder [role="status"]')).toHaveCount(0)
+    expect(await geometry()).toEqual(pendingGeometry!)
+    if (subscribed) {
+      await expect(page.getByRole('button', { name: 'Current plan', exact: true })).toBeDisabled()
+      const resolvedTabs = await page.locator('.pricing-tab-list').boundingBox()
+      expect(resolvedTabs).toEqual(pendingTabs!)
+      await page.screenshot({ path: test.info().outputPath('pricing-ready.png') })
+      await page.getByRole('tab', { name: 'Credit top-ups', exact: true }).click()
+      await expect(page.getByText('Current membership', { exact: true })).toBeVisible()
+      await expect(page.getByText('Top-up rate preview', { exact: true })).toHaveCount(0)
+    } else {
+      await expect(page.getByRole('tab')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Choose Basic', exact: true })).toBeEnabled()
+    }
+    expect(errors).toEqual([])
+  })
+}
+
+test('pricing retries unavailable initial membership without exposing purchase controls', async ({
   page,
 }) => {
   await stubBilling(page, { plan: 'basic' })
-  const errors: string[] = []
-  page.on('console', (message) => {
-    if (/hydration.*mismatch/i.test(message.text())) errors.push(message.text())
-  })
-  let restore!: () => void
-  const restored = new Promise<void>((resolve) => {
-    restore = resolve
-  })
-  await page.route('**/api/auth/refresh', async (route) => {
-    await restored
-    await route.fulfill({ json: envelope(authResponse) })
-  })
-  await page.goto('/pricing', { waitUntil: 'domcontentloaded' })
-  try {
-    await expect(page.getByRole('tab')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Choose Basic', exact: true })).toBeVisible()
-    await expect(page.getByText('Start research', { exact: true })).toHaveCount(0)
-  } finally {
-    restore()
-  }
+  let unavailable = true
+  await page.route('**/api/billing/account', (route) =>
+    unavailable
+      ? route.fulfill({
+          status: 503,
+          json: { code: 50340, error: { key: 'BILLING_NOT_CONFIGURED' } },
+        })
+      : route.fallback(),
+  )
+  await page.route('**/api/auth/refresh', (route) =>
+    route.fulfill({ json: envelope(authResponse) }),
+  )
+  await page.goto('/pricing')
+  const failure = page.locator('.pricing-initial-error')
+  await expect(failure).toBeVisible()
+  await expect(page.locator('.pricing-button-placeholder')).toHaveCount(3)
+  await expect(page.getByRole('button', { name: 'Choose Basic', exact: true })).toHaveCount(0)
+  unavailable = false
+  await failure.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(failure).toHaveCount(0)
+  await expect(page.locator('.pricing-button-placeholder')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Current plan', exact: true })).toBeDisabled()
-  await page.getByRole('tab', { name: 'Credit top-ups', exact: true }).click()
-  await expect(page.getByText('Current membership', { exact: true })).toBeVisible()
-  await expect(page.getByText('Top-up rate preview', { exact: true })).toHaveCount(0)
-  expect(errors).toEqual([])
+  await expect(page.getByRole('tab', { name: 'Credit top-ups', exact: true })).toBeVisible()
 })
 
 test('public pricing uses server credit quotes and keeps edited amounts across tabs in both languages', async ({

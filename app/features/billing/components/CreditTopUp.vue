@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LoadingSpinner from '~/components/ui/LoadingSpinner.vue'
 import { formatDecimal, formatQuantity } from '~/lib/format'
 import Decimal from 'decimal.js'
 import {
@@ -245,12 +246,10 @@ function submit() {
       <div>
         <p>{{ t('billing.quotedCredits') }}</p>
         <strong>
-          <UIcon
+          <LoadingSpinner
             v-if="quotePending"
-            name="i-lucide-loader-circle"
-            class="pricing-topup-spinner spin"
-            :aria-label="t('common.loading')"
-            role="status"
+            class="pricing-topup-spinner"
+            :decorative="false"
           />
           <template v-else>{{ confirmedQuote ? number(confirmedQuote.credits) : '—' }}</template>
           <span>{{ t('billing.credits') }}</span>
@@ -292,3 +291,9 @@ function submit() {
     </button>
   </form>
 </template>
+<style scoped>
+.pricing-topup-spinner {
+  width: 22px;
+  height: 22px;
+}
+</style>

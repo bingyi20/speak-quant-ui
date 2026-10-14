@@ -2,6 +2,7 @@
 import { computed, ref, onBeforeUnmount } from 'vue'
 import { formatMessageTime } from '~/lib/format'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
+import LoadingSpinner from '~/components/ui/LoadingSpinner.vue'
 import MessageCardView from './cards/MessageCard.vue'
 import { clarificationData } from '../agent-events'
 import { useStreamingText } from '../composables/useStreamingText'
@@ -14,6 +15,7 @@ const props = defineProps<{
   selectedCardId?: string
   activeQuestionMessageId?: string
   waiting?: boolean
+  waitingStartedAt?: number
 }>()
 defineEmits<{ open: [card: MessageCard] }>()
 const rendered = useStreamingText(
@@ -89,9 +91,10 @@ onBeforeUnmount(() => {
       class="reply-waiting"
       role="status"
     >
-      <UIcon
-        name="i-lucide-loader-circle"
+      <LoadingSpinner
+        size="sm"
         class="chat-spinner"
+        :started-at="waitingStartedAt"
       /><span class="sr-only">{{ $t('chat.replying') }}</span>
     </div>
     <MarkdownContent

@@ -79,6 +79,8 @@
   --color-text-placeholder: color-mix(in srgb, var(--color-text-muted) 80%, transparent);
   --color-scrollbar-thumb: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
   --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-muted) 50%, transparent);
+  --color-loading-track: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  --color-loading-active: var(--color-text-secondary);
   --color-border-card-hover: color-mix(
     in srgb,
     var(--color-border-default) 80%,

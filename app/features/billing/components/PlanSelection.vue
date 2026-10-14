@@ -12,6 +12,7 @@ const props = defineProps<{
   subscription: Subscription | null | undefined
   controlsDisabled: boolean
   canUpgrade: boolean
+  eligibilityPending?: boolean
 }>()
 const { t, locale } = useI18n()
 const billing = useBillingStore()
@@ -146,6 +147,7 @@ function confirmUpgrade() {
       :current="plan.code === subscription?.plan_code"
       :disabled="disabledPlan(plan)"
       :loading="active === plan.code"
+      :eligibility-pending="eligibilityPending"
       :button-label="planButtonLabel(plan)"
       @select="selectPlan"
     />

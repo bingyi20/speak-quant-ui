@@ -80,6 +80,18 @@
 .replay-summary-metrics > div:first-child dd {
   font-size: 24px;
 }
+.replay-metric-pending {
+  visibility: hidden;
+}
+.replay-summary-metrics dd {
+  position: relative;
+}
+.replay-summary-metrics .replay-metric-skeleton {
+  position: absolute;
+  inset: 0.3em auto auto 0;
+  width: min(3.5em, 100%);
+  height: 0.8em;
+}
 .replay-workspace .is-positive,
 .replay-trade-dialog .is-positive {
   color: var(--color-chart-up);
@@ -201,11 +213,54 @@
   pointer-events: none;
   z-index: 2;
 }
+.replay-chart-block > .replay-chart-loading,
 .replay-chart-empty {
-  min-height: 28px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   color: var(--color-text-muted);
   font-size: 12px;
   text-align: center;
+  z-index: 4;
+}
+.replay-chart-loading {
+  pointer-events: none;
+}
+.replay-resource-loading {
+  min-height: 128px;
+}
+.replay-shortcuts {
+  min-height: 36px;
+  align-items: center;
+}
+.replay-event-summary .replay-evidence-summary-skeleton {
+  width: 65%;
+  height: 14px;
+}
+.replay-shortcuts .replay-shortcut-skeleton {
+  width: 116px;
+  height: 16px;
+  margin-block: 7px;
+}
+@media (max-width: 760px) {
+  .replay-chart-block > .replay-chart-loading,
+  .replay-chart-empty,
+  .replay-chart-failure {
+    /* Keep feedback above the sticky playback controls on short screens. */
+    padding-bottom: 48px;
+  }
+  .replay-chart-toolbar {
+    min-height: 44px;
+  }
+  .replay-quote-date {
+    min-height: 40px;
+  }
+}
+.replay-detail-loading {
+  min-height: 100%;
 }
 .replay-chart-failure {
   position: absolute;
@@ -668,18 +723,6 @@
   color: var(--color-text-muted);
   font-size: 12px;
   margin-top: 24px;
-}
-.replay-skeleton > div {
-  height: 24px;
-  margin: 12px 0;
-  border-radius: 6px;
-  background: var(--color-bg-subtle);
-}
-.replay-skeleton > div:nth-child(2) {
-  height: 72px;
-}
-.replay-skeleton > div:nth-child(3) {
-  height: 340px;
 }
 .replay-reference {
   display: flex;

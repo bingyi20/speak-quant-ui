@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, useId, useTemplateRef, watch } from 'vue'
 import MarkdownContent from '~/components/common/MarkdownContent.vue'
+import LoadingState from '~/components/common/LoadingState.vue'
 import CopyButton from '~/components/ui/CopyButton.vue'
 import StrategyReplayList from './StrategyReplayList.vue'
 import type { StrategyDetailState } from '../detail-state'
@@ -95,20 +96,22 @@ watch([version, tab, allReplays], () =>
         :id="`${uid}-content`"
         ref="body"
         class="strategy-detail-body"
+        :class="{ 'is-initial-loading': loading && !detail }"
         role="tabpanel"
         :aria-labelledby="`${uid}-${tab}`"
         :aria-busy="loading"
       >
-        <div class="strategy-detail-inner">
-          <p
-            v-if="loading"
-            class="detail-state"
-            role="status"
-          >
-            {{ t('common.loading') }}
-          </p>
+        <LoadingState
+          v-if="loading && !detail"
+          class="strategy-detail-loading"
+          fill
+        />
+        <div
+          v-else
+          class="strategy-detail-inner"
+        >
           <div
-            v-else-if="error"
+            v-if="error"
             class="detail-state"
             role="alert"
           >
@@ -121,7 +124,7 @@ watch([version, tab, allReplays], () =>
               {{ t('common.retry') }}
             </button>
           </div>
-          <template v-else-if="detail">
+          <template v-if="detail">
             <div
               v-if="tab === 'design'"
               class="strategy-document"

@@ -239,6 +239,12 @@
 .strategy-detail-inner {
   width: 100%;
 }
+.strategy-detail-body.is-initial-loading {
+  display: flex;
+}
+.strategy-detail-loading {
+  flex: 1;
+}
 .strategy-document {
   max-width: 660px;
   margin: 0 auto;

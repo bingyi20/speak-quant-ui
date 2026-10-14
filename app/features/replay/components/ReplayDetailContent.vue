@@ -5,6 +5,9 @@ import ReplayChart from './ReplayChart.client.vue'
 import ReplayTimeline from './ReplayTimeline.vue'
 import ReplayEvidencePanel from './ReplayEvidencePanel.vue'
 import ReplayDetails from './ReplayDetails.vue'
+import LoadingState from '~/components/common/LoadingState.vue'
+import LoadingSpinner from '~/components/ui/LoadingSpinner.vue'
+import LoadingSkeleton from '~/components/ui/LoadingSkeleton.vue'
 import { resolveSelection } from '../events'
 import { EQUITY_RATE_DIGITS } from '../historical-result'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
@@ -71,6 +74,16 @@ const body = useTemplateRef<HTMLElement>('body')
 const reading = ref<'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | null>(null),
   volume = ref(false)
 const complete = computed(() => detail.value?.status === 'completed')
+const chartLoading = computed(
+  () => !renderedBars.value.length && (phases.candles === 'loading' || displayLoading.value),
+)
+const shortcutsLoading = computed(
+  () =>
+    (initializing.value || !props.state.tradesComplete.value) &&
+    (detail.value?.result?.trade_count ?? 0) > 0 &&
+    !errors.candles &&
+    !errors.trades,
+)
 const shortcuts = computed(() =>
   events.value.filter((e) => ['best', 'worst', 'drawdown'].includes(e.kind)),
 )
@@ -106,7 +119,12 @@ const menuUi = {
 }
 const warnings = computed(() => detail.value?.result?.quality_warnings?.length ?? 0)
 const metrics = computed(() => {
-  const r = (desktop.value ? props.state.summaryResult.value : detail.value?.result) ?? {
+  // Final metrics only reserve skeleton dimensions during initial loading.
+  // An indexing failure must keep the historical result unavailable.
+  const reserveFinalMetrics = initializing.value && !errors.candles
+  const r = (desktop.value && !reserveFinalMetrics
+    ? props.state.summaryResult.value
+    : detail.value?.result) ?? {
     net_return_rate: null,
     max_drawdown_rate: null,
     trade_count: null,
@@ -255,16 +273,11 @@ onBeforeUnmount(() => {
     @keydown.capture="playbackKeydown"
     @scroll="scrollTop = ($event.target as HTMLElement).scrollTop"
   >
-    <div
+    <LoadingState
       v-if="loading && !detail"
-      class="replay-skeleton"
-      role="status"
-      :aria-label="t('common.loading')"
-    >
-      <div />
-      <div />
-      <div />
-    </div>
+      class="replay-detail-loading"
+      fill
+    />
     <div
       v-else-if="!detail && error"
       class="detail-state"
@@ -321,7 +334,10 @@ onBeforeUnmount(() => {
             <UIcon name="i-lucide-triangle-alert" />{{ warnings }}
           </button>
         </div>
-        <dl class="replay-summary-metrics">
+        <dl
+          class="replay-summary-metrics"
+          :aria-busy="initializing && !errors.candles"
+        >
           <div
             v-for="metric in metrics"
             :key="metric.key"
@@ -329,7 +345,15 @@ onBeforeUnmount(() => {
           >
             <dt>{{ t(metric.key === 'trades' ? 'replay.tradeTotal' : `replay.${metric.key}`) }}</dt>
             <dd :class="{ 'is-positive': metric.sign > 0, 'is-negative': metric.sign < 0 }">
-              {{ metric.sign > 0 ? '+' : '' }}{{ metric.value }}
+              <span
+                :class="{ 'replay-metric-pending': initializing && !errors.candles }"
+                :aria-hidden="initializing && !errors.candles ? true : undefined"
+                >{{ metric.sign > 0 ? '+' : '' }}{{ metric.value }}</span
+              >
+              <LoadingSkeleton
+                v-if="initializing && !errors.candles"
+                class="replay-metric-skeleton"
+              />
             </dd>
           </div>
           <button
@@ -342,18 +366,24 @@ onBeforeUnmount(() => {
           </button>
         </dl>
         <div
-          v-if="!desktop && shortcuts.length && atEnd"
+          v-if="!desktop && (shortcutsLoading || (shortcuts.length && atEnd))"
           class="replay-shortcuts"
           :aria-label="t('replay.resultLocations')"
         >
-          <button
-            v-for="event in shortcuts"
-            :key="event.id"
-            class="text-button"
-            @click="state.locate(event.selection)"
-          >
-            {{ t(`replay.shortcuts.${event.kind}`) }}<UIcon name="i-lucide-arrow-up-right" />
-          </button>
+          <template v-if="shortcutsLoading">
+            <LoadingSkeleton class="replay-shortcut-skeleton" />
+            <LoadingSkeleton class="replay-shortcut-skeleton" />
+          </template>
+          <template v-else>
+            <button
+              v-for="event in shortcuts"
+              :key="event.id"
+              class="text-button"
+              @click="state.locate(event.selection)"
+            >
+              {{ t(`replay.shortcuts.${event.kind}`) }}<UIcon name="i-lucide-arrow-up-right" />
+            </button>
+          </template>
         </div>
         <div class="replay-chart-region">
           <div class="replay-chart-toolbar">
@@ -390,11 +420,10 @@ onBeforeUnmount(() => {
               class="replay-muted"
               >{{ t('replay.execution', { timeframe: detail.strategy.execution_timeframe }) }}</span
             >
-            <UIcon
-              v-if="displayLoading"
-              name="i-lucide-loader-circle"
-              class="chat-spinner"
-              :aria-label="t('common.loading')"
+            <LoadingSpinner
+              v-if="displayLoading && renderedBars.length"
+              size="sm"
+              :decorative="false"
             />
             <span class="replay-toolbar-spacer" />
             <UDropdownMenu
@@ -444,35 +473,30 @@ onBeforeUnmount(() => {
               :range="requestedRange"
               :volume="volume"
               :symbol="detail.conditions.symbol"
+              :loading="chartLoading"
+              :load-error="errors.candles"
+              :empty-label="
+                !renderedBars.length && !chartLoading && !errors.candles
+                  ? t('replay.noCandles')
+                  : undefined
+              "
               @select="select"
               @range="rangeChanged"
               @interact="interact"
               @follow="follow = true"
+              @retry="state.retry('candles')"
             />
-            <template #fallback><div class="replay-chart" /></template>
+            <template #fallback>
+              <LoadingState class="replay-chart" />
+            </template>
           </ClientOnly>
         </div>
         <div
-          v-if="!renderedBars.length"
-          class="replay-chart-empty"
-          role="status"
-        >
-          {{
-            t(
-              phases.candles === 'loading'
-                ? 'common.loading'
-                : errors.candles
-                  ? errors.candles
-                  : 'replay.noCandles',
-            )
-          }}
-        </div>
-        <div
-          v-if="errors.candles"
+          v-if="errors.candles && renderedBars.length"
           class="replay-inline-error"
           role="alert"
         >
-          <span v-if="renderedBars.length">{{ t(errors.candles) }}</span
+          <span>{{ t(errors.candles) }}</span
           ><button
             class="text-button"
             @click="state.retry('candles')"
@@ -624,9 +648,7 @@ onBeforeUnmount(() => {
               ? desktop
                 ? formatDateTime(currentBar.time * 1000)
                 : formatDate(new Date(currentBar.time * 1000).toISOString(), locale)
-              : initializing
-                ? t('common.loading')
-                : '—'
+              : '—'
           }}</span>
         </div>
         <ReplayTimeline
@@ -653,11 +675,7 @@ onBeforeUnmount(() => {
         class="detail-state"
         role="status"
       >
-        <UIcon
-          v-if="['queued', 'running'].includes(detail.status)"
-          name="i-lucide-loader-circle"
-          class="chat-spinner"
-        />
+        <LoadingSpinner v-if="['queued', 'running'].includes(detail.status)" />
         <p>{{ detail.error?.message || t(`strategy.replayStatus.${detail.status}`) }}</p>
         <button
           class="text-button"

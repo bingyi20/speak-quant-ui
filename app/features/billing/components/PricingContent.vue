@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/features/auth'
+import LoadingState from '~/components/common/LoadingState.vue'
+import LoadingSkeleton from '~/components/ui/LoadingSkeleton.vue'
 import type { PricingTab } from '../catalog'
 import { useBillingAction } from '../composables/useBillingAction'
 import { useBillingStore } from '../stores/billing'
@@ -15,10 +17,11 @@ const props = withDefaults(
   { initialTab: 'plans', headingTag: 'h2' },
 )
 const { t } = useI18n()
+const app = useNuxtApp()
 const auth = useAuthStore()
 const billing = useBillingStore()
 const { active, run } = useBillingAction<'topup' | 'retry'>()
-const hydrated = ref(false)
+const hydrated = ref(import.meta.client && !app.isHydrating)
 const activeTab = ref<PricingTab>(props.initialTab)
 await useAsyncData('billing-plans', async () => {
   await billing.loadCatalog()
@@ -61,6 +64,18 @@ const showTabs = computed(
     billing.account?.topup_eligible === true &&
     !!topUpPlan.value,
 )
+const initialLoading = computed(
+  () =>
+    !hydrated.value ||
+    ['unknown', 'restoring'].includes(auth.status) ||
+    (auth.isAuthenticated && !billing.account && (billing.loading || !billing.error)),
+)
+const initialError = computed(() => {
+  if (initialLoading.value) return null
+  if (auth.status === 'unavailable') return t('auth.restoreError')
+  return auth.isAuthenticated && !billing.account ? billing.error : null
+})
+const eligibilityUnknown = computed(() => initialLoading.value || !!initialError.value)
 watch(showTabs, (eligible) => {
   if (!eligible) activeTab.value = 'plans'
 })
@@ -97,18 +112,23 @@ function confirmTopUp(quote: BillingQuote) {
 function retryOperation() {
   return run('retry', () => billing.retryOperation())
 }
+async function retryInitialLoad() {
+  if (auth.status === 'unavailable') await app.$restoreAuth()
+  await billing.initialize()
+}
 </script>
 
 <template>
   <section
     class="pricing-content"
-    :aria-busy="billing.busy"
+    :data-initial-loading="eligibilityUnknown"
+    :aria-busy="initialLoading || billing.busy"
   >
     <header class="pricing-heading">
       <component :is="headingTag">{{ t('billing.title') }}</component>
     </header>
     <div
-      v-if="billing.error"
+      v-if="billing.error && !eligibilityUnknown"
       class="pricing-feedback pricing-feedback-error"
       role="alert"
     >
@@ -138,13 +158,45 @@ function retryOperation() {
         {{ t('common.retry') }}
       </button>
     </div>
-    <p
+    <LoadingState
       v-else-if="!catalog"
       class="pricing-loading"
-      role="status"
+    />
+    <div
+      v-if="catalog && !showTabs"
+      class="pricing-tab-placeholder"
     >
-      {{ t('common.loading') }}
-    </p>
+      <div
+        v-if="initialLoading"
+        class="pricing-tab-skeleton"
+        role="status"
+        aria-live="polite"
+      >
+        <LoadingSkeleton class="pricing-tab-skeleton-shape" />
+        <span
+          v-for="tab in tabs"
+          :key="tab.value"
+          class="pricing-tab-trigger"
+          aria-hidden="true"
+        >
+          {{ tab.label }}
+        </span>
+        <span class="sr-only">{{ t('common.loading') }}</span>
+      </div>
+      <div
+        v-else-if="initialError"
+        class="pricing-initial-error"
+        role="alert"
+      >
+        <p>{{ initialError }}</p>
+        <button
+          type="button"
+          @click="retryInitialLoad"
+        >
+          {{ t('common.retry') }}
+        </button>
+      </div>
+    </div>
     <UTabs
       v-if="catalog && showTabs"
       v-model="activeTab"
@@ -187,8 +239,9 @@ function retryOperation() {
       v-else-if="catalog"
       :catalog="catalog"
       :subscription="subscription"
-      :controls-disabled="controlsDisabled"
+      :controls-disabled="controlsDisabled || eligibilityUnknown"
       :can-upgrade="canUpgrade"
+      :eligibility-pending="eligibilityUnknown"
     />
     <p
       v-if="catalog"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import LoadingSpinner from '~/components/ui/LoadingSpinner.vue'
 import { formatDate } from '~/lib/format'
 import type { StrategyVersion } from '../types'
 const props = defineProps<{
@@ -110,9 +111,14 @@ const items = computed(() => [
       >
     </template>
     <template #trailing>
+      <LoadingSpinner
+        v-if="loading"
+        size="sm"
+        class="strategy-version-loading"
+      />
       <UIcon
-        :name="loading ? 'i-lucide-loader-circle' : 'i-lucide-chevrons-up-down'"
-        :class="{ 'chat-spinner': loading }"
+        v-else
+        name="i-lucide-chevrons-up-down"
         aria-hidden="true"
       />
     </template>
@@ -131,3 +137,9 @@ const items = computed(() => [
     </template>
   </USelect>
 </template>
+<style scoped>
+.strategy-version-loading {
+  width: 14px;
+  height: 14px;
+}
+</style>

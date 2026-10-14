@@ -1625,6 +1625,62 @@ p {
   color: var(--color-text-secondary);
   text-align: center;
 }
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 24px;
+}
+.loading-state-fill {
+  height: 100%;
+}
+.loading-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-loading-track);
+  border-top-color: var(--color-loading-active);
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: loading-rotate 800ms linear infinite;
+}
+.loading-spinner-sm {
+  width: 16px;
+  height: 16px;
+}
+.loading-spinner.is-delayed {
+  visibility: hidden;
+  animation: none;
+}
+.loading-skeleton {
+  display: block;
+  width: 100%;
+  height: 1em;
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  animation: loading-pulse 1400ms ease-in-out infinite alternate;
+}
+@keyframes loading-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes loading-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner,
+  .loading-skeleton {
+    animation: none;
+  }
+}
 .markdown-content {
   line-height: 1.9;
   overflow-wrap: anywhere;

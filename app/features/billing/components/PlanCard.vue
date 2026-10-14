@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Decimal from 'decimal.js'
 import { formatDecimal, formatQuantity } from '~/lib/format'
+import LoadingSkeleton from '~/components/ui/LoadingSkeleton.vue'
 import { planName, topUpRatePer1000 } from '../catalog'
 import type { Plan, PlanCatalog } from '../types'
 
@@ -10,6 +11,7 @@ const props = defineProps<{
   current: boolean
   disabled?: boolean
   loading?: boolean
+  eligibilityPending?: boolean
   buttonLabel?: string
 }>()
 const emit = defineEmits<{ select: [code: Plan['code']] }>()
@@ -54,13 +56,19 @@ const label = computed(() =>
     <button
       type="button"
       class="pricing-button"
-      :disabled="disabled || current || loading"
+      :class="{ 'is-pending': eligibilityPending }"
+      :disabled="disabled || current || loading || eligibilityPending"
+      :aria-hidden="eligibilityPending || undefined"
       :aria-label="label"
       :aria-busy="!!loading"
       :data-loading="!!loading"
       @click="emit('select', plan.code)"
     >
-      <span :class="{ invisible: loading }">{{ label }}</span>
+      <span :class="{ invisible: loading || eligibilityPending }">{{ label }}</span>
+      <LoadingSkeleton
+        v-if="eligibilityPending"
+        class="pricing-button-placeholder"
+      />
       <UIcon
         v-if="loading"
         name="i-lucide-loader-circle"
