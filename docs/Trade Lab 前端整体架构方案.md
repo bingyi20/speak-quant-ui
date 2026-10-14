@@ -256,6 +256,7 @@ features 的公开入口
 | 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
 | 订阅权益、套餐、报价、支付与积分流水 | `app/features/billing/types.ts`、`api.ts`、`stores/billing.ts`、`payment.ts`、`return-context.ts`、`catalog.ts`、`composables/useBillingAction.ts`、`useCreditHistory.ts`、`components/`（含共享 `PlanSelection.vue`、账户设置 `UsageHistory.vue`）、`app/plugins/03.billing.client.ts`、`app/pages/billing/payment-return.vue`、`app/assets/css/billing.css`、`usage-history.css`；实现与验证见[订阅与积分模块技术方案](订阅与积分模块技术方案.md) |
 | 全局偏好、主题及语言恢复          | `app/stores/preferences.ts`、`app/plugins/01.preferences.ts`、`app/composables/useTheme.ts`、`public/theme-init.js`                                                               |
+| 全局滚动条显隐 | `app/plugins/04.scrollbars.client.ts` 捕获页面及嵌套容器滚动、独立管理空闲计时和淡出动画，并在卸载/HMR 时清理；`app/assets/css/main.css` 仅切换滑块颜色，保留原生尺寸与占位；交互规则见[浅色版设计决策 §5.7](Trade%20Lab%20浅色版设计决策.md#57-全局样式与滚动条) |
 | 尺寸、字体、配色与页面样式        | `app/assets/css/tokens.css`、`themes/light.css`、`themes/dark.css`、`main.css`、`public.css`；Nuxt UI 配置在 `app/app.config.ts`                                                                |
 | 品牌、头像与公共控件              | `public/logo.svg`（页面与标签页图标共用）、`public/avatar-default.svg`、`app/components/common/`、`app/components/ui/`                                                              |
 | 页面中上方短提示 | `app/components/ui/TransientNotice.vue`、`app/assets/css/main.css`；通用短提示，组件统一管理显示、重复点击计时和卸载清理 |

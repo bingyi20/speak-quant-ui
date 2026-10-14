@@ -88,3 +88,16 @@
   --color-bg-document: color-mix(in srgb, var(--color-brand) 5%, var(--color-bg-surface));
   --color-border-document: color-mix(in srgb, var(--color-brand) 30%, var(--color-border-default));
 }
+[data-theme='light'][data-scrollbar-visible],
+[data-theme='light'] [data-scrollbar-visible] {
+  --color-scrollbar-thumb-visible: color-mix(
+    in srgb,
+    var(--color-scrollbar-thumb) calc(var(--scrollbar-opacity) * 100%),
+    transparent
+  );
+  --color-scrollbar-thumb-hover-visible: color-mix(
+    in srgb,
+    var(--color-scrollbar-thumb-hover) calc(var(--scrollbar-opacity) * 100%),
+    transparent
+  );
+}

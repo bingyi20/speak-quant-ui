@@ -31,6 +31,13 @@ const tabIcons: Record<StrategyTab, string> = {
   code: 'i-lucide-code',
 }
 const status = computed(() => (version.value === 'current' ? current.value?.status : 'historical'))
+const copyContent = computed(() =>
+  tab.value === 'design'
+    ? detail.value?.design.content
+    : tab.value === 'code'
+      ? detail.value?.code?.content
+      : undefined,
+)
 function navigate(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
   event.preventDefault()
@@ -77,126 +84,123 @@ watch([version, tab, allReplays], () =>
         {{ t(`strategy.${item}`) }}
       </button>
     </div>
-    <div
-      :id="`${uid}-content`"
-      ref="body"
-      class="strategy-detail-body"
-      role="tabpanel"
-      :aria-labelledby="`${uid}-${tab}`"
-      :aria-busy="loading"
-    >
-      <div class="strategy-detail-inner">
-        <p
-          v-if="loading"
-          class="detail-state"
-          role="status"
-        >
-          {{ t('common.loading') }}
-        </p>
-        <div
-          v-else-if="error"
-          class="detail-state"
-          role="alert"
-        >
-          <p>{{ t(error) }}</p>
-          <button
-            class="text-button"
-            type="button"
-            @click="state.retry()"
+    <div class="strategy-detail-viewport">
+      <CopyButton
+        v-if="!loading && !error && copyContent"
+        class="strategy-floating-copy"
+        :content="copyContent"
+        :label="t(tab === 'design' ? 'chat.copyMarkdown' : 'strategy.copyCode')"
+      />
+      <div
+        :id="`${uid}-content`"
+        ref="body"
+        class="strategy-detail-body"
+        role="tabpanel"
+        :aria-labelledby="`${uid}-${tab}`"
+        :aria-busy="loading"
+      >
+        <div class="strategy-detail-inner">
+          <p
+            v-if="loading"
+            class="detail-state"
+            role="status"
           >
-            {{ t('common.retry') }}
-          </button>
-        </div>
-        <template v-else-if="detail">
+            {{ t('common.loading') }}
+          </p>
           <div
-            v-if="tab === 'design'"
-            class="strategy-document"
+            v-else-if="error"
+            class="detail-state"
+            role="alert"
           >
-            <MarkdownContent
-              v-if="detail.design.content"
-              class="markdown-prose"
-              :content="detail.design.content"
-            />
-            <p
-              v-else
-              class="detail-state"
+            <p>{{ t(error) }}</p>
+            <button
+              class="text-button"
+              type="button"
+              @click="state.retry()"
             >
-              {{ t('strategy.noDesign') }}
-            </p>
-            <div class="strategy-document-footer">
-              <span
-                v-if="status === 'modified'"
-                class="strategy-status"
-                >{{ t('strategy.status.modified') }}</span
-              >
-              <CopyButton
+              {{ t('common.retry') }}
+            </button>
+          </div>
+          <template v-else-if="detail">
+            <div
+              v-if="tab === 'design'"
+              class="strategy-document"
+            >
+              <MarkdownContent
                 v-if="detail.design.content"
+                class="markdown-prose"
                 :content="detail.design.content"
-                :label="t('chat.copyMarkdown')"
               />
-            </div>
-          </div>
-          <div
-            v-else-if="tab === 'replays'"
-            class="strategy-replays"
-          >
-            <div class="strategy-content-toolbar replay-scope-toolbar">
-              <span class="strategy-status"
-                >{{ t(allReplays ? 'strategy.allVersions' : 'strategy.selectedVersion') }} ·
-                {{ replays.length }}</span
+              <p
+                v-else
+                class="detail-state"
               >
-              <button
-                type="button"
-                class="replay-scope-toggle"
-                :aria-pressed="allReplays"
-                @click="allReplays = !allReplays"
+                {{ t('strategy.noDesign') }}
+              </p>
+              <div
+                v-if="status === 'modified'"
+                class="strategy-document-footer"
               >
-                <UIcon
-                  :name="allReplays ? 'i-lucide-filter' : 'i-lucide-layers'"
-                  aria-hidden="true"
-                />
-                {{ t(allReplays ? 'strategy.onlySelected' : 'strategy.viewAll') }}
-              </button>
+                <span class="strategy-status">{{ t('strategy.status.modified') }}</span>
+              </div>
             </div>
-            <StrategyReplayList
-              v-if="replays.length"
-              :replays="replays"
-              :all="allReplays"
-              :selected-node-id="selectedNodeId"
-              :names="versionNames"
-              @open="$emit('openReplay', $event)"
-            />
-            <p
-              v-else
-              class="detail-state"
+            <div
+              v-else-if="tab === 'replays'"
+              class="strategy-replays"
             >
-              {{ t(allReplays ? 'strategy.noReplays' : 'strategy.noVersionReplays') }}
-            </p>
-          </div>
-          <template v-else>
-            <div class="strategy-content-toolbar">
-              <span class="strategy-status">{{
-                detail.code?.language ?? t(`strategy.status.${status}`)
-              }}</span>
-              <CopyButton
+              <div class="strategy-content-toolbar replay-scope-toolbar">
+                <span class="strategy-status"
+                  >{{ t(allReplays ? 'strategy.allVersions' : 'strategy.selectedVersion') }} ·
+                  {{ replays.length }}</span
+                >
+                <button
+                  type="button"
+                  class="replay-scope-toggle"
+                  :aria-pressed="allReplays"
+                  @click="allReplays = !allReplays"
+                >
+                  <UIcon
+                    :name="allReplays ? 'i-lucide-filter' : 'i-lucide-layers'"
+                    aria-hidden="true"
+                  />
+                  {{ t(allReplays ? 'strategy.onlySelected' : 'strategy.viewAll') }}
+                </button>
+              </div>
+              <StrategyReplayList
+                v-if="replays.length"
+                :replays="replays"
+                :all="allReplays"
+                :selected-node-id="selectedNodeId"
+                :names="versionNames"
+                @open="$emit('openReplay', $event)"
+              />
+              <p
+                v-else
+                class="detail-state"
+              >
+                {{ t(allReplays ? 'strategy.noReplays' : 'strategy.noVersionReplays') }}
+              </p>
+            </div>
+            <template v-else>
+              <div class="strategy-content-toolbar">
+                <span class="strategy-status">{{
+                  detail.code?.language ?? t(`strategy.status.${status}`)
+                }}</span>
+              </div>
+              <StrategyCode
                 v-if="detail.code"
                 :content="detail.code.content"
-                :label="t('strategy.copyCode')"
+                :language="detail.code.language"
               />
-            </div>
-            <StrategyCode
-              v-if="detail.code"
-              :content="detail.code.content"
-              :language="detail.code.language"
-            />
-            <p
-              v-else
-              class="detail-state"
-            >
-              {{ t('strategy.noCode') }}
-            </p>
+              <p
+                v-else
+                class="detail-state"
+              >
+                {{ t('strategy.noCode') }}
+              </p>
+            </template>
           </template>
-        </template>
+        </div>
       </div>
     </div>
   </div>

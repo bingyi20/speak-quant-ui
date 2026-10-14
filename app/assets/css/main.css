@@ -27,17 +27,26 @@
   --ui-border: var(--color-border-default);
   --ui-border-accented: var(--color-border-focus);
 }
+@property --scrollbar-opacity {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+  scrollbar-color: transparent transparent;
+}
+[data-scrollbar-visible] {
+  scrollbar-color: var(--color-scrollbar-thumb-visible) transparent;
 }
 .app-modal-overlay {
   background: var(--color-overlay);
 }
 /* Native scrollbar colors override WebKit thumb hover styles in Chromium. */
 @supports selector(::-webkit-scrollbar) {
-  * {
+  *,
+  [data-scrollbar-visible] {
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
@@ -55,10 +64,16 @@
   ::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
     border-radius: 999px;
-    background-color: var(--color-scrollbar-thumb);
+    background-color: transparent;
     background-clip: padding-box;
   }
-  ::-webkit-scrollbar-thumb:hover {
+  [data-scrollbar-visible]::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb-visible);
+  }
+  [data-scrollbar-visible]::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-thumb-hover-visible);
+  }
+  ::-webkit-scrollbar-thumb:active {
     background-color: var(--color-scrollbar-thumb-hover);
   }
   ::-webkit-scrollbar-button {
