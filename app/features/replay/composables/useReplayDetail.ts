@@ -33,6 +33,10 @@ export function useReplayDetail(
   const index = ref(-1),
     speed = ref(8)
   const selection = shallowRef<ReplaySelection | null>(null)
+  const focusedFillTime = ref<number | null>(null)
+  watch(selection, (value) => {
+    if (value) focusedFillTime.value = null
+  })
   const currentCandle = shallowRef<ReplayCandle | null>(null)
   const currentLoading = ref(false),
     currentError = ref(''),
@@ -70,6 +74,7 @@ export function useReplayDetail(
       follow.value = saved?.follow ?? true
       requestedRange.value = null
       selection.value = null
+      focusedFillTime.value = null
     },
     { flush: 'sync' },
   )
@@ -251,9 +256,11 @@ export function useReplayDetail(
     if (
       'revealTime' in range
         ? !Number.isFinite(range.revealTime)
-        : 'seekTime' in range
-          ? !Number.isFinite(range.seekTime)
-          : !(range.to > range.from)
+        : 'centerTime' in range
+          ? !Number.isFinite(range.centerTime)
+          : 'seekTime' in range
+            ? !Number.isFinite(range.seekTime)
+            : !(range.to > range.from)
     )
       return
     requestedRange.value = { ...range, revision: ++rangeRevision }
@@ -265,11 +272,23 @@ export function useReplayDetail(
     // selection/reveal path so neither entry resets the scale or replay clock.
     return locate(resolved, false)
   }
-  function focusEvidenceViewport(target: ReplaySelection, mode: 'fit' | 'reveal' = 'fit') {
+  function focusEvidenceViewport(
+    target: ReplaySelection,
+    mode: 'fit' | 'reveal' | 'center' = 'fit',
+  ) {
     const bar = target.candleId
       ? (data.bars.value.find((bar) => bar.id === target.candleId) ??
         data.axis.value[data.indexById.get(target.candleId) ?? -1])
       : null
+    if (mode === 'center') {
+      const time = bar?.time ?? target.time
+      if (time !== undefined) {
+        const displayed = data.bars.value.findLast((bar) => bar.time <= time)
+        focusedFillTime.value = displayed?.time ?? time
+        requestRange({ centerTime: focusedFillTime.value })
+      }
+      return
+    }
     if (mode === 'reveal') {
       const time = target.range?.to ?? bar?.time ?? target.time
       if (time !== undefined) requestRange({ revealTime: time })
@@ -331,6 +350,7 @@ export function useReplayDetail(
     if (time !== undefined) requestRange({ seekTime: time })
   }
   function recordNavigation() {
+    focusedFillTime.value = null
     seekRevision.value++
     seekCutoff.value = cutoff.value
     for (const saved of instrumentViews.values()) saved.follow = true
@@ -391,7 +411,11 @@ export function useReplayDetail(
   function resolveVisibleSelection(target: ReplaySelection) {
     return resolveSelection(target, data.axis.value, visibleTrades.value, [])
   }
-  async function locate(target: ReplaySelection, movePlayhead = true) {
+  async function locate(
+    target: ReplaySelection,
+    movePlayhead = true,
+    alignment: 'reveal' | 'center' = 'reveal',
+  ) {
     // Evidence inspection changes the viewport, not the playback clock.
     if (movePlayhead) pause()
     const evidenceTicket = ++evidenceGeneration
@@ -404,11 +428,30 @@ export function useReplayDetail(
       resolved?.instrumentRole ??
       (trade ? tradeInstrument(trade, data.instruments.value)?.role : undefined) ??
       data.axisInstrument.value
-    const switched = await data.setInstrument(
-      role,
-      resolved?.range ?? instrumentViews.get(role)?.range ?? currentViewportRange() ?? undefined,
-      data.detail.value?.strategy.execution_timeframe,
-    )
+    const center = alignment === 'center'
+    const timeframe = center
+      ? role === data.displayInstrument.value
+        ? data.displayTimeframe.value
+        : (instrumentViews.get(role)?.timeframe ?? data.displayTimeframe.value)
+      : data.detail.value?.strategy.execution_timeframe
+    const targetTime = resolved?.candleId
+      ? (data.axis.value[data.indexById.get(resolved.candleId) ?? -1]?.time ?? resolved.time)
+      : resolved?.time
+    const savedRange =
+      role === data.displayInstrument.value ? viewRange.value : instrumentViews.get(role)?.range
+    // Load around an off-screen fill while preserving the chosen instrument's
+    // timeframe and viewport span. The chart receives only a horizontal pan.
+    const span = savedRange ? savedRange.to - savedRange.from : 0
+    const range =
+      center && targetTime !== undefined
+        ? span > 0
+          ? { from: targetTime - span / 2, to: targetTime + span / 2 }
+          : defaultViewportRange(targetTime, timeframeSeconds(timeframe ?? '') ?? 3600)
+        : (resolved?.range ??
+          instrumentViews.get(role)?.range ??
+          currentViewportRange() ??
+          undefined)
+    const switched = await data.setInstrument(role, range, timeframe)
     if (ticket !== seekGeneration || evidenceTicket !== evidenceGeneration) return
     if (!switched) {
       locateError.value = 'replay.errors.locate'
@@ -421,6 +464,11 @@ export function useReplayDetail(
       return
     }
     follow.value = movePlayhead
+    if (center) {
+      selection.value = null
+      focusEvidenceViewport(resolved, 'center')
+      return
+    }
     selection.value = resolved
     expanded.value = true
     const openTrade = visibleTrades.value.find(
@@ -457,6 +505,9 @@ export function useReplayDetail(
       }
     if (ticket !== seekGeneration || evidenceTicket !== evidenceGeneration) return
     focusEvidenceViewport(selection.value ?? resolved, movePlayhead ? 'fit' : 'reveal')
+  }
+  function locateFill(target: ReplaySelection) {
+    return locate(target, false, 'center')
   }
   function toggleTrade(tradeId: string) {
     if (selection.value?.tradeId === tradeId) {
@@ -593,6 +644,7 @@ export function useReplayDetail(
     )
     if (ticket !== seekGeneration || !ready) return
     selection.value = null
+    focusedFillTime.value = null
     locateError.value = ''
     status.value = 'playing'
     lastFrame = 0
@@ -617,6 +669,7 @@ export function useReplayDetail(
     const ok = await data.setTimeframe(value, range ?? undefined)
     if (ok && ticket === seekGeneration) {
       selection.value = null
+      focusedFillTime.value = null
       if (range) requestRange(range)
     }
   }
@@ -717,6 +770,7 @@ export function useReplayDetail(
       initializing.value = true
       index.value = -1
       selection.value = null
+      focusedFillTime.value = null
       expanded.value = true
       scrollTop.value = 0
       viewRange.value = null
@@ -835,6 +889,7 @@ export function useReplayDetail(
     speeds,
     baseSpeed,
     selection,
+    focusedFillTime,
     currentCandle,
     currentBar,
     currentState,
@@ -865,6 +920,7 @@ export function useReplayDetail(
     play,
     start,
     locate,
+    locateFill,
     toggleTrade,
     selectCandle,
     seek,

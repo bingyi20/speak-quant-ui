@@ -51,7 +51,7 @@ function restoreDetailsFocus() {
 function locateDetailsFill(fillId: string) {
   const tradeId = detailsTrade.value?.id
   detailsTradeId.value = null
-  if (tradeId) locate({ tradeId, fillId })
+  if (tradeId) void props.state.locateFill({ tradeId, fillId })
 }
 function askDetails() {
   const tradeId = detailsTrade.value?.id

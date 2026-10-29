@@ -282,6 +282,15 @@
   pointer-events: none;
   z-index: 2;
 }
+.replay-fill-focus {
+  position: absolute;
+  top: 0;
+  bottom: 28px;
+  width: 1px;
+  background: var(--color-chart-evidence-edge);
+  pointer-events: none;
+  z-index: 2;
+}
 .replay-chart-block > .replay-chart-loading,
 .replay-chart-empty {
   position: absolute;
@@ -488,6 +497,12 @@
   height: 7px;
   border-radius: 50%;
   box-sizing: border-box;
+}
+.replay-track-marker.replay-trade-marker {
+  pointer-events: none;
+}
+.replay-track-marker.replay-trade-marker:not(:disabled) .replay-event-dot {
+  pointer-events: auto;
 }
 .replay-event-dot.is-buy {
   color: var(--color-chart-buy);
@@ -903,11 +918,6 @@
   .replay-playback-controls .detail-icon-button,
   .replay-play-toggle {
     min-width: 44px;
-  }
-  .replay-track-marker {
-    min-width: 32px;
-    height: 44px;
-    top: 27px;
   }
 }
 @media (max-height: 680px) {
@@ -1542,10 +1552,18 @@
   padding: 0;
   border: 0;
   width: auto;
-  font-size: 12px;
+  font-size: inherit;
+  color: var(--color-brand);
+  background: transparent;
   line-height: 20px;
   min-height: 20px;
   white-space: nowrap;
+}
+.replay-trade-dialog .replay-fill-row:hover,
+.replay-trade-dialog .replay-fill-row:focus-visible,
+.replay-trade-dialog .replay-fill-row:active {
+  color: var(--color-brand-hover);
+  background: transparent;
 }
 .replay-trade-dialog tr.is-selected {
   background: var(--color-bg-subtle);

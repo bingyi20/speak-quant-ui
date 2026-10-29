@@ -115,6 +115,11 @@ export function createLightweightChart(
   shade.className = 'replay-evidence-shade'
   shade.setAttribute('aria-hidden', 'true')
   element.append(shade)
+  const fillFocus = document.createElement('div')
+  fillFocus.className = 'replay-fill-focus'
+  fillFocus.setAttribute('aria-hidden', 'true')
+  fillFocus.hidden = true
+  element.append(fillFocus)
   let priceLines: IPriceLine[] = []
   let movingWindow = false,
     windowFrame = 0,
@@ -230,6 +235,16 @@ export function createLightweightChart(
     shade.hidden = from === null || to === null || right < left
     shade.style.left = `${left}px`
     shade.style.width = `${Math.max(2, right - left)}px`
+    const time = selection?.point
+    const x =
+      time !== undefined &&
+      plotted.length &&
+      time >= plotted[0]!.time &&
+      time <= plotted.at(-1)!.time
+        ? projectTime(time)
+        : null
+    fillFocus.hidden = x === null || x < 0 || x > width
+    fillFocus.style.left = `${Math.round(x ?? 0)}px`
   }
   function setMarkers(value: readonly ChartMarker[]) {
     currentMarkers = value
@@ -668,6 +683,7 @@ export function createLightweightChart(
     },
     setVisibleRange,
     revealTime: (time) => positionTime(time, EVIDENCE_REVEAL_POSITION, true),
+    centerTime: (time) => positionTime(time, 0.5),
     getViewState: view,
     setMarkers,
     setSelection,
@@ -746,6 +762,7 @@ export function createLightweightChart(
       series.detachPrimitive(markers)
       if (timeLabel) series.detachPrimitive(timeLabel)
       shade.remove()
+      fillFocus.remove()
       chart.remove()
     },
   }

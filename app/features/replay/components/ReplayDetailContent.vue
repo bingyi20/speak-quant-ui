@@ -39,6 +39,7 @@ const {
   displayLoading,
   displayError,
   selection,
+  focusedFillTime,
   selectedTrade,
   currentBar,
   currentState,
@@ -556,6 +557,7 @@ onBeforeUnmount(() => {
                   :bars="renderedBars"
                   :events="chartEvents"
                   :selection="selection"
+                  :focus-time="focusedFillTime"
                   :trade="selectedTrade"
                   :timeframe="displayTimeframe"
                   :playing="playing"
@@ -757,6 +759,7 @@ onBeforeUnmount(() => {
           :index="index"
           :disabled="initializing || !state.axis.value.length"
           @seek="state.seekTime"
+          @locate="state.locateFill($event.selection)"
           @pause="state.pause"
         />
         <ReplayEvidencePanel

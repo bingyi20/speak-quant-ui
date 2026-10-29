@@ -232,6 +232,33 @@ test('portfolio tabs isolate chart feeds while trades, account result and the ti
   if (!isMobile)
     await expect(panel.locator('.replay-track-marker[data-event-id^="fill:"]')).toHaveCount(6)
 
+  const cutoffBeforeFill = await panel.locator('.replay-timeline input').inputValue()
+  await panel.locator('[data-event-id="fill:portfolio-fill-asset_b-0"]').click()
+  await expect(instruments.getByRole('tab', { name: /ETH\/USDT/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(panel.locator('.replay-timeline input')).toHaveValue(cutoffBeforeFill)
+  await expect(panel.locator('.replay-chart:visible')).toHaveAttribute(
+    'data-visible-end',
+    cutoffBeforeFill,
+  )
+  await expect(panel.locator('.replay-chart:visible .replay-evidence-shade')).toBeHidden()
+  await expect(panel.locator('.replay-track-evidence')).toHaveCount(0)
+  await expect(
+    panel.locator(
+      '.replay-trade-card[aria-pressed="true"], .replay-trade-row[aria-expanded="true"], .replay-trade.is-selected',
+    ),
+  ).toHaveCount(0)
+  await expect
+    .poll(async () => {
+      const chart = panel.locator('.replay-chart:visible'),
+        plot = (await chart.locator('canvas').first().boundingBox())!,
+        line = (await chart.locator('.replay-fill-focus').boundingBox())!
+      return Math.abs((line.x + line.width / 2 - plot.x) / plot.width - 0.5)
+    })
+    .toBeLessThan(0.01)
+
   await instruments.getByRole('tab', { name: /ETH\/USDT/ }).click()
   await expect(panel.getByRole('img', { name: 'ETH/USDT 1h K 线图' })).toHaveAttribute(
     'aria-busy',
@@ -256,6 +283,30 @@ test('portfolio tabs isolate chart feeds while trades, account result and the ti
     'aria-busy',
     'false',
   )
+  const twoHourChart = panel.locator('.replay-chart:visible')
+  await waitForChartPaint(page)
+  const twoHourSpacing = (await chartFrame(twoHourChart)).spacing
+  expect(twoHourSpacing).toBeGreaterThan(0)
+  await panel.locator('[data-event-id="fill:portfolio-fill-asset_b-1"]').click()
+  await expect(panel.getByRole('img', { name: 'ETH/USDT 2h K 线图' })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  )
+  await expect(panel.locator('.replay-timeline input')).toHaveValue(cutoffBeforeFill)
+  await expect(twoHourChart.locator('.replay-evidence-shade')).toBeHidden()
+  await expect(
+    panel.locator(
+      '.replay-trade-card[aria-pressed="true"], .replay-trade-row[aria-expanded="true"], .replay-trade.is-selected',
+    ),
+  ).toHaveCount(0)
+  await expect
+    .poll(async () => {
+      const plot = (await twoHourChart.locator('canvas').first().boundingBox())!,
+        line = (await twoHourChart.locator('.replay-fill-focus').boundingBox())!
+      return Math.abs((line.x + line.width / 2 - plot.x) / plot.width - 0.5)
+    })
+    .toBeLessThan(0.015)
+  expect(Math.abs((await chartFrame(twoHourChart)).spacing - twoHourSpacing)).toBeLessThan(1)
   await expect(tradeCards(panel, isMobile)).toHaveCount(3)
   await expect(panel.locator('.replay-timeline input')).toHaveAttribute('max', timelineRange!)
   // Position may be specific to the chart instrument; the five portfolio metrics are shared.
@@ -281,11 +332,36 @@ test('portfolio tabs isolate chart feeds while trades, account result and the ti
     await panel.locator('[data-trade-details="portfolio-trade-asset_b"]').click()
     const dialog = page.getByRole('dialog', { name: '第 2 笔交易详情', exact: true })
     await expect(dialog).toContainText('ETH/USDT')
-    await dialog.locator('.replay-fill-row').first().click()
+    const cells = dialog.locator('tbody tr').first().locator('td'),
+      sequence = cells.first().getByRole('button', { name: '定位成交 5', exact: true })
+    await expect(sequence).toHaveText('5')
+    await expect(cells.nth(1).getByRole('button')).toHaveCount(0)
+    await sequence.click()
+    await expect(dialog).toBeHidden()
     await expect(instruments.getByRole('tab', { name: /ETH\/USDT/ })).toHaveAttribute(
       'aria-selected',
       'true',
     )
+    await expect(panel.getByRole('img', { name: 'ETH/USDT 2h K 线图' })).toHaveAttribute(
+      'aria-busy',
+      'false',
+    )
+    await expect(panel.locator('.replay-timeline input')).toHaveValue(cutoffBeforeFill)
+    await expect(panel.locator('.replay-chart:visible .replay-evidence-shade')).toBeHidden()
+    await expect(panel.locator('.replay-track-evidence')).toHaveCount(0)
+    await expect(panel.locator('.replay-trade-card[aria-pressed="true"]')).toHaveCount(0)
+    await expect(panel.locator('.replay-chart:visible .replay-fill-focus')).toBeVisible()
+    await expect
+      .poll(async () => {
+        const chart = panel.locator('.replay-chart:visible'),
+          plot = (await chart.locator('canvas').first().boundingBox())!,
+          line = (await chart.locator('.replay-fill-focus').boundingBox())!
+        return Math.abs((line.x + line.width / 2 - plot.x) / plot.width - 0.5)
+      })
+      .toBeLessThan(0.01)
+    expect(
+      Math.abs((await chartFrame(panel.locator('.replay-chart:visible'))).spacing - twoHourSpacing),
+    ).toBeLessThan(1)
   }
   expect(tradeRequests.some((url) => url.searchParams.get('page') === '2')).toBe(true)
   expect(tradeRequests.every((url) => !url.searchParams.has('instrument'))).toBe(true)

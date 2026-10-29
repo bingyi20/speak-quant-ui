@@ -35,6 +35,7 @@ const props = defineProps<{
   bars: readonly ReplayBar[]
   events: readonly ReplayEvent[]
   selection: ReplaySelection | null
+  focusTime: number | null
   trade: ReplayTradeView | null
   timeframe: string
   playing: boolean
@@ -232,31 +233,33 @@ function selected() {
     ? props.bars.find((c) => c.id === props.selection?.candleId)
     : null
   adapter?.setSelection(
-    props.selection
-      ? {
-          range:
-            props.selection.range ??
-            (selectedBar
-              ? {
-                  from: selectedBar.time,
-                  to:
-                    selectedBar.closeTime ??
-                    nextBarTime(selectedBar.time, props.timeframe) ??
-                    selectedBar.time,
-                }
-              : undefined),
-          prices: trade
-            ? [
-                ...(trade.entry_price
-                  ? [{ price: Number(trade.entry_price), label: t('replay.entry') }]
-                  : []),
-                ...(trade.exit_price
-                  ? [{ price: Number(trade.exit_price), label: t('replay.exit') }]
-                  : []),
-              ]
-            : [],
-        }
-      : null,
+    props.focusTime !== null
+      ? { point: props.focusTime }
+      : props.selection
+        ? {
+            range:
+              props.selection.range ??
+              (selectedBar
+                ? {
+                    from: selectedBar.time,
+                    to:
+                      selectedBar.closeTime ??
+                      nextBarTime(selectedBar.time, props.timeframe) ??
+                      selectedBar.time,
+                  }
+                : undefined),
+            prices: trade
+              ? [
+                  ...(trade.entry_price
+                    ? [{ price: Number(trade.entry_price), label: t('replay.entry') }]
+                    : []),
+                  ...(trade.exit_price
+                    ? [{ price: Number(trade.exit_price), label: t('replay.exit') }]
+                    : []),
+                ]
+              : [],
+          }
+        : null,
   )
   markers()
 }
@@ -378,6 +381,7 @@ function applyRange(range: ChartViewportRequest & { revision: number }) {
   if (!active || !adapter || pendingResume || range.revision === appliedRangeRevision) return
   appliedRangeRevision = range.revision
   if ('revealTime' in range) adapter?.revealTime(range.revealTime)
+  else if ('centerTime' in range) adapter.centerTime(range.centerTime)
   else if ('seekTime' in range) {
     adapter.seek(range.seekTime)
     appliedSeekRevision = props.seekRevision
@@ -404,7 +408,10 @@ watch(
     draw()
   },
 )
-watch([() => props.events, () => props.selection, () => props.trade, locale], selected)
+watch(
+  [() => props.events, () => props.selection, () => props.focusTime, () => props.trade, locale],
+  selected,
+)
 watch(
   () => props.range,
   (range) => {

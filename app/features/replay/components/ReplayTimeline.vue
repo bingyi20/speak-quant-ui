@@ -16,7 +16,7 @@ const props = defineProps<{
   index: number
   disabled?: boolean
 }>()
-const emit = defineEmits<{ seek: [time: number]; pause: [] }>()
+const emit = defineEmits<{ seek: [time: number]; locate: [event: ReplayEvent]; pause: [] }>()
 const { t, locale } = useI18n()
 const host = useTemplateRef<HTMLElement>('host'),
   width = ref(400),
@@ -140,8 +140,7 @@ function setGroupOpen(id: string, open: boolean) {
 }
 function choose(event: ReplayEvent) {
   openGroup.value = null
-  // Event dots are shortcuts to a historical candle, not evidence selection.
-  emit('seek', event.time)
+  emit('locate', event)
 }
 function keyboard(event: KeyboardEvent) {
   const n = nearestBar(props.bars, props.current ?? end.value),

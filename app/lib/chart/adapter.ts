@@ -51,9 +51,13 @@ export type ChartViewportRequest =
     })
   /** Reveal an off-screen endpoint without changing the user's candle spacing. */
   | { revealTime: number }
+  /** Center a fill on the plot without changing candle spacing or the playback clock. */
+  | { centerTime: number }
   /** Move the historical cutoff to the playback anchor, preserving candle spacing. */
   | { seekTime: number }
 export interface ChartSelection {
+  /** A fill locator is one time line, independent of a trade's evidence interval. */
+  point?: number
   range?: ChartRange
   prices?: Array<{ price: number; label: string }>
 }
@@ -69,6 +73,7 @@ export interface ChartAdapter {
   resetView(time?: number): void
   setVisibleRange(range: ChartRange): void
   revealTime(time: number): void
+  centerTime(time: number): void
   getViewState(): ChartRange | null
   setMarkers(markers: readonly ChartMarker[]): void
   setSelection(selection: ChartSelection | null): void

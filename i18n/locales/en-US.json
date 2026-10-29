@@ -478,6 +478,7 @@
     "tradeNumberCompact": "Trade {number}",
     "fillNumber": "Fill {number}",
     "fillSequence": "Fill no.",
+    "locateFill": "Locate fill {number}",
     "viewTradeDetails": "View trade details",
     "detailsEntry": "Details",
     "fillTime": "Time",

@@ -55,7 +55,10 @@ async function insightDots(chart: import('@playwright/test').Locator) {
 async function candleGeometry(chart: import('@playwright/test').Locator) {
   return chart.evaluate((host) => {
     const swatch = document.createElement('canvas').getContext('2d')!
-    const colors = ['--color-chart-candle-up', '--color-chart-candle-down'].map((key) => {
+    const colorKeys = window.matchMedia('(min-width: 761px)').matches
+      ? ['--color-chart-candle-up', '--color-chart-candle-down']
+      : ['--color-chart-up', '--color-chart-down']
+    const colors = colorKeys.map((key) => {
       swatch.fillStyle = getComputedStyle(host).getPropertyValue(key).trim()
       swatch.fillRect(0, 0, 1, 1)
       return [...swatch.getImageData(0, 0, 1, 1).data].slice(0, 3)
@@ -547,7 +550,7 @@ test('one historical cutoff controls candles, timeline and trades while paused',
   await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
 })
 
-test('mobile timeline event choices navigate without selecting evidence', async ({
+test('mobile timeline event choices locate fills without moving the playback cutoff', async ({
   page,
   isMobile,
 }) => {
@@ -560,15 +563,112 @@ test('mobile timeline event choices navigate without selecting evidence', async 
   await panel.getByRole('button', { name: '最大盈利交易', exact: true }).click()
   await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
   await panel.locator('.replay-track-marker').first().click()
-  await expect(slider).toHaveValue(String(Date.parse(iso(20)) / 1000))
+  await expect(slider).toHaveValue(String(Date.parse(iso(50)) / 1000))
   await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+  await expect(panel.locator('.replay-fill-focus')).toBeVisible()
+  await expect(panel.locator('.replay-trade-row[aria-expanded="true"]')).toHaveCount(0)
+  await expect(panel.locator('.replay-trade.is-selected')).toHaveCount(0)
   await slider.press('End')
   await panel.locator('.replay-track-marker').last().click()
   const picker = page.locator('.replay-marker-choices')
   if (await picker.isVisible()) await picker.getByRole('button', { name: /平空/ }).click()
-  await expect(slider).toHaveValue(String(Date.parse(iso(100)) / 1000))
+  await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
   await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+  await expect(panel.locator('.replay-fill-focus')).toBeVisible()
+  await expect(panel.locator('.replay-trade-row[aria-expanded="true"]')).toHaveCount(0)
   await expect(picker).toBeHidden()
+})
+
+test('timeline fill dots locate charts without seeking and surrounding track still seeks', async ({
+  page,
+}) => {
+  const { iso } = await import('./replay-fixtures')
+  await stubReplay(page)
+  await open(page)
+  const panel = page.locator('.asset-detail-panel'),
+    slider = panel.locator('.replay-timeline input'),
+    chart = panel.locator('.replay-chart'),
+    marker = panel.locator('[data-event-id="fill:f-1"]'),
+    cutoff = (n: number) => String(Date.parse(iso(n)) / 1000)
+
+  await marker.click()
+  await expect(slider).toHaveValue(cutoff(199))
+  await expect(chart).toHaveAttribute('data-visible-end', cutoff(199))
+  await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+  await expect(panel.locator('.replay-track-evidence')).toHaveCount(0)
+  await expect(
+    panel.locator(
+      '.replay-trade-card[aria-pressed="true"], .replay-trade-row[aria-expanded="true"], .replay-trade.is-selected',
+    ),
+  ).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: '从头播放', exact: true })).toBeVisible()
+  const focus = chart.locator('.replay-fill-focus')
+  await expect(focus).toBeVisible()
+  expect((await focus.boundingBox())!.width).toBeCloseTo(1, 1)
+  const centerOffset = async () => {
+    const plot = (await chart.locator('canvas').first().boundingBox())!,
+      line = (await focus.boundingBox())!
+    return Math.abs((line.x + line.width / 2 - plot.x) / plot.width - 0.5)
+  }
+  await expect.poll(centerOffset).toBeLessThan(0.01)
+  const candleSpacing = (await candleGeometry(chart)).spacing!
+  expect(candleSpacing).toBeGreaterThan(0)
+  await chart.scrollIntoViewIfNeeded()
+  const plot = (await chart.locator('canvas').first().boundingBox())!
+  await page.mouse.move(plot.x + plot.width / 2, plot.y + plot.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(plot.x + plot.width / 2 + 40, plot.y + plot.height / 2, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(centerOffset).toBeGreaterThan(0.02)
+  // The fill remains visible after this short drag; clicking still re-centers it.
+  await marker.click()
+  await expect.poll(centerOffset).toBeLessThan(0.01)
+  expect(Math.abs((await candleGeometry(chart)).spacing! - candleSpacing)).toBeLessThan(1)
+  await expect(slider).toHaveValue(cutoff(199))
+
+  // Blank space immediately above/below the dot belongs to the timeline input,
+  // even inside the old tall marker button's bounds.
+  for (const offset of [-8, 8]) {
+    await page.mouse.move(0, 0)
+    await expect(page.locator('.replay-fill-tooltip-host')).toBeHidden()
+    await marker.scrollIntoViewIfNeeded()
+    const dot = (await marker.locator('.replay-event-dot').boundingBox())!
+    await page.mouse.click(dot.x + dot.width / 2, dot.y + dot.height / 2 + offset)
+    await expect
+      .poll(async () => Math.abs(Number(await slider.inputValue()) - Number(cutoff(20))))
+      .toBeLessThan(3600)
+    await expect(chart).toHaveAttribute('data-visible-end', await slider.inputValue())
+    await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+    await expect(focus).toBeHidden()
+    await slider.press('End')
+    await expect(slider).toHaveValue(cutoff(199))
+  }
+
+  await slider.evaluate((input, value) => {
+    ;(input as HTMLInputElement).value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }, cutoff(130))
+  await expect(slider).toHaveValue(cutoff(130))
+  const clockStart = Date.now()
+  await page.clock.install({ time: clockStart })
+  await page.clock.pauseAt(clockStart + 60_000)
+  await panel.getByRole('button', { name: '播放', exact: true }).click()
+  await marker.click()
+  // Let the chart paint the centered viewport while the mocked playback clock
+  // advances by less than one candle interval.
+  await page.clock.runFor(32)
+  await expect(slider).toHaveValue(cutoff(130))
+  await expect(focus).toBeVisible()
+  await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+  await expect(
+    panel.locator(
+      '.replay-trade-card[aria-pressed="true"], .replay-trade-row[aria-expanded="true"], .replay-trade.is-selected',
+    ),
+  ).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: '暂停', exact: true })).toBeVisible()
+  await page.clock.runFor(500)
+  expect(Number(await slider.inputValue())).toBeGreaterThan(Number(cutoff(130)))
+  await panel.getByRole('button', { name: '暂停', exact: true }).click()
 })
 
 test('timeline controls cutoff while desktop buy tags stay local', async ({ page, isMobile }) => {
@@ -579,7 +679,13 @@ test('timeline controls cutoff while desktop buy tags stay local', async ({ page
     slider = panel.locator('.replay-timeline input')
   if (isMobile) await panel.getByRole('button', { name: '最大盈利交易', exact: true }).click()
   else {
-    await panel.locator('[data-event-id="fill:f-2"]').click()
+    await slider.evaluate(
+      (input, value) => {
+        ;(input as HTMLInputElement).value = value
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      },
+      String(Date.parse(iso(50)) / 1000),
+    )
   }
   await expect(slider).toHaveValue(String(Date.parse(iso(50)) / 1000))
   const chart = panel.locator('.replay-chart')
@@ -720,7 +826,7 @@ test('timeline controls cutoff while desktop buy tags stay local', async ({ page
   const picker = page.locator('.replay-marker-choices')
   if (isMobile && (await picker.isVisible()))
     await picker.getByRole('button', { name: /平空/ }).click()
-  await expect(slider).toHaveValue(String(Date.parse(iso(100)) / 1000))
+  await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
   await expect(picker).toHaveCount(0)
   await page.mouse.move(10, 10)
   await slider.scrollIntoViewIfNeeded()
@@ -1211,7 +1317,6 @@ test('desktop evidence navigation moves the chart without rewinding history', as
     await expect(panel.locator('.replay-summary-metrics dd')).toHaveText(metrics)
     await expect(panel.locator('.replay-track-marker')).toHaveCount(4)
     await expect(panel.locator('.replay-trade-card')).toHaveCount(2)
-    await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
   }
   for (const index of [199, 150]) {
     const cutoff = String(Date.parse(iso(index)) / 1000)
@@ -1224,16 +1329,43 @@ test('desktop evidence navigation moves the chart without rewinding history', as
     const metrics = await panel.locator('.replay-summary-metrics dd').allTextContents()
     await panel.locator('[data-trade-id="t-1"]').click()
     await checkCutoff(cutoff, metrics)
+    await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
     for (let index = 0; index < 2; index++) {
+      const spacing = (await candleGeometry(chart)).spacing!,
+        chartLabel = await chart.getAttribute('aria-label')
       const dialog = await openTradeDetails(page, 't-1')
-      await dialog.locator('.replay-fill-row').nth(index).click()
+      const cells = dialog.locator('tbody tr').nth(index).locator('td'),
+        sequence = cells.first().getByRole('button', {
+          name: `定位成交 ${index + 1}`,
+          exact: true,
+        })
+      await expect(sequence).toHaveText(String(index + 1))
+      await expect(cells.nth(1).getByRole('button')).toHaveCount(0)
+      await sequence.click()
       await expect(dialog).toBeHidden()
       await checkCutoff(cutoff, metrics)
+      await expect(chart).toHaveAttribute('aria-label', chartLabel!)
+      await expect(panel.locator('.replay-evidence-shade')).toBeHidden()
+      await expect(panel.locator('.replay-track-evidence')).toHaveCount(0)
+      await expect(panel.locator('.replay-trade-card[aria-pressed="true"]')).toHaveCount(0)
+      await expect(panel.locator('.replay-trade-card.is-selected')).toHaveCount(0)
+      const focus = chart.locator('.replay-fill-focus')
+      await expect(focus).toBeVisible()
+      expect((await focus.boundingBox())!.width).toBeCloseTo(1, 1)
+      await expect
+        .poll(async () => {
+          const plot = (await chart.locator('canvas').first().boundingBox())!,
+            line = (await focus.boundingBox())!
+          return Math.abs((line.x + line.width / 2 - plot.x) / plot.width - 0.5)
+        })
+        .toBeLessThan(0.01)
+      expect(Math.abs((await candleGeometry(chart)).spacing! - spacing)).toBeLessThan(1)
     }
     await panel.getByRole('button', { name: '4h', exact: true }).click()
     await panel.locator('[data-trade-id="t-2"]').click()
     await expect(chart).toHaveAttribute('aria-label', 'BTC/USDT 1h K 线图')
     await checkCutoff(cutoff, metrics)
+    await expect(panel.locator('.replay-evidence-shade')).toBeVisible()
   }
 })
 

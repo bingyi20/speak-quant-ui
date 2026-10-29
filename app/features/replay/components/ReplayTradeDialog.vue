@@ -171,16 +171,16 @@ const pnlClass = computed(() =>
                 :key="fill.id"
                 :class="{ 'is-selected': selectedFill === fill.id }"
               >
-                <td>{{ fill.sequence }}</td>
                 <td>
                   <button
                     class="text-button replay-fill-row"
-                    :aria-pressed="selectedFill === fill.id"
+                    :aria-label="t('replay.locateFill', { number: fill.sequence })"
                     @click="emit('locate', fill.id)"
                   >
-                    {{ date(fill.occurred_at) }}
+                    {{ fill.sequence }}
                   </button>
                 </td>
+                <td>{{ date(fill.occurred_at) }}</td>
                 <td>{{ t(fillActionKey(fill.action, trade.direction)) }}</td>
                 <td
                   v-for="(value, index) in [fill.price, fill.quantity, fill.fee, fill.realized_pnl]"
