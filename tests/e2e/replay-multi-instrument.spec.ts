@@ -279,7 +279,7 @@ test('portfolio tabs isolate chart feeds while trades, account result and the ti
   await expect(tradeCards(panel, isMobile)).toHaveCount(3)
   if (!isMobile) {
     await panel.locator('[data-trade-details="portfolio-trade-asset_b"]').click()
-    const dialog = page.getByRole('dialog', { name: '交易明细', exact: true })
+    const dialog = page.getByRole('dialog', { name: '第 2 笔交易详情', exact: true })
     await expect(dialog).toContainText('ETH/USDT')
     await dialog.locator('.replay-fill-row').first().click()
     await expect(instruments.getByRole('tab', { name: /ETH\/USDT/ })).toHaveAttribute(

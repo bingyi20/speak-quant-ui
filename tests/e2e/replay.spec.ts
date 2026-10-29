@@ -97,7 +97,7 @@ async function candleGeometry(chart: import('@playwright/test').Locator) {
 }
 async function openTradeDetails(page: import('@playwright/test').Page, id: string) {
   await page.locator(`[data-trade-details="${id}"]`).click()
-  const dialog = page.getByRole('dialog', { name: '交易明细', exact: true })
+  const dialog = page.getByRole('dialog', { name: /^第 \d+ 笔交易详情$/ })
   await expect(dialog).toBeVisible()
   return dialog
 }
@@ -112,7 +112,7 @@ async function timeAxisImage(chart: import('@playwright/test').Locator) {
   })
 }
 async function closeTradeDetails(page: import('@playwright/test').Page) {
-  const dialog = page.getByRole('dialog', { name: '交易明细', exact: true })
+  const dialog = page.getByRole('dialog', { name: /^第 \d+ 笔交易详情$/ })
   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(dialog).toBeHidden()
 }
@@ -529,7 +529,7 @@ test('one historical cutoff controls candles, timeline and trades while paused',
   await expect(panel.locator(isMobile ? '.replay-trade-row' : '.replay-trade-card')).toHaveCount(2)
   await expect(
     isMobile
-      ? panel.locator('.replay-trade-row').filter({ hasText: '#1' })
+      ? panel.locator('.replay-trade-row').filter({ hasText: /\b1 ·/ })
       : panel.locator('[data-trade-id="t-1"]'),
   ).toContainText('+87')
   await expect(panel.locator('.replay-track-marker .is-insight')).toHaveCount(0)
@@ -638,7 +638,9 @@ test('timeline controls cutoff while desktop buy tags stay local', async ({ page
   if (!isMobile) {
     await expect(slider).toHaveValue(String(Date.parse(iso(50)) / 1000))
     const tooltip = panel.getByRole('tooltip')
-    await expect(tooltip).toContainText('订单明细')
+    await expect(tooltip.locator('strong')).toHaveText(/^1 · \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/)
+    await expect(tooltip.locator('time')).toHaveText(/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/)
+    await expect(tooltip).toContainText('交易1')
     await expect(tooltip).toContainText('开多')
     await expect(tooltip).toContainText('@')
     await expect(tooltip.getByRole('button')).toHaveCount(0)
@@ -2519,7 +2521,7 @@ test('desktop trade cards only locate the chart and independent dialogs show com
   await expect(panel.locator('.replay-timeline input')).toHaveValue(cutoff)
   expect(await panel.locator('.replay-evidence-shade').boundingBox()).toEqual(rangeBefore)
   await expect(dialog.locator('tbody tr')).toHaveCount(2)
-  await expect(dialog.locator('thead th')).toHaveCount(8)
+  await expect(dialog.locator('thead th')).toHaveCount(9)
   await expect(dialog.locator('.replay-trade-dialog-metrics')).toContainText('-11.11%')
   await expect(dialog.locator('.replay-trade-dialog-metrics')).toContainText('71 天 23 小时')
   for (const label of ['毛利润', '手续费', '资金费用', '滑点成本'])
@@ -2542,7 +2544,7 @@ test('desktop trade cards only locate the chart and independent dialogs show com
     path: test.info().outputPath('trade-reason-hover.png'),
     animations: 'disabled',
   })
-  await dialog.getByRole('heading', { name: '交易明细', exact: true }).hover()
+  await dialog.getByRole('heading', { name: '第 6 笔交易详情', exact: true }).hover()
   await expect(reasonTooltip).toBeHidden()
   await reasonCell.focus()
   await expect(reasonTooltip).toBeVisible()

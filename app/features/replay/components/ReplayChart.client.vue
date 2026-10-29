@@ -28,7 +28,7 @@ import {
 } from '~/lib/format'
 import { tradeTooltipPosition } from '~/lib/chart/tooltip-position'
 import { nearestBar, nextBarTime } from '../normalize'
-import { fillActionKey } from '../events'
+import ReplayFillTooltip from './ReplayFillTooltip.vue'
 import { candleChange } from '../visibility'
 import type { ReplayBar, ReplayEvent, ReplaySelection, ReplayTradeView } from '../types'
 const props = defineProps<{
@@ -81,9 +81,8 @@ const host = useTemplateRef<HTMLElement>('host'),
   failure = ref(false),
   mounting = ref(true),
   canReturn = ref(false)
-const cluster = ref<ReplayEvent[]>([])
 const hoveredTag = ref<ChartMarkerHit | null>(null)
-const hoveredFills = ref<ReplayEvent[]>([])
+const hoveredFill = ref<ReplayEvent | null>(null)
 const fillElement = useTemplateRef<HTMLElement>('fillElement')
 const fillSize = ref({ width: 240, height: 86 })
 let fillResize: ResizeObserver | undefined
@@ -139,10 +138,10 @@ function clearFill() {
   keepFill()
   insideFill = false
   hoveredTag.value = null
-  hoveredFills.value = []
+  hoveredFill.value = null
 }
 const desktop = () => window.matchMedia('(min-width: 761px)').matches
-const markerGroups = new Map<string, ReplayEvent[]>()
+const markerEvents = new Map<string, ReplayEvent>()
 const quoted = computed(() => {
   const row = hover.value ? props.bars[nearestBar(props.bars, hover.value.time)] : undefined
   return row && row.time === hover.value?.time ? row : props.bars.at(-1)
@@ -191,12 +190,12 @@ function theme(): ChartTheme {
 }
 function markers() {
   if (!active) return
-  markerGroups.clear()
+  markerEvents.clear()
   const bars = props.bars,
-    grouped = new Map<string, { bar: ReplayBar; items: ReplayEvent[] }>()
+    values: ChartMarker[] = []
   for (const event of props.events) {
-    if (event.kind !== 'fill') continue
-    const time = event.fill ? Date.parse(event.fill.occurred_at) / 1000 : event.time
+    if (event.kind !== 'fill' || !event.fill) continue
+    const time = Date.parse(event.fill.occurred_at) / 1000
     let lo = 0,
       hi = bars.length - 1
     while (lo <= hi) {
@@ -209,34 +208,21 @@ function markers() {
     if (!bar) continue
     const end = bar.closeTime ?? nextBarTime(bar.time, props.timeframe)
     if (end && time > end) continue
-    // A reversal can close a long and open a short with two sells on one candle.
-    // Only fills with the same position direction and action share a tag.
-    const key = `${bar.time}:${event.kind}:${event.fill?.side}:${event.trade?.direction}:${event.fill?.action}`
-    const group = grouped.get(key) ?? { bar, items: [] }
-    group.items.push(event)
-    grouped.set(key, group)
-  }
-  const values: ChartMarker[] = [...grouped.values()]
-    .sort((a, b) => a.bar.time - b.bar.time)
-    .map(({ bar, items }) => {
-      const e =
-        items.find(
-          (e) => props.selection?.fillId && e.selection.fillId === props.selection.fillId,
-        ) ?? items[0]!
-      markerGroups.set(e.id, items)
-      return {
-        id: e.id,
-        time: bar.time,
-        side: e.fill?.side === 'buy' ? 'buy' : 'sell',
-        positionDirection:
-          e.trade?.direction === 'long' || e.trade?.direction === 'short'
-            ? e.trade.direction
-            : undefined,
-        price: Number(e.fill?.price),
-        edgePrice: bar.high,
-        label: `${e.fill?.side === 'buy' ? 'B' : 'S'}${items.length > 1 ? `×${items.length}` : ''}`,
-      }
+    markerEvents.set(event.id, event)
+    values.push({
+      id: event.id,
+      time: bar.time,
+      side: event.fill.side === 'buy' ? 'buy' : 'sell',
+      positionDirection:
+        event.trade?.direction === 'long' || event.trade?.direction === 'short'
+          ? event.trade.direction
+          : undefined,
+      price: Number(event.fill.price),
+      edgePrice: bar.high,
+      label: event.fill.side === 'buy' ? 'B' : 'S',
     })
+  }
+  values.sort((a, b) => a.time - b.time)
   adapter?.setMarkers(values)
 }
 function selected() {
@@ -351,16 +337,12 @@ async function mount() {
     })
     adapter.onSelect((time, marker) => {
       if (!active) return
-      const items = marker ? markerGroups.get(marker) : null
       if (desktop()) {
         const bar = props.bars[nearestBar(props.bars, time)]
         hover.value = bar?.time === time ? bar : null
         return
       }
-      if (items && items.length > 1) {
-        cluster.value = items
-        emit('interact')
-      } else emit('select', time, marker)
+      emit('select', time, marker)
     })
     adapter.onCrosshair((time, marker) => {
       if (!active) return
@@ -368,7 +350,7 @@ async function mount() {
         if (marker) {
           keepFill()
           hoveredTag.value = marker
-          hoveredFills.value = markerGroups.get(marker.id) ?? []
+          hoveredFill.value = markerEvents.get(marker.id) ?? null
         } else scheduleFillClose()
       }
       const bar = time === null ? undefined : props.bars[nearestBar(props.bars, time)]
@@ -392,10 +374,6 @@ async function mount() {
     if (alive && revision === mountRevision) mounting.value = false
   }
 }
-function chooseEvent(event: ReplayEvent) {
-  emit('select', event.time, event.id)
-  cluster.value = []
-}
 function applyRange(range: ChartViewportRequest & { revision: number }) {
   if (!active || !adapter || pendingResume || range.revision === appliedRangeRevision) return
   appliedRangeRevision = range.revision
@@ -415,13 +393,11 @@ function followLatest() {
 watch(
   () => props.bars,
   () => {
-    cluster.value = []
     const cutoff = props.bars.at(-1)?.time ?? -Infinity
     if (
-      !hoveredFills.value.length ||
-      hoveredFills.value.some(
-        (event) => event.time > cutoff || !props.events.some((visible) => visible.id === event.id),
-      )
+      !hoveredFill.value ||
+      hoveredFill.value.time > cutoff ||
+      !props.events.some((visible) => visible.id === hoveredFill.value?.id)
     )
       clearFill()
     hover.value = null
@@ -479,7 +455,6 @@ function deactivate() {
   activation++
   mountRevision++
   clearFill()
-  cluster.value = []
   hover.value = null
   cancelAnimationFrame(frame)
   fillResize?.disconnect()
@@ -590,31 +565,7 @@ onBeforeUnmount(() => {
       </dl>
     </div>
     <div
-      v-if="cluster.length"
-      class="replay-chart-cluster"
-      role="group"
-      :aria-label="t('replay.events')"
-    >
-      <button
-        v-for="event in cluster"
-        :key="event.id"
-        class="text-button"
-        @click="chooseEvent(event)"
-      >
-        {{
-          `${t(fillActionKey(event.fill?.action ?? '', event.trade?.direction))} · #${event.trade?.sequence}`
-        }}
-      </button>
-      <button
-        class="detail-icon-button"
-        :aria-label="t('common.close')"
-        @click="cluster = []"
-      >
-        <UIcon name="i-lucide-x" />
-      </button>
-    </div>
-    <div
-      v-if="hoveredTag && hoveredFills.length"
+      v-if="hoveredTag && hoveredFill"
       ref="fillElement"
       class="replay-chart-local-fill"
       :data-placement="fillPosition?.placement"
@@ -623,24 +574,7 @@ onBeforeUnmount(() => {
       @pointerenter="enterFill"
       @pointerleave="leaveFill"
     >
-      <strong
-        >{{ formatDateTime(hoveredFills[0]?.fill?.occurred_at ?? '') }}
-        {{ t('replay.orderDetails') }}</strong
-      >
-      <div
-        v-for="event in hoveredFills"
-        :key="event.id"
-        class="replay-fill-tooltip-row"
-      >
-        <span :class="event.fill?.side === 'buy' ? 'is-buy' : 'is-sell'">{{
-          t(fillActionKey(event.fill?.action ?? '', event.trade?.direction))
-        }}</span>
-        <span
-          >{{ formatQuantity(event.fill?.quantity, locale) }}@{{
-            price(Number(event.fill?.price))
-          }}</span
-        >
-      </div>
+      <ReplayFillTooltip :event="hoveredFill" />
     </div>
     <div
       ref="host"

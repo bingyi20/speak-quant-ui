@@ -919,16 +919,13 @@
   }
 }
 
-.replay-chart-cluster {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  padding: 8px;
-  max-height: 140px;
-  overflow: auto;
-  background: var(--color-bg-subtle);
-  border-radius: 8px;
+.replay-fill-tooltip-host {
+  display: block;
+  height: auto;
+  max-width: calc(100vw - 16px);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Desktop chart: the quote is an overlay, and the timeframe bar belongs to the plot. */
@@ -990,48 +987,11 @@
     margin: 0;
   }
   .replay-chart-local-fill {
-    overflow-y: auto;
     position: absolute;
     z-index: 5;
-    width: 240px;
-    padding: 14px 16px;
-    background: var(--color-bg-surface);
-    border: 1px solid var(--color-border-default);
-    border-radius: 6px;
-    box-shadow: var(--shadow-chart-tooltip);
-    font-size: 13px;
-    line-height: 20px;
-    color: var(--color-text-primary);
+    width: max-content;
+    max-width: calc(100% - 84px);
     pointer-events: auto;
-  }
-  .replay-chart-local-fill > strong {
-    display: block;
-    margin-bottom: 10px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .replay-fill-tooltip-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    line-height: 28px;
-    font-variant-numeric: tabular-nums;
-  }
-  .replay-fill-tooltip-row .is-buy {
-    color: var(--color-chart-buy);
-  }
-  .replay-fill-tooltip-row .is-sell {
-    color: var(--color-chart-sell);
-  }
-}
-
-@media (min-width: 761px) {
-  .replay-chart-cluster {
-    position: absolute;
-    left: 10px;
-    bottom: 36px;
-    z-index: 4;
-    max-width: calc(100% - 86px);
   }
 }
 

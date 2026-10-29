@@ -231,9 +231,9 @@ function instrumentLabel(trade: ReplayTradeView) {
               :aria-pressed="selectedTrade?.id === trade.id"
               @click="state.toggleTrade(trade.id)"
             >
-              <span class="replay-card-heading">{{
-                t(`replay.direction.${trade.direction}`)
-              }}</span>
+              <span class="replay-card-heading"
+                >{{ trade.sequence }} · {{ t(`replay.direction.${trade.direction}`) }}</span
+              >
               <span
                 v-if="instrumentLabel(trade)"
                 class="replay-trade-instrument"
@@ -365,7 +365,7 @@ function instrumentLabel(trade: ReplayTradeView) {
                 class="replay-trade-instrument"
                 >{{ instrumentLabel(trade) }}</span
               >
-              #{{ trade.sequence }} · {{ t(`replay.direction.${trade.direction}`) }} ·
+              {{ trade.sequence }} · {{ t(`replay.direction.${trade.direction}`) }} ·
               {{ trade.isComplete ? reason(trade.exit_reason) : t('replay.unclosed')
               }}<small
                 >{{ trade.entry_at.slice(0, 16).replace('T', ' ') }} →
@@ -456,6 +456,10 @@ function instrumentLabel(trade: ReplayTradeView) {
                 </button>
                 <template v-if="selection?.fillId === fill.id">
                   <dl class="replay-key-values">
+                    <div>
+                      <dt>{{ t('replay.fillSequence') }}</dt>
+                      <dd>{{ fill.sequence }}</dd>
+                    </div>
                     <div
                       v-for="[key, value] in [
                         ['fees', fill.fee],

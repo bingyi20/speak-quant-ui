@@ -51,7 +51,11 @@ const pnlClass = computed(() =>
 <template>
   <UModal
     v-model:open="open"
-    :title="t('replay.tradeDetails')"
+    :title="
+      trade
+        ? t('replay.tradeDetailsNumbered', { number: trade.sequence })
+        : t('replay.tradeDetails')
+    "
     :description="
       trade
         ? `${instrumentLabel ? instrumentLabel + ' · ' : ''}${t(`replay.direction.${trade.direction}`)} · ${date(trade.entry_at)} → ${trade.exit_at ? date(trade.exit_at) : t('replay.unclosed')}`
@@ -134,6 +138,7 @@ const pnlClass = computed(() =>
         <div class="replay-table-scroll replay-fills-table">
           <table :aria-label="t('replay.fills', { count: trade.fills.length })">
             <colgroup>
+              <col style="width: 80px" />
               <col style="width: 144px" />
               <col style="width: 90px" />
               <col
@@ -146,6 +151,7 @@ const pnlClass = computed(() =>
             </colgroup>
             <thead>
               <tr>
+                <th>{{ t('replay.fillSequence') }}</th>
                 <th>{{ t('replay.fillTime') }}</th>
                 <th>{{ t('replay.fillAction') }}</th>
                 <th
@@ -165,6 +171,7 @@ const pnlClass = computed(() =>
                 :key="fill.id"
                 :class="{ 'is-selected': selectedFill === fill.id }"
               >
+                <td>{{ fill.sequence }}</td>
                 <td>
                   <button
                     class="text-button replay-fill-row"

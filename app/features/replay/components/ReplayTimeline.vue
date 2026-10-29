@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from
 import { nearestBar } from '../normalize'
 import { fillActionKey } from '../events'
 import type { ReplayBar, ReplayEvent } from '../types'
-import { formatDate, formatDateTime } from '~/lib/format'
+import { formatDate } from '~/lib/format'
+import ReplayFillTooltip from './ReplayFillTooltip.vue'
 import ReplayTradeMarker from './ReplayTradeMarker.vue'
 const props = defineProps<{
   start: string
@@ -111,7 +112,8 @@ const label = (event: ReplayEvent) =>
   [
     event.fill?.symbol ?? event.trade?.symbol,
     t(fillActionKey(event.fill?.action ?? '', event.trade?.direction)),
-    `#${event.trade?.sequence}`,
+    event.fill && t('replay.fillNumber', { number: event.fill.sequence }),
+    event.trade && t('replay.tradeNumberCompact', { number: event.trade.sequence }),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -212,19 +214,28 @@ onBeforeUnmount(() => {
           v-for="group in groups"
           :key="group.items[0]!.id"
         >
-          <ReplayTradeMarker
+          <UTooltip
             v-if="group.items.length === 1"
-            class="replay-track-marker"
-            :side="kind(group.items[0]!)"
-            :direction="group.items[0]!.trade?.direction"
-            :data-event-id="group.items[0]!.id"
-            :data-marker-lane="group.lane"
-            :style="markerStyle(group)"
-            :label="label(group.items[0]!)"
-            :title="label(group.items[0]!)"
             :disabled="disabled"
-            @click="choose(group.items[0]!)"
-          />
+            :delay-duration="150"
+            :content="{ side: 'top', align: 'center', sideOffset: 6, collisionPadding: 8 }"
+            :ui="{ content: 'replay-fill-tooltip-host' }"
+          >
+            <ReplayTradeMarker
+              class="replay-track-marker"
+              :side="kind(group.items[0]!)"
+              :direction="group.items[0]!.trade?.direction"
+              :data-event-id="group.items[0]!.id"
+              :data-marker-lane="group.lane"
+              :style="markerStyle(group)"
+              :label="label(group.items[0]!)"
+              :disabled="disabled"
+              @click="choose(group.items[0]!)"
+            />
+            <template #content>
+              <ReplayFillTooltip :event="group.items[0]!" />
+            </template>
+          </UTooltip>
           <UPopover
             v-else
             :key="desktop ? 'hover' : 'click'"
@@ -255,17 +266,26 @@ onBeforeUnmount(() => {
                 role="group"
                 :aria-label="t('replay.events')"
               >
-                <ReplayTradeMarker
+                <UTooltip
                   v-for="event in group.items"
                   :key="event.id"
-                  class="replay-marker-choice"
-                  :side="kind(event)"
-                  :direction="event.trade?.direction"
-                  :label="label(event)"
-                  :title="`${label(event)} · ${formatDateTime(event.fill?.occurred_at ?? event.time * 1000)}`"
                   :disabled="disabled"
-                  @click="choose(event)"
-                />
+                  :delay-duration="150"
+                  :content="{ side: 'top', align: 'center', sideOffset: 6, collisionPadding: 8 }"
+                  :ui="{ content: 'replay-fill-tooltip-host' }"
+                >
+                  <ReplayTradeMarker
+                    class="replay-marker-choice"
+                    :side="kind(event)"
+                    :direction="event.trade?.direction"
+                    :label="label(event)"
+                    :disabled="disabled"
+                    @click="choose(event)"
+                  />
+                  <template #content>
+                    <ReplayFillTooltip :event="event" />
+                  </template>
+                </UTooltip>
               </div>
             </template>
           </UPopover>
