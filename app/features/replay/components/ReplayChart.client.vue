@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import ReplayInsightContent from './ReplayInsightContent.vue'
 import LoadingState from '~/components/common/LoadingState.vue'
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onDeactivated,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useTemplateRef,
+  watch,
+} from 'vue'
 import type {
   ChartAdapter,
   ChartMarker,
@@ -31,21 +40,42 @@ const props = defineProps<{
   playing: boolean
   follow: boolean
   range: (ChartViewportRequest & { revision: number }) | null
+  initialRange: ChartRange | null
+  initialSeekRevision: number
+  seekRevision: number
+  seekCutoff: number | null
   volume: boolean
   symbol: string
+  instrument: string
+  visible: boolean
   loading?: boolean
   emptyLabel?: string
   loadError?: string
 }>()
 const emit = defineEmits<{
   select: [time: number, markerId?: string]
-  range: [value: ChartRange]
+  range: [value: ChartRange, instrument: string]
   interact: []
   follow: []
   hover: [time: number | null]
   retry: []
 }>()
 const { t, locale } = useI18n()
+// This component and its canvas belong to one frozen instrument for their entire lifetime.
+const instrument = props.instrument
+let active = props.visible,
+  attached = true,
+  activation = 0,
+  mountRevision = 0
+let appliedRangeRevision: number | undefined
+let appliedSeekRevision = props.seekRevision
+let suspendedFollow = props.follow
+let pendingResume: {
+  follow: boolean
+  seek: boolean
+  revision: number
+  cutoff: number | null
+} | null = null
 const host = useTemplateRef<HTMLElement>('host'),
   hover = ref<ReplayBar | null>(null),
   failure = ref(false),
@@ -67,12 +97,7 @@ watch(fillElement, (element) => {
   fillResize = new ResizeObserver(measure)
   fillResize.observe(element)
 })
-const fillMaxHeight = computed(() => {
-  // Bottom-row insight markers must remain clickable even with long content.
-  if (hoveredTag.value && hoveredFills.value[0]?.kind === 'insight')
-    return Math.max(0, Math.floor(hoveredTag.value.top) - 12)
-  return Math.max(86, (host.value?.clientHeight ?? 300) - 44)
-})
+const fillMaxHeight = computed(() => Math.max(86, (host.value?.clientHeight ?? 300) - 44))
 const fillPosition = computed(() => {
   const tag = hoveredTag.value
   if (!tag || !host.value) return null
@@ -155,7 +180,8 @@ function theme(): ChartTheme {
     up: value(desktop() ? '--color-chart-candle-up' : '--color-chart-up'),
     buy: value('--color-chart-buy'),
     sell: value('--color-chart-sell'),
-    insight: value('--color-chart-insight'),
+    buyText: value('--color-chart-buy-text'),
+    sellText: value('--color-chart-sell-text'),
     tagText: value('--color-chart-tag-text'),
     down: value(desktop() ? '--color-chart-candle-down' : '--color-chart-down'),
     accent: value('--color-brand'),
@@ -164,15 +190,12 @@ function theme(): ChartTheme {
   }
 }
 function markers() {
+  if (!active) return
   markerGroups.clear()
   const bars = props.bars,
     grouped = new Map<string, { bar: ReplayBar; items: ReplayEvent[] }>()
   for (const event of props.events) {
-    if (
-      event.kind !== 'fill' &&
-      !(desktop() && event.kind === 'insight' && event.insight?.scope === 'runtime')
-    )
-      continue
+    if (event.kind !== 'fill') continue
     const time = event.fill ? Date.parse(event.fill.occurred_at) / 1000 : event.time
     let lo = 0,
       hi = bars.length - 1
@@ -186,7 +209,9 @@ function markers() {
     if (!bar) continue
     const end = bar.closeTime ?? nextBarTime(bar.time, props.timeframe)
     if (end && time > end) continue
-    const key = `${bar.time}:${event.kind}:${event.fill?.side}`
+    // A reversal can close a long and open a short with two sells on one candle.
+    // Only fills with the same position direction and action share a tag.
+    const key = `${bar.time}:${event.kind}:${event.fill?.side}:${event.trade?.direction}:${event.fill?.action}`
     const group = grouped.get(key) ?? { bar, items: [] }
     group.items.push(event)
     grouped.set(key, group)
@@ -196,29 +221,26 @@ function markers() {
     .map(({ bar, items }) => {
       const e =
         items.find(
-          (e) =>
-            (props.selection?.fillId && e.selection.fillId === props.selection.fillId) ||
-            (props.selection?.insightId && e.selection.insightId === props.selection.insightId),
+          (e) => props.selection?.fillId && e.selection.fillId === props.selection.fillId,
         ) ?? items[0]!
       markerGroups.set(e.id, items)
       return {
         id: e.id,
         time: bar.time,
-        side: e.kind === 'insight' ? 'insight' : e.fill?.side === 'buy' ? 'buy' : 'sell',
-        active: e.kind === 'insight' && e.selection.insightId === props.selection?.insightId,
+        side: e.fill?.side === 'buy' ? 'buy' : 'sell',
+        positionDirection:
+          e.trade?.direction === 'long' || e.trade?.direction === 'short'
+            ? e.trade.direction
+            : undefined,
         price: Number(e.fill?.price),
         edgePrice: bar.high,
-        label:
-          e.kind === 'insight'
-            ? items.length > 1
-              ? String(items.length)
-              : ''
-            : `${e.fill?.side === 'buy' ? 'B' : 'S'}${items.length > 1 ? `×${items.length}` : ''}`,
+        label: `${e.fill?.side === 'buy' ? 'B' : 'S'}${items.length > 1 ? `×${items.length}` : ''}`,
       }
     })
   adapter?.setMarkers(values)
 }
 function selected() {
+  if (!active) return
   const trade = props.trade
   const selectedBar = props.selection?.candleId
     ? props.bars.find((c) => c.id === props.selection?.candleId)
@@ -252,10 +274,16 @@ function selected() {
   )
   markers()
 }
-function draw() {
-  if (!adapter) return
+function draw(preserveViewport = false) {
+  if (!adapter || !active) return
+  if (pendingResume && pendingResume.revision !== props.seekRevision)
+    pendingResume = {
+      follow: true,
+      seek: true,
+      revision: props.seekRevision,
+      cutoff: props.seekCutoff,
+    }
   const rows = props.bars
-  const saved = adapter.getViewState()
   const append =
     props.playing &&
     previous.length > 0 &&
@@ -271,28 +299,60 @@ function draw() {
     if (desktop()) adapter.resetView()
     else if (to > from) adapter.setVisibleRange({ from, to })
     initial = false
+  } else if (preserveViewport || pendingResume) {
+    // resumeViewport settles the cached policy after current data is installed.
+  } else if (rows.length && appliedSeekRevision !== props.seekRevision) {
+    adapter.seek(rows.at(-1)!.time)
+    appliedSeekRevision = props.seekRevision
   } else if (props.follow && rows.length) adapter.follow()
-  else if (saved && !append) adapter.setVisibleRange(saved)
+  if (pendingResume) {
+    const pending = pendingResume
+    const seekBar =
+      pending.seek && pending.cutoff !== null
+        ? rows.findLast(
+            (bar) =>
+              (bar.closeTime ?? nextBarTime(bar.time, props.timeframe) ?? Infinity) <=
+              pending.cutoff!,
+          )
+        : undefined
+    if (
+      adapter.resumeViewport({
+        follow: pending.follow,
+        seek: pending.seek,
+        seekTime: seekBar?.time ?? -Infinity,
+      })
+    ) {
+      appliedSeekRevision = pending.revision
+      pendingResume = null
+      if (props.range) applyRange(props.range)
+      const range = adapter.getViewState()
+      if (range) emit('range', range, instrument)
+    }
+  }
   selected()
 }
 async function mount() {
+  const revision = ++mountRevision
   failure.value = false
   mounting.value = true
   try {
     const { createLightweightChart } = await import('~/lib/chart/lightweight')
-    if (!alive || !host.value) return
+    if (!alive || !active || revision !== mountRevision || !host.value) return
     adapter?.destroy()
     adapter = createLightweightChart(host.value, theme())
+    appliedSeekRevision = props.seekRevision
     initial = true
     previous = []
-    adapter.onRangeChange((range) => emit('range', range))
+    adapter.onRangeChange((range) => {
+      if (active && !pendingResume) emit('range', range, instrument)
+    })
     adapter.onReturnVisibilityChange((visible) => {
       canReturn.value = visible
     })
     adapter.onSelect((time, marker) => {
+      if (!active) return
       const items = marker ? markerGroups.get(marker) : null
       if (desktop()) {
-        if (items?.[0]?.kind === 'insight') emit('select', time, marker)
         const bar = props.bars[nearestBar(props.bars, time)]
         hover.value = bar?.time === time ? bar : null
         return
@@ -303,6 +363,7 @@ async function mount() {
       } else emit('select', time, marker)
     })
     adapter.onCrosshair((time, marker) => {
+      if (!active) return
       if (desktop()) {
         if (marker) {
           keepFill()
@@ -315,22 +376,34 @@ async function mount() {
       emit('hover', time)
     })
     adapter.setVolume(props.volume)
+    const initialRange = props.initialRange
     draw()
+    if (initialRange) {
+      adapter.setVisibleRange(initialRange)
+      // A global seek may have happened after reopening the replay, before this
+      // instrument's cached snapshot has been recreated as an SDK instance.
+      if (props.initialSeekRevision !== props.seekRevision && props.bars.length)
+        adapter.seek(props.bars.at(-1)!.time)
+    }
     if (props.range) applyRange(props.range)
   } catch {
     failure.value = true
   } finally {
-    if (alive) mounting.value = false
+    if (alive && revision === mountRevision) mounting.value = false
   }
 }
 function chooseEvent(event: ReplayEvent) {
   emit('select', event.time, event.id)
   cluster.value = []
 }
-function applyRange(range: ChartViewportRequest) {
+function applyRange(range: ChartViewportRequest & { revision: number }) {
+  if (!active || !adapter || pendingResume || range.revision === appliedRangeRevision) return
+  appliedRangeRevision = range.revision
   if ('revealTime' in range) adapter?.revealTime(range.revealTime)
-  else if ('seekTime' in range) adapter?.seek(range.seekTime)
-  else if (desktop() && range.focusTime !== undefined) adapter?.resetView(range.focusTime)
+  else if ('seekTime' in range) {
+    adapter.seek(range.seekTime)
+    appliedSeekRevision = props.seekRevision
+  } else if (desktop() && range.focusTime !== undefined) adapter?.resetView(range.focusTime)
   else adapter?.setVisibleRange(range)
 }
 function followLatest() {
@@ -364,29 +437,87 @@ watch(
 )
 watch(
   () => props.volume,
-  (value) => adapter?.setVolume(value),
+  (value) => {
+    if (active) adapter?.setVolume(value)
+  },
 )
-onMounted(() => {
-  void mount()
-  resize = new ResizeObserver(() => {
-    cancelAnimationFrame(frame)
-    frame = requestAnimationFrame(() => {
-      const r = host.value?.getBoundingClientRect()
-      if (r) adapter?.resize(r.width, r.height)
-    })
-  })
-  if (host.value) resize.observe(host.value)
-  themeObserver = new MutationObserver(() => {
-    if (host.value) adapter?.applyTheme(theme())
-  })
-  themeObserver.observe(document.documentElement, {
+async function activate() {
+  if (!props.visible || !attached) return
+  const ticket = ++activation
+  await nextTick()
+  if (!alive || !props.visible || !attached || ticket !== activation || !host.value) return
+  active = true
+  resize?.observe(host.value)
+  themeObserver?.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ['data-theme', 'class'],
   })
+  if (!adapter) {
+    await mount()
+    return
+  }
+  adapter.setActive(true)
+  const bounds = host.value.getBoundingClientRect()
+  adapter.resize(bounds.width, bounds.height)
+  adapter.applyTheme(theme())
+  adapter.setVolume(props.volume)
+  const seek = appliedSeekRevision !== props.seekRevision
+  pendingResume = {
+    follow: seek || suspendedFollow,
+    seek,
+    revision: props.seekRevision,
+    cutoff: props.seekCutoff,
+  }
+  draw(true)
+  if (props.range) applyRange(props.range)
+  const range = adapter.getViewState()
+  if (range && !pendingResume) emit('range', range, instrument)
+}
+function deactivate() {
+  if (active) suspendedFollow = props.follow
+  active = false
+  activation++
+  mountRevision++
+  clearFill()
+  cluster.value = []
+  hover.value = null
+  cancelAnimationFrame(frame)
+  fillResize?.disconnect()
+  resize?.disconnect()
+  themeObserver?.disconnect()
+  adapter?.setActive(false)
+}
+onMounted(() => {
+  resize = new ResizeObserver(() => {
+    if (!active) return
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => {
+      const r = host.value?.getBoundingClientRect()
+      if (active && r) adapter?.resize(r.width, r.height)
+    })
+  })
+  themeObserver = new MutationObserver(() => {
+    if (active && host.value) adapter?.applyTheme(theme())
+  })
+  void activate()
+})
+watch(
+  () => props.visible,
+  (value) => {
+    if (value) void activate()
+    else deactivate()
+  },
+)
+onActivated(() => {
+  attached = true
+  void activate()
+})
+onDeactivated(() => {
+  attached = false
+  deactivate()
 })
 onBeforeUnmount(() => {
-  clearFill()
-  fillResize?.disconnect()
+  deactivate()
   alive = false
   cancelAnimationFrame(frame)
   resize?.disconnect()
@@ -395,7 +526,10 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="replay-chart-block">
+  <div
+    class="replay-chart-block"
+    :data-instrument="instrument"
+  >
     <div
       class="replay-quote"
       aria-live="off"
@@ -483,38 +617,30 @@ onBeforeUnmount(() => {
       v-if="hoveredTag && hoveredFills.length"
       ref="fillElement"
       class="replay-chart-local-fill"
-      :class="{ 'is-insight': hoveredFills[0]?.kind === 'insight' }"
       :data-placement="fillPosition?.placement"
       role="tooltip"
       :style="fillStyle"
       @pointerenter="enterFill"
       @pointerleave="leaveFill"
     >
-      <ReplayInsightContent
-        v-if="hoveredFills[0]?.kind === 'insight'"
-        :insights="hoveredFills.flatMap((event) => (event.insight ? [event.insight] : []))"
-        :time="hoveredFills[0]?.time"
-      />
-      <template v-else>
-        <strong
-          >{{ formatDateTime(hoveredFills[0]?.fill?.occurred_at ?? '') }}
-          {{ t('replay.orderDetails') }}</strong
+      <strong
+        >{{ formatDateTime(hoveredFills[0]?.fill?.occurred_at ?? '') }}
+        {{ t('replay.orderDetails') }}</strong
+      >
+      <div
+        v-for="event in hoveredFills"
+        :key="event.id"
+        class="replay-fill-tooltip-row"
+      >
+        <span :class="event.fill?.side === 'buy' ? 'is-buy' : 'is-sell'">{{
+          t(fillActionKey(event.fill?.action ?? '', event.trade?.direction))
+        }}</span>
+        <span
+          >{{ formatQuantity(event.fill?.quantity, locale) }}@{{
+            price(Number(event.fill?.price))
+          }}</span
         >
-        <div
-          v-for="event in hoveredFills"
-          :key="event.id"
-          class="replay-fill-tooltip-row"
-        >
-          <span :class="event.fill?.side === 'buy' ? 'is-buy' : 'is-sell'">{{
-            t(event.fill?.side === 'buy' ? 'replay.markerKinds.buy' : 'replay.markerKinds.sell')
-          }}</span>
-          <span
-            >{{ formatQuantity(event.fill?.quantity, locale) }}@{{
-              price(Number(event.fill?.price))
-            }}</span
-          >
-        </div>
-      </template>
+      </div>
     </div>
     <div
       ref="host"

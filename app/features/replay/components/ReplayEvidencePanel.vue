@@ -2,13 +2,13 @@
 import { computed, nextTick, ref, watch, useTemplateRef } from 'vue'
 import { formatDate, formatDecimal, formatRatio } from '~/lib/format'
 import ReplayTradeDialog from './ReplayTradeDialog.vue'
-import MarkdownContent from '~/components/common/MarkdownContent.vue'
 import LoadingState from '~/components/common/LoadingState.vue'
 import LoadingSkeleton from '~/components/ui/LoadingSkeleton.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
 import { fillActionKey } from '../events'
+import { tradeInstrument } from '../instruments'
 import { useReplayTradeStrip } from '../composables/useReplayTradeStrip'
-import type { ReplayQuestionReference, ReplaySelection } from '../types'
+import type { ReplayQuestionReference, ReplaySelection, ReplayTradeView } from '../types'
 const props = defineProps<{ state: ReplayDetailState; desktop?: boolean }>()
 const emit = defineEmits<{
   question: [reference: ReplayQuestionReference]
@@ -17,16 +17,11 @@ const emit = defineEmits<{
 const { t, locale } = useI18n()
 const {
   detail,
-  tab,
   expanded,
   atEnd,
-  visibleInsights: insights,
   visibleTrades: trades,
   phases,
   errors,
-  visibleInsights,
-  selectedInsight,
-  relatedInsightTrade,
   selectedTrade,
   selection,
   tradesComplete,
@@ -72,7 +67,6 @@ watch(
     if (!value) detailsTradeId.value = null
   },
 )
-const displayTab = computed(() => (props.desktop ? 'trades' : tab.value))
 const tradesLoading = computed(
   () =>
     !trades.value.length &&
@@ -81,21 +75,10 @@ const tradesLoading = computed(
 const tradeCount = computed(() =>
   initializing.value || !tradesComplete.value ? '—' : trades.value.length,
 )
-const scope = ref<'global' | 'runtime'>('global'),
-  direction = ref('all'),
+const direction = ref('all'),
   exitReason = ref('all'),
   page = ref(1),
-  insightLimit = ref(20),
   showFills = ref(false)
-const summary = computed(
-  () =>
-    insights.value.find((i) => i.scope === 'global')?.title ||
-    (atEnd.value ? detail.value?.result_summary : insights.value.at(-1)?.title) ||
-    t('replay.noInsights'),
-)
-const filteredInsights = computed(() =>
-  visibleInsights.value.filter((i) => i.scope === scope.value),
-)
 const filteredTrades = computed(() =>
   [...trades.value]
     .sort((a, b) => a.sequence - b.sequence)
@@ -143,25 +126,13 @@ function reason(value: string | null) {
       ? t('replay.reasons.other')
       : '—'
 }
-function changeTab(value: 'insights' | 'trades') {
-  props.state.pause()
-  tab.value = value
-  expanded.value = true
-}
 function locate(target: ReplaySelection) {
-  void props.state.locate(target, !props.desktop)
+  void props.state.locate(target, !props.desktop && !detail.value?.conditions.instruments)
 }
 function ask() {
   const reference = props.state.question()
   if (reference) emit('question', reference)
 }
-watch(
-  atEnd,
-  (value) => {
-    scope.value = value ? 'global' : 'runtime'
-  },
-  { immediate: true },
-)
 watch(
   () => trades.value.length,
   () => {
@@ -176,17 +147,8 @@ watch([direction, exitReason], () => {
 })
 watch(selection, async (value, previous) => {
   if (value?.tradeId !== previous?.tradeId) showFills.value = false
-  const insight = insights.value.find((i) => i.id === value?.insightId)
   if (value?.fillId) showFills.value = true
-  if (insight) {
-    scope.value = insight.scope
-    insightLimit.value = Math.max(
-      insightLimit.value,
-      insights.value
-        .filter((i) => i.scope === insight.scope)
-        .findIndex((i) => i.id === insight.id) + 1,
-    )
-  }
+  if (value?.tradeId) expanded.value = true
   if (value?.tradeId && value.tradeId !== previous?.tradeId) {
     direction.value = 'all'
     exitReason.value = 'all'
@@ -203,33 +165,30 @@ watch(
     direction.value = 'all'
     exitReason.value = 'all'
     page.value = 1
-    insightLimit.value = 20
     detailsTradeId.value = null
   },
 )
 const pnlClass = (value: string | null) =>
   Number(value) > 0 ? 'is-positive' : Number(value) < 0 ? 'is-negative' : ''
+function instrumentLabel(trade: ReplayTradeView) {
+  if (!detail.value?.conditions.instruments) return ''
+  const instrument = tradeInstrument(trade, props.state.instruments.value)
+  if (!instrument) return trade.symbol ?? trade.instrument_role ?? ''
+  const market = instrument.market_type
+    ? t(
+        `replay.marketTypes.${instrument.market_type === 'spot' ? 'spot' : instrument.contract_type === 'perpetual' ? 'perpetual' : 'contract'}`,
+      )
+    : ''
+  return [instrument.symbol, market].filter(Boolean).join(' · ')
+}
 </script>
 <template>
   <section
     class="replay-evidence"
     :class="{ 'is-desktop-cards': desktop }"
-    :aria-label="t('replay.evidence')"
+    :aria-label="t('replay.tradesTitle')"
   >
     <template v-if="desktop">
-      <div
-        v-if="errors.insights"
-        class="replay-inline-error"
-        role="alert"
-      >
-        <span>{{ t(errors.insights) }}</span
-        ><button
-          class="text-button"
-          @click="state.retry('insights')"
-        >
-          {{ t('common.retry') }}
-        </button>
-      </div>
       <div class="replay-cards-heading">
         <h3>
           {{ t('replay.tradesTitle') }} <span>{{ tradeCount }}</span>
@@ -276,6 +235,12 @@ const pnlClass = (value: string | null) =>
                 t(`replay.direction.${trade.direction}`)
               }}</span>
               <span
+                v-if="instrumentLabel(trade)"
+                class="replay-trade-instrument"
+                :title="instrumentLabel(trade)"
+                >{{ instrumentLabel(trade) }}</span
+              >
+              <span
                 class="replay-card-pnl"
                 :class="pnlClass(trade.net_pnl)"
                 ><span>{{ formatRatio(trade.return_rate, locale) }}</span
@@ -304,27 +269,10 @@ const pnlClass = (value: string | null) =>
     <div
       v-if="!desktop"
       class="replay-evidence-tabs"
-      role="tablist"
-      :aria-label="t('replay.evidence')"
     >
-      <button
-        id="replay-insights-tab"
-        role="tab"
-        :aria-selected="tab === 'insights'"
-        aria-controls="replay-evidence-content"
-        @click="changeTab('insights')"
-      >
-        {{ t('replay.insights') }}<span>{{ insights.length }}</span>
-      </button>
-      <button
-        id="replay-trades-tab"
-        role="tab"
-        :aria-selected="tab === 'trades'"
-        aria-controls="replay-evidence-content"
-        @click="changeTab('trades')"
-      >
-        {{ t('replay.tradeRecords') }}<span>{{ tradeCount }}</span>
-      </button>
+      <h3 class="py-2 text-[13px] font-medium">
+        {{ t('replay.tradesTitle') }} <span class="replay-muted">{{ tradeCount }}</span>
+      </h3>
       <button
         v-if="expanded"
         class="detail-icon-button replay-evidence-collapse"
@@ -336,21 +284,18 @@ const pnlClass = (value: string | null) =>
     </div>
     <div
       id="replay-evidence-content"
-      role="tabpanel"
-      :aria-labelledby="
-        desktop ? undefined : tab === 'insights' ? 'replay-insights-tab' : 'replay-trades-tab'
-      "
-      :aria-label="desktop ? t('replay.tradeRecords') : undefined"
+      role="region"
+      :aria-label="t('replay.tradeRecords')"
     >
       <div
-        v-if="errors[displayTab]"
+        v-if="errors.trades"
         class="replay-inline-error"
         role="alert"
       >
-        <span>{{ t(errors[displayTab]) }}</span
+        <span>{{ t(errors.trades) }}</span
         ><button
           class="text-button"
-          @click="state.retry(displayTab)"
+          @click="state.retry('trades')"
         >
           {{ t('common.retry') }}
         </button>
@@ -360,15 +305,13 @@ const pnlClass = (value: string | null) =>
         class="replay-event-summary"
       >
         <LoadingSkeleton
-          v-if="phases[tab] === 'loading' || (initializing && !errors.candles)"
+          v-if="phases.trades === 'loading' || (initializing && !errors.candles)"
           class="replay-evidence-summary-skeleton"
         />
         <span
           v-else
           class="replay-summary-text"
-          >{{
-            tab === 'insights' ? summary : t('replay.tradeCount', { count: trades.length })
-          }}</span
+          >{{ t('replay.tradeCount', { count: trades.length }) }}</span
         ><button
           class="text-button"
           @click="expanded = true"
@@ -376,97 +319,6 @@ const pnlClass = (value: string | null) =>
           {{ t('replay.expand') }}<UIcon name="i-lucide-chevron-down" />
         </button>
       </div>
-      <template v-else-if="displayTab === 'insights'">
-        <div class="replay-evidence-filter">
-          <button
-            v-for="value in (atEnd ? ['global', 'runtime'] : ['runtime']) as Array<
-              'global' | 'runtime'
-            >"
-            :key="value"
-            :aria-pressed="scope === value"
-            @click="scope = value"
-          >
-            {{ t(`replay.scope.${value}`) }}
-            {{ insights.filter((insight) => insight.scope === value).length }}
-          </button>
-        </div>
-        <LoadingState
-          v-if="phases.insights === 'loading' && !filteredInsights.length"
-          class="replay-resource-loading"
-        />
-        <div v-else-if="!filteredInsights.length && !errors.insights">
-          <MarkdownContent
-            v-if="atEnd && scope === 'global' && detail?.result_summary"
-            :content="detail.result_summary"
-          />
-          <p
-            v-else
-            class="replay-muted"
-          >
-            {{ t('replay.noInsights') }}
-          </p>
-        </div>
-        <div
-          v-for="insight in filteredInsights.slice(0, insightLimit)"
-          :key="insight.id"
-          class="replay-insight"
-          :class="{ 'is-selected': selectedInsight?.id === insight.id }"
-        >
-          <button
-            class="replay-insight-title"
-            :aria-expanded="selectedInsight?.id === insight.id"
-            @click="locate({ insightId: insight.id })"
-          >
-            <span>{{ insight.title }}</span
-            ><span
-              v-if="!insight.is_validated"
-              class="replay-unvalidated"
-              >{{ t('replay.unvalidated') }}</span
-            ><UIcon name="i-lucide-chevron-down" />
-          </button>
-          <div
-            v-if="selectedInsight?.id === insight.id"
-            class="replay-insight-content"
-          >
-            <MarkdownContent :content="insight.content" />
-            <p
-              v-if="typeof insight.evidence?.summary === 'string'"
-              class="replay-evidence-summary"
-            >
-              {{ insight.evidence.summary }}
-            </p>
-            <template v-if="insight.suggestion"
-              ><h4>{{ t('replay.suggestion') }}</h4>
-              <MarkdownContent :content="insight.suggestion"
-            /></template>
-            <template v-if="insight.tradeoff"
-              ><h4>{{ t('replay.tradeoff') }}</h4>
-              <MarkdownContent :content="insight.tradeoff"
-            /></template>
-            <div class="replay-evidence-actions">
-              <button
-                v-if="relatedInsightTrade"
-                class="text-button"
-                @click="locate({ tradeId: relatedInsightTrade.id })"
-              >
-                {{ t('replay.relatedTrade', { number: relatedInsightTrade.sequence }) }}</button
-              ><button
-                class="text-button"
-                @click="ask"
-              >
-                {{ t('replay.askAgent') }}<UIcon name="i-lucide-arrow-up-right" />
-              </button>
-            </div>
-          </div>
-        </div>
-        <button
-          v-if="filteredInsights.length > insightLimit"
-          class="text-button"
-          @click="insightLimit += 20"
-        >
-          {{ t('replay.loadMore') }}
-        </button>
-      </template>
       <template v-else>
         <div
           v-if="trades.length && !desktop"
@@ -508,7 +360,12 @@ const pnlClass = (value: string | null) =>
             @click="locate({ tradeId: trade.id })"
           >
             <span
-              >#{{ trade.sequence }} · {{ t(`replay.direction.${trade.direction}`) }} ·
+              ><span
+                v-if="instrumentLabel(trade)"
+                class="replay-trade-instrument"
+                >{{ instrumentLabel(trade) }}</span
+              >
+              #{{ trade.sequence }} · {{ t(`replay.direction.${trade.direction}`) }} ·
               {{ trade.isComplete ? reason(trade.exit_reason) : t('replay.unclosed')
               }}<small
                 >{{ trade.entry_at.slice(0, 16).replace('T', ' ') }} →
@@ -648,6 +505,7 @@ const pnlClass = (value: string | null) =>
       v-if="desktop"
       v-model:open="detailsOpen"
       :trade="detailsTrade"
+      :instrument-label="detailsTrade ? instrumentLabel(detailsTrade) : ''"
       :exit-label="
         detailsTrade?.isComplete ? reason(detailsTrade.exit_reason) : t('replay.unclosed')
       "

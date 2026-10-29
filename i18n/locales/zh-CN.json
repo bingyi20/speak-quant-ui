@@ -93,7 +93,7 @@
     "replay": "回测",
     "replayHint": "回看历史交易与研究证据",
     "strategyEmpty": "策略形成后，设计文档将在这里展示。",
-    "replayEmpty": "回测完成后，在这里查看图表、交易与洞察。",
+    "replayEmpty": "回测完成后，在这里查看图表与交易。",
     "download": "Runner 下载",
     "downloadHint": "验证后的策略可以在此准备运行包。",
     "timeline": "播放控制将在接入回测数据后开放"
@@ -493,6 +493,11 @@
     "winRate": "胜率",
     "profitFactor": "盈亏因子",
     "metrics": "全部指标",
+    "chartInstrument": "行情标的",
+    "instrumentCount": "{count} 个标的",
+    "targetQuantity": "策略目标数量",
+    "instrumentUsage": "用途",
+    "readOnlyInstrument": "仅用于行情分析",
     "viewTimeframe": "查看周期",
     "execution": "策略周期 {timeframe}",
     "volume": "成交量",
@@ -542,18 +547,10 @@
     "report": "研究报告",
     "copyReport": "复制报告",
     "emptyReport": "暂无报告",
-    "warnings": "数据质量",
-    "noInsights": "暂无洞察",
     "allExits": "全部离场原因",
     "allDirections": "全部方向",
-    "evidence": "洞察与交易",
-    "insights": "洞察",
     "collapse": "收起",
     "expand": "展开",
-    "unvalidated": "未经验证",
-    "suggestion": "改进建议",
-    "tradeoff": "权衡",
-    "relatedTrade": "关联交易 #{number}",
     "askAgent": "询问 Agent",
     "loadMore": "加载更多",
     "loadingTrades": "交易加载中",
@@ -644,12 +641,11 @@
       "chart": "图表加载失败",
       "candles": "行情加载未完成",
       "trades": "交易加载失败",
-      "insights": "洞察加载失败",
       "report": "报告加载失败",
       "state": "当前状态读取失败",
       "locate": "无法定位这条证据",
       "indexing": "该区间仍在加载，请稍后重试",
-      "timeframe": "该周期加载失败，保留原视图",
+      "timeframe": "行情加载失败，已保留原视图。请重新选择重试",
       "detail": "回测详情加载失败",
       "reference": "回测引用已失效，请移除后重试",
       "download": "运行包下载失败，请重试"
@@ -725,8 +721,7 @@
     "percentChange": "涨跌幅",
     "markerKinds": {
       "buy": "买入",
-      "sell": "卖出",
-      "insight": "洞察"
+      "sell": "卖出"
     }
   },
   "openSource": {

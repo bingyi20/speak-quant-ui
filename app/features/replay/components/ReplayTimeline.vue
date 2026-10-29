@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import ReplayInsightContent from './ReplayInsightContent.vue'
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { nearestBar } from '../normalize'
-import { fillActionKey, groupEvents } from '../events'
+import { fillActionKey } from '../events'
 import type { ReplayBar, ReplayEvent } from '../types'
-import { formatDate } from '~/lib/format'
+import { formatDate, formatDateTime } from '~/lib/format'
+import ReplayTradeMarker from './ReplayTradeMarker.vue'
 const props = defineProps<{
   start: string
   end: string
@@ -19,7 +19,7 @@ const emit = defineEmits<{ seek: [time: number]; pause: [] }>()
 const { t, locale } = useI18n()
 const host = useTemplateRef<HTMLElement>('host'),
   width = ref(400),
-  selected = ref<ReplayEvent[]>([])
+  openGroup = ref<string | null>(null)
 const start = computed(() => props.bars[0]?.time ?? Date.parse(props.start) / 1000),
   end = computed(() => props.bars.at(-1)?.time ?? Date.parse(props.end) / 1000)
 const position = computed(() =>
@@ -37,19 +37,59 @@ const eventTime = (event: ReplayEvent) => {
   const timestamp = event.fill ? Date.parse(event.fill.occurred_at) / 1000 : event.time
   return Number.isFinite(timestamp) ? timestamp : event.time
 }
-const groups = computed(() =>
-  desktop.value
-    ? props.events
-        .filter((event) => event.kind === 'fill' || event.kind === 'insight')
-        .map((event) => ({
-          position: Math.max(
-            0,
-            Math.min(1, (eventTime(event) - start.value) / (end.value - start.value || 1)),
-          ),
-          items: [event],
-        }))
-    : groupEvents(props.events, start.value, end.value, width.value - 20, 32),
-)
+interface TimelineGroup {
+  position: number
+  lane: number
+  items: ReplayEvent[]
+  hitWidth: number
+}
+const markerSize = 7
+const groups = computed(() => {
+  const fills = props.events
+    .filter((event) => event.kind === 'fill')
+    .slice()
+    .sort((a, b) => eventTime(a) - eventTime(b) || a.sequence - b.sequence)
+  const groups: TimelineGroup[] = []
+  const lanes: Array<{ x: number; group: (typeof groups)[number] } | undefined> = Array(3)
+  const plotWidth = Math.max(1, width.value - 20)
+  for (const event of fills) {
+    const position = Math.max(
+      0,
+      Math.min(1, (eventTime(event) - start.value) / (end.value - start.value || 1)),
+    )
+    const x = position * plotWidth
+    const lane = lanes.findIndex((last) => !last || x - last.x >= markerSize)
+    if (lane === -1) {
+      // Keep dense groups local to their first timestamp; do not extend the
+      // collision boundary and swallow a continuous stream into one group.
+      lanes[2]!.group.items.push(event)
+      continue
+    }
+    const group = { position, lane, items: [event], hitWidth: markerSize }
+    groups.push(group)
+    lanes[lane] = { x, group }
+  }
+  // Keep comfortable hit areas where there is room, without covering a
+  // neighboring marker when the visible dots are close together.
+  for (let lane = 0; lane < lanes.length; lane++) {
+    const row = groups.filter((group) => group.lane === lane)
+    row.forEach((group, index) => {
+      const previous = row[index - 1],
+        next = row[index + 1]
+      group.hitWidth = Math.min(
+        desktop.value ? 10 : 28,
+        previous ? (group.position - previous.position) * plotWidth : Infinity,
+        next ? (next.position - group.position) * plotWidth : Infinity,
+      )
+    })
+  }
+  return groups
+})
+const markerStyle = (group: TimelineGroup) => ({
+  left: `${group.position * 100}%`,
+  '--marker-lane': group.lane,
+  '--marker-hit-width': `${group.hitWidth}px`,
+})
 const ticks = computed(() => {
   const count = Math.max(2, Math.min(6, Math.floor(width.value / 100)))
   return Array.from({ length: count }, (_, i) => ({
@@ -65,25 +105,39 @@ const ticks = computed(() => {
   }))
 })
 let observer: ResizeObserver | undefined
-const kind = (event: ReplayEvent) =>
-  event.fill ? (event.fill.side === 'buy' ? 'buy' : 'sell') : 'insight'
+const kind = (event: ReplayEvent) => (event.fill?.side === 'buy' ? 'buy' : 'sell')
 const kinds = (events: ReplayEvent[]) => [...new Set(events.map(kind))]
 const label = (event: ReplayEvent) =>
-  event.insight?.title ||
-  `${t(fillActionKey(event.fill?.action ?? '', event.trade?.direction))} · #${event.trade?.sequence}`
+  [
+    event.fill?.symbol ?? event.trade?.symbol,
+    t(fillActionKey(event.fill?.action ?? '', event.trade?.direction)),
+    `#${event.trade?.sequence}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 const groupLabel = (items: ReplayEvent[]) =>
   items.length === 1
     ? label(items[0]!)
-    : kinds(items)
+    : t('replay.eventCount', { count: items.length }) +
+      ' · ' +
+      kinds(items)
         .map((value) => t(`replay.markerKinds.${value}`))
         .join(' · ') +
       ' · ' +
       formatDate(new Date(items[0]!.time * 1000).toISOString(), locale.value)
-watch([() => props.index, () => props.events], () => {
-  selected.value = []
+watch([groups, () => props.disabled], () => {
+  if (
+    props.disabled ||
+    !groups.value.some((group) => group.items.length > 1 && group.items[0]!.id === openGroup.value)
+  )
+    openGroup.value = null
 })
+function setGroupOpen(id: string, open: boolean) {
+  if (open) openGroup.value = id
+  else if (openGroup.value === id) openGroup.value = null
+}
 function choose(event: ReplayEvent) {
-  selected.value = []
+  openGroup.value = null
   // Event dots are shortcuts to a historical candle, not evidence selection.
   emit('seek', event.time)
 }
@@ -154,43 +208,68 @@ onBeforeUnmount(() => {
         >
           <span />
         </div>
-        <UPopover
-          v-for="(group, n) in groups"
-          :key="n"
-          mode="hover"
-          :open="desktop && group.items[0]?.kind === 'insight' ? undefined : false"
-          :open-delay="120"
-          :close-delay="220"
-          :content="{ side: 'top', sideOffset: 6, collisionPadding: 12 }"
-          :ui="{ content: 'replay-insight-hover-surface' }"
+        <template
+          v-for="group in groups"
+          :key="group.items[0]!.id"
         >
-          <button
+          <ReplayTradeMarker
+            v-if="group.items.length === 1"
             class="replay-track-marker"
-            :class="desktop ? `replay-marker-${kind(group.items[0]!)}` : undefined"
-            :data-event-id="desktop ? group.items[0]!.id : undefined"
-            :style="{ left: `${group.position * 100}%` }"
-            :aria-label="groupLabel(group.items)"
-            :title="group.items[0]?.kind === 'insight' ? undefined : groupLabel(group.items)"
+            :side="kind(group.items[0]!)"
+            :direction="group.items[0]!.trade?.direction"
+            :data-event-id="group.items[0]!.id"
+            :data-marker-lane="group.lane"
+            :style="markerStyle(group)"
+            :label="label(group.items[0]!)"
+            :title="label(group.items[0]!)"
             :disabled="disabled"
-            @click="
-              group.items.length === 1
-                ? choose(group.items[0]!)
-                : ((selected = group.items), emit('pause'))
-            "
+            @click="choose(group.items[0]!)"
+          />
+          <UPopover
+            v-else
+            :key="desktop ? 'hover' : 'click'"
+            :mode="desktop ? 'hover' : 'click'"
+            :open="openGroup === group.items[0]!.id"
+            :open-delay="0"
+            :close-delay="150"
+            :modal="false"
+            :content="{ side: 'bottom', align: 'center', sideOffset: 4, collisionPadding: 8 }"
+            :ui="{ content: 'replay-marker-popover ring-0' }"
+            @update:open="setGroupOpen(group.items[0]!.id, $event)"
           >
-            <span
-              v-for="value in kinds(group.items)"
-              :key="value"
-              class="replay-event-dot"
-              :class="`is-${value}`"
-            />
-          </button>
-          <template #content
-            ><ReplayInsightContent
-              :insights="group.items.flatMap((event) => (event.insight ? [event.insight] : []))"
-              :time="group.items[0]?.time"
-          /></template>
-        </UPopover>
+            <button
+              class="replay-track-marker"
+              :data-marker-lane="group.lane"
+              :style="markerStyle(group)"
+              :aria-label="groupLabel(group.items)"
+              :disabled="disabled"
+            >
+              <UIcon
+                name="i-lucide-ellipsis"
+                class="replay-marker-overflow"
+              />
+            </button>
+            <template #content>
+              <div
+                class="replay-marker-choices"
+                role="group"
+                :aria-label="t('replay.events')"
+              >
+                <ReplayTradeMarker
+                  v-for="event in group.items"
+                  :key="event.id"
+                  class="replay-marker-choice"
+                  :side="kind(event)"
+                  :direction="event.trade?.direction"
+                  :label="label(event)"
+                  :title="`${label(event)} · ${formatDateTime(event.fill?.occurred_at ?? event.time * 1000)}`"
+                  :disabled="disabled"
+                  @click="choose(event)"
+                />
+              </div>
+            </template>
+          </UPopover>
+        </template>
       </div>
       <input
         type="range"
@@ -209,7 +288,7 @@ onBeforeUnmount(() => {
     <div class="replay-timeline-footer">
       <div class="replay-track-legend">
         <span
-          v-for="value in ['buy', 'sell', 'insight']"
+          v-for="value in ['buy', 'sell']"
           :key="value"
           ><i
             class="replay-event-dot"
@@ -218,28 +297,6 @@ onBeforeUnmount(() => {
         >
       </div>
       <span>{{ start ? props.start.slice(0, 10) : '—' }} — {{ props.end.slice(0, 10) }}</span>
-    </div>
-    <div
-      v-if="selected.length"
-      class="replay-event-picker"
-      role="group"
-      :aria-label="t('replay.events')"
-    >
-      <button
-        v-for="event in selected"
-        :key="event.id"
-        class="text-button"
-        @click="choose(event)"
-      >
-        {{ label(event) }} · {{ formatDate(new Date(event.time * 1000).toISOString(), locale) }}
-      </button>
-      <button
-        class="detail-icon-button"
-        :aria-label="t('common.close')"
-        @click="selected = []"
-      >
-        <UIcon name="i-lucide-x" />
-      </button>
     </div>
   </div>
 </template>

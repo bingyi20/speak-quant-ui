@@ -40,10 +40,11 @@
   --color-chart-down: #d5948b;
   --color-chart-buy: #c76e62;
   --color-chart-sell: #41967e;
+  --color-chart-buy-text: #d7877c;
+  --color-chart-sell-text: #65b099;
   --color-chart-tag-text: #ffffff;
   --color-chart-time-label-bg: #dedede;
   --color-chart-time-label-text: #171717;
-  --color-chart-insight: #a99ae8;
   --color-chart-progress: #d9bc810b;
   --color-chart-grid: #36382f;
   --color-chart-volume-up: #81bda935;

@@ -8,7 +8,7 @@ import CopyButton from '~/components/ui/CopyButton.vue'
 import LoadingState from '~/components/common/LoadingState.vue'
 import type { ReplayDetailState } from '../composables/useReplayDetail'
 const props = defineProps<{ state: ReplayDetailState; historical?: boolean }>()
-const kind = defineModel<'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | null>({
+const kind = defineModel<'conditions' | 'metrics' | 'report' | 'state' | null>({
   default: null,
 })
 const { t, locale } = useI18n()
@@ -30,7 +30,7 @@ const rows = computed<Array<[string, string]>>(() => {
     const c = d.conditions,
       a = d.execution_assumptions
     return [
-      [t('replay.symbol'), c.symbol],
+      ...(!c.instruments ? [[t('replay.symbol'), c.symbol ?? '—']] : []),
       [t('replay.executionTimeframe'), d.strategy.execution_timeframe],
       ...(d.strategy.auxiliary_timeframes?.length
         ? [[t('replay.auxiliaryTimeframes'), d.strategy.auxiliary_timeframes.join(' · ')]]
@@ -49,7 +49,7 @@ const rows = computed<Array<[string, string]>>(() => {
             ],
           ]
         : []),
-      ...(c.leverage
+      ...(!c.instruments && c.leverage
         ? [[t('replay.leverage'), `${formatDecimal(c.leverage, locale.value, 0)}×`]]
         : []),
       ...(a
@@ -64,7 +64,9 @@ const rows = computed<Array<[string, string]>>(() => {
                     })
                 : a.position_sizing.type === 'fixed_amount'
                   ? `${t('replay.fixedSize')} ${a.position_sizing.value}`
-                  : `${a.position_sizing.type} · ${a.position_sizing.value}`,
+                  : a.position_sizing.type === 'target_quantity'
+                    ? t('replay.targetQuantity')
+                    : `${a.position_sizing.type} · ${a.position_sizing.value ?? '—'}`,
             ],
             [t('replay.commission'), formatRatio(a.commission_rate, locale.value)],
             [t('replay.slippage'), formatRatio(a.slippage_rate, locale.value)],
@@ -177,12 +179,6 @@ const drawdownRows = computed<Array<[string, string]>>(() => {
     `${formatDecimal(range[key].equity, locale.value)} · ${formatDateTime(range[key].closeTime * 1000)}`,
   ])
 })
-const warnings = computed(
-  () =>
-    detail.value?.result?.quality_warnings
-      ?.map((v) => (typeof v === 'string' ? v : v.message || v.label || v.key))
-      .filter(Boolean) ?? [],
-)
 </script>
 <template>
   <UModal
@@ -219,15 +215,44 @@ const warnings = computed(
         /></template>
         <p v-else>{{ t('replay.emptyReport') }}</p>
       </template>
-      <ul v-else-if="kind === 'warnings'">
-        <li
-          v-for="warning in warnings"
-          :key="warning"
-        >
-          {{ warning }}
-        </li>
-      </ul>
       <template v-else>
+        <div
+          v-if="kind === 'conditions' && detail?.conditions.instruments"
+          class="replay-condition-instruments"
+        >
+          <section
+            v-for="instrument in state.instruments.value"
+            :key="instrument.role"
+          >
+            <h3>
+              {{ instrument.symbol }} <small>{{ instrument.role }}</small>
+            </h3>
+            <dl class="replay-key-values">
+              <div v-if="instrument.market_type">
+                <dt>{{ t('replay.market') }}</dt>
+                <dd>
+                  {{
+                    t(
+                      `replay.marketTypes.${instrument.market_type === 'spot' ? 'spot' : instrument.contract_type === 'perpetual' ? 'perpetual' : 'contract'}`,
+                    )
+                  }}
+                </dd>
+              </div>
+              <div v-if="instrument.timeframes.length">
+                <dt>{{ t('replay.viewTimeframe') }}</dt>
+                <dd>{{ instrument.timeframes.join(' · ') }}</dd>
+              </div>
+              <div v-if="instrument.leverage">
+                <dt>{{ t('replay.leverage') }}</dt>
+                <dd>{{ formatDecimal(instrument.leverage, locale, 0) }}×</dd>
+              </div>
+              <div v-if="instrument.tradable === false">
+                <dt>{{ t('replay.instrumentUsage') }}</dt>
+                <dd>{{ t('replay.readOnlyInstrument') }}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
         <dl class="replay-key-values">
           <div
             v-for="[label, value] in rows"

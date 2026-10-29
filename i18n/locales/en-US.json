@@ -93,7 +93,7 @@
     "replay": "Backtest",
     "replayHint": "Historical trades and research evidence",
     "strategyEmpty": "Your strategy design will appear here once it is ready.",
-    "replayEmpty": "Charts, trades and insights will appear after a backtest.",
+    "replayEmpty": "Charts and trades will appear after a backtest.",
     "download": "Download Runner",
     "downloadHint": "Prepare a runner package for a tested strategy here.",
     "timeline": "Playback will be available when backtest data is connected"
@@ -493,6 +493,11 @@
     "winRate": "Win rate",
     "profitFactor": "Profit factor",
     "metrics": "All metrics",
+    "chartInstrument": "Chart instrument",
+    "instrumentCount": "{count} instruments",
+    "targetQuantity": "Strategy target quantities",
+    "instrumentUsage": "Usage",
+    "readOnlyInstrument": "Market data only",
     "viewTimeframe": "Chart timeframe",
     "execution": "Strategy timeframe {timeframe}",
     "volume": "Volume",
@@ -542,18 +547,10 @@
     "report": "Research report",
     "copyReport": "Copy report",
     "emptyReport": "No report available",
-    "warnings": "Data quality",
-    "noInsights": "No insights",
     "allExits": "All exit reasons",
     "allDirections": "All directions",
-    "evidence": "Insights and trades",
-    "insights": "Insights",
     "collapse": "Collapse",
     "expand": "Expand",
-    "unvalidated": "Unvalidated",
-    "suggestion": "Suggestion",
-    "tradeoff": "Trade-off",
-    "relatedTrade": "Related trade #{number}",
     "askAgent": "Ask Agent",
     "loadMore": "Load more",
     "loadingTrades": "Loading trades",
@@ -644,12 +641,11 @@
       "chart": "Chart could not load",
       "candles": "Candle loading interrupted",
       "trades": "Trades could not load",
-      "insights": "Insights could not load",
       "report": "Report could not load",
       "state": "Current state could not load",
       "locate": "This evidence cannot be located",
       "indexing": "This range is still loading. Try again shortly.",
-      "timeframe": "Timeframe could not load. Previous view retained.",
+      "timeframe": "Market data could not load. The previous chart is preserved. Select again to retry.",
       "detail": "Backtest could not load",
       "reference": "Backtest reference is invalid. Remove it to continue.",
       "download": "Runner download failed. Try again."
@@ -725,8 +721,7 @@
     "percentChange": "Change %",
     "markerKinds": {
       "buy": "Buy",
-      "sell": "Sell",
-      "insight": "Insight"
+      "sell": "Sell"
     }
   },
   "openSource": {

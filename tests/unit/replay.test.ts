@@ -14,7 +14,6 @@ function setup() {
       .fn()
       .mockResolvedValue({ timeframe: '1h', items: raw, has_more: false, next_cursor: null }),
     trades: vi.fn().mockResolvedValue({ items: replayTrades, page: 1, total_pages: 1 }),
-    insights: vi.fn().mockResolvedValue({ items: replayInsights }),
     report: vi
       .fn()
       .mockResolvedValue({ format: 'markdown', content: '# Report', generated_at: '' }),

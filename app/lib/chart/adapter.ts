@@ -6,6 +6,8 @@ export interface ChartTheme {
   down: string
   buy: string
   sell: string
+  buyText?: string
+  sellText?: string
   insight?: string
   tagText: string
   accent?: string
@@ -25,6 +27,8 @@ export interface ChartMarker {
   time: number
   label: string
   side: 'buy' | 'sell' | 'insight'
+  /** Buy/sell controls the letter and color; short positions use hollow tags. */
+  positionDirection?: 'long' | 'short'
   active?: boolean
   price: number
   edgePrice: number
@@ -54,6 +58,10 @@ export interface ChartSelection {
   prices?: Array<{ price: number; label: string }>
 }
 export interface ChartAdapter {
+  /** Suspend a cached instrument chart while its container is detached. */
+  setActive(active: boolean): void
+  /** Catch up after installing current candles; false keeps the checkpoint until data is ready. */
+  resumeViewport(options: { follow: boolean; seek?: boolean; seekTime?: number }): boolean
   setData(candles: readonly Candle[]): void
   appendData(candles: readonly Candle[]): void
   seek(time: number): void

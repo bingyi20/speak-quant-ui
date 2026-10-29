@@ -1,7 +1,10 @@
 import {
+  advancePlaybackViewport,
   canReturnToLatest,
   playbackViewportPolicy,
   playbackViewportPosition,
+  playbackViewportRight,
+  type PlaybackViewport,
   type PlaybackViewportPolicy,
   DEFAULT_CHART_VIEWPORT,
   EVIDENCE_REVEAL_POSITION,
@@ -119,7 +122,21 @@ export function createLightweightChart(
     followFrame = 0,
     gestureFrame = 0,
     destroyed = false
+  let active = true
   let policy: PlaybackViewportPolicy = { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
+  type PositionIntent = { time: number; position: number | 'playback' }
+  let pendingPosition: PositionIntent | null = null
+  let pendingRangePolicy = false
+  let suspendedViewport:
+    | (PlaybackViewport & {
+        anchorTime: number
+        anchorOffset: number
+        latestTime: number
+        returning: boolean
+        pendingPosition: PositionIntent | null
+      })
+    | null = null
+  type ResumeOptions = Parameters<ChartAdapter['resumeViewport']>[0]
   let gesturing = false
   let gestureStart: { right: number; spacing: number } | null = null
   let gestureTimer: ReturnType<typeof setTimeout> | undefined
@@ -159,7 +176,7 @@ export function createLightweightChart(
       ? { from: r.from, to: r.to }
       : null
   }
-  function renderWindow(requested?: ChartRange | null) {
+  function renderWindow(requested?: ChartRange | null, replace = false) {
     if (!rows.length) {
       plotted = []
       markers.setMarkers([])
@@ -183,6 +200,7 @@ export function createLightweightChart(
       last = Math.min(rows.length, high + BUFFER + 1)
     const next = rows.slice(first, last)
     if (
+      replace ||
       plotted.length !== next.length ||
       plotted[0]?.time !== next[0]?.time ||
       plotted.at(-1)?.time !== next.at(-1)?.time
@@ -252,6 +270,7 @@ export function createLightweightChart(
     return { x, width, spacing, right: first + plotted.length - 1 + scale.scrollPosition() }
   }
   function publishReturnVisibility() {
+    if (!active) return
     const g = geometry()
     const visible =
       !!g && !followFrame && canReturnToLatest(g.x, g.width, g.spacing, rows.length - 1)
@@ -268,6 +287,7 @@ export function createLightweightChart(
       policy = playbackViewportPolicy(g.x, g.width, g.spacing)
   }
   function beginGesture() {
+    if (!active) return
     cancelMovement()
     cancelAnimationFrame(gestureFrame)
     clearTimeout(gestureTimer)
@@ -297,6 +317,7 @@ export function createLightweightChart(
   // Logical ranges include fractional pans; button visibility follows geometry,
   // not pointer-down, hover, or the playback/evidence selection state.
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+    if (!active) return
     updateShade()
     if (gesturing && !movingWindow) adoptGesture()
     publishReturnVisibility()
@@ -304,6 +325,7 @@ export function createLightweightChart(
   chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
     if (
       movingWindow ||
+      !active ||
       destroyed ||
       !range ||
       typeof range.from !== 'number' ||
@@ -329,6 +351,7 @@ export function createLightweightChart(
     }
   })
   chart.subscribeClick((event) => {
+    if (!active) return
     const hit = event.point ? markers.markerAt(event.point.x, event.point.y) : undefined
     const markerId =
       hit?.id ?? (typeof event.hoveredObjectId === 'string' ? event.hoveredObjectId : undefined)
@@ -337,6 +360,7 @@ export function createLightweightChart(
       selectHandlers.forEach((h) => h(marker?.time ?? (event.time as number), markerId))
   })
   chart.subscribeCrosshairMove((event) => {
+    if (!active) return
     const time = typeof event.time === 'number' ? event.time : null
     timeLabel?.setTime(time)
     const hit = event.point ? markers.markerAt(event.point.x, event.point.y) : undefined
@@ -352,7 +376,9 @@ export function createLightweightChart(
         .timeScale()
         .setVisibleRange({ from: range.from as UTCTimestamp, to: range.to as UTCTimestamp })
     updateShade()
+    pendingRangePolicy = true
     positionFrame = requestAnimationFrame(() => {
+      pendingRangePolicy = false
       const g = geometry()
       if (g) policy = playbackViewportPolicy(g.x, g.width, g.spacing)
       publishReturnVisibility()
@@ -380,6 +406,7 @@ export function createLightweightChart(
         : { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
     const right = target - 0.5 + (scale.width() * (1 - position) - 1) / spacing
     scale.setVisibleLogicalRange({ from: right - span + 1, to: right })
+    pendingPosition = { time, position: desktop() ? 'playback' : PLAYBACK_VIEWPORT_POSITION }
     positionFrame = requestAnimationFrame(() => {
       positionTime(time, desktop() ? 'playback' : PLAYBACK_VIEWPORT_POSITION)
     })
@@ -412,7 +439,9 @@ export function createLightweightChart(
     const offset = moveRight(right, barSpacing)
     // New prices can resize the price axis on the next draw. Align once that
     // layout settles, unless another gesture has already changed the viewport.
+    pendingPosition = { time, position }
     positionFrame = requestAnimationFrame(() => {
+      pendingPosition = null
       if (
         !destroyed &&
         scale.width() !== width &&
@@ -429,6 +458,8 @@ export function createLightweightChart(
     cancelAnimationFrame(followFrame)
     cancelAnimationFrame(positionFrame)
     followFrame = 0
+    pendingPosition = null
+    pendingRangePolicy = false
   }
   // Translate in global logical indices so a long pan can cross data buffers
   // without resetting the user's candle spacing.
@@ -483,16 +514,117 @@ export function createLightweightChart(
     followFrame = requestAnimationFrame(step)
     publishReturnVisibility()
   }
+  function suspendViewport() {
+    adoptGesture()
+    const g = geometry()
+    if (!g) return
+    if (pendingRangePolicy) policy = playbackViewportPolicy(g.x, g.width, g.spacing)
+    const anchor = Math.max(0, Math.min(rows.length - 1, Math.floor(g.right)))
+    suspendedViewport = {
+      policy,
+      right: g.right,
+      spacing: g.spacing,
+      anchorTime: rows[anchor]!.time,
+      anchorOffset: g.right - anchor,
+      latestTime: rows.at(-1)!.time,
+      returning: !!followFrame,
+      pendingPosition,
+    }
+  }
+  function resumeViewport(options: ResumeOptions) {
+    const saved = suspendedViewport
+    if (!saved) return true
+    if (!rows.length || !plotted.length) return false
+    cancelMovement()
+    cancelGesture()
+    const width = chart.timeScale().width()
+    if (width <= 0) return false
+    suspendedViewport = null
+    const latest = rows.length - 1
+    let previous = lowerBound(rows, saved.latestTime)
+    let viewport: PlaybackViewport = {
+      policy: saved.policy,
+      right: lowerBound(rows, saved.anchorTime) + saved.anchorOffset,
+      spacing: saved.spacing,
+    }
+    if (options.seek || saved.returning) {
+      // A timeline jump resets every instrument's playback intent. On mobile,
+      // retain its original cutoff so native new-bar shifting is reproduced too.
+      const seekTime = options.seek ? options.seekTime : undefined
+      previous = seekTime === undefined ? latest : lowerBound(rows, seekTime)
+      if (seekTime !== undefined && rows[previous]!.time > seekTime)
+        previous = Math.max(0, previous - 1)
+      const position = playbackViewportPosition(previous, width, saved.spacing)
+      viewport = {
+        ...viewport,
+        policy:
+          position < PLAYBACK_VIEWPORT_POSITION
+            ? { mode: 'filling' }
+            : { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION },
+        right: playbackViewportRight(previous, width, saved.spacing, position),
+      }
+    } else if (saved.pendingPosition) {
+      const { time, position } = saved.pendingPosition
+      const index = lowerBound(rows, time)
+      const anchor =
+        position === 'playback' ? playbackViewportPosition(index, width, saved.spacing) : position
+      viewport.right = playbackViewportRight(index, width, saved.spacing, anchor)
+      if (position === 'playback')
+        viewport.policy =
+          anchor < PLAYBACK_VIEWPORT_POSITION
+            ? { mode: 'filling' }
+            : { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
+    }
+    if (options.seek || saved.returning || rows.at(-1)!.time !== saved.latestTime)
+      viewport = advancePlaybackViewport(viewport, latest, width, {
+        follow: options.follow,
+        previousIndex: previous,
+        shiftVisibleRangeOnNewBar: chart.timeScale().options().shiftVisibleRangeOnNewBar,
+      })
+    policy = viewport.policy
+    // setData may change the SDK's base index/offset. Restore the logical result
+    // explicitly so one large catch-up is equivalent to individual visible ticks.
+    moveRight(viewport.right, viewport.spacing)
+    if (
+      options.follow &&
+      policy.mode === 'following' &&
+      (options.seek || saved.returning || rows.at(-1)!.time !== saved.latestTime)
+    )
+      positionTime(rows.at(-1)!.time, policy.position)
+    updateShade()
+    publishReturnVisibility()
+    return true
+  }
   // A manual gesture takes ownership immediately; no pending pan can snap back.
   element.addEventListener('pointerdown', beginGesture, { capture: true })
   element.addEventListener('wheel', wheelGesture, { capture: true, passive: true })
   window.addEventListener('pointerup', endGesture)
   window.addEventListener('pointercancel', endGesture)
   return {
+    setActive(value) {
+      if (destroyed || active === value) return
+      if (!value) suspendViewport()
+      active = value
+      if (active) {
+        window.addEventListener('pointerup', endGesture)
+        window.addEventListener('pointercancel', endGesture)
+      } else {
+        cancelMovement()
+        cancelGesture()
+        chart.clearCrosshairPosition()
+        timeLabel?.setTime(null)
+        window.removeEventListener('pointerup', endGesture)
+        window.removeEventListener('pointercancel', endGesture)
+      }
+    },
+    resumeViewport,
     setData(value) {
       cancelMovement()
       cancelGesture()
       const saved = view()
+      const g = geometry()
+      const anchor = g ? Math.max(0, Math.min(rows.length - 1, Math.floor(g.right))) : 0
+      const anchorTime = g ? rows[anchor]!.time : null
       rows = value
       const price = value[0]?.close
       if (price && price > 0) {
@@ -501,7 +633,12 @@ export function createLightweightChart(
           priceFormat: { type: 'price', precision, minMove: 10 ** -precision },
         })
       }
-      renderWindow(saved)
+      // Another instrument can have the same timestamps and length with different prices.
+      renderWindow(saved, true)
+      // Reloading an unchanged feed must not fit its real time range: that range
+      // omits empty margins and fractional pans, which would alter candle spacing.
+      if (g && anchorTime !== null && rows.length)
+        moveRight(lowerBound(rows, anchorTime) + g.right - anchor, g.spacing)
       updateShade()
     },
     appendData(value) {

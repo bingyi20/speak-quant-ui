@@ -126,30 +126,58 @@ export class TradeTags implements ISeriesPrimitive<Time> {
           }
           top = Math.max(topInset, top)
           const color = marker.side === 'buy' ? this.theme.buy : this.theme.sell
+          const hollow = marker.positionDirection === 'short'
           const below = top > y,
-            tipY = below ? top - 5 : top + height + 5
+            tipY = below ? top - 5 : top + height + 5,
+            center = left + width / 2,
+            right = left + width,
+            bottom = top + height
           ctx.strokeStyle = color
           ctx.lineWidth = 1
           ctx.beginPath()
           ctx.moveTo(x, y)
-          ctx.lineTo(left + width / 2, tipY)
+          ctx.lineTo(center, tipY)
           ctx.stroke()
-          ctx.fillStyle = color
+          ctx.fillStyle = hollow ? this.theme.background : color
           ctx.beginPath()
           ctx.arc(x, y, 3, 0, Math.PI * 2)
           ctx.fill()
-          ctx.strokeStyle = this.theme.background
+          ctx.strokeStyle = hollow ? color : this.theme.background
+          ctx.lineWidth = hollow ? 1.5 : 1
           ctx.stroke()
+          // One closed silhouette keeps hollow tags opaque over the chart and
+          // avoids a border seam between the rounded body and its arrow tip.
+          ctx.strokeStyle = color
+          ctx.lineWidth = 1.5
           ctx.beginPath()
-          ctx.roundRect(left, top, width, height, 4)
+          ctx.moveTo(left + 4, top)
+          if (below) {
+            ctx.lineTo(center - 5, top)
+            ctx.lineTo(center, tipY)
+            ctx.lineTo(center + 5, top)
+          }
+          ctx.lineTo(right - 4, top)
+          ctx.quadraticCurveTo(right, top, right, top + 4)
+          ctx.lineTo(right, bottom - 4)
+          ctx.quadraticCurveTo(right, bottom, right - 4, bottom)
+          if (!below) {
+            ctx.lineTo(center + 5, bottom)
+            ctx.lineTo(center, tipY)
+            ctx.lineTo(center - 5, bottom)
+          }
+          ctx.lineTo(left + 4, bottom)
+          ctx.quadraticCurveTo(left, bottom, left, bottom - 4)
+          ctx.lineTo(left, top + 4)
+          ctx.quadraticCurveTo(left, top, left + 4, top)
+          ctx.closePath()
           ctx.fill()
-          ctx.beginPath()
-          ctx.moveTo(left + width / 2 - 5, below ? top : top + height)
-          ctx.lineTo(left + width / 2, tipY)
-          ctx.lineTo(left + width / 2 + 5, below ? top : top + height)
-          ctx.fill()
-          ctx.fillStyle = this.theme.tagText
-          ctx.fillText(marker.label, left + width / 2, top + height / 2)
+          if (hollow) ctx.stroke()
+          ctx.fillStyle = hollow
+            ? marker.side === 'buy'
+              ? (this.theme.buyText ?? color)
+              : (this.theme.sellText ?? color)
+            : this.theme.tagText
+          ctx.fillText(marker.label, center, top + height / 2)
           this.hits.push({ id: marker.id, left, top, width, height })
         }
       })

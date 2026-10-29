@@ -32,6 +32,9 @@ const {
   phases,
   errors,
   availableTimeframes,
+  instruments,
+  displayInstrument,
+  selectedInstrument,
   displayTimeframe,
   displayLoading,
   displayError,
@@ -46,7 +49,11 @@ const {
   events,
   renderedBars,
   renderedEvents,
+  chartEvents,
   requestedRange,
+  seekRevision,
+  seekCutoff,
+  initialViewSeekRevision,
   viewRange,
   follow,
   scrollTop,
@@ -71,9 +78,43 @@ const speedOptions = computed(() =>
     : speeds.value.map((value) => ({ value, label: t('replay.barsPerSecond', { count: value }) })),
 )
 const body = useTemplateRef<HTMLElement>('body')
-const reading = ref<'conditions' | 'metrics' | 'report' | 'state' | 'warnings' | null>(null),
+const reading = ref<'conditions' | 'metrics' | 'report' | 'state' | null>(null),
   volume = ref(false)
 const complete = computed(() => detail.value?.status === 'completed')
+const portfolio = computed(() => !!detail.value?.conditions.instruments)
+const historical = computed(() => desktop.value && !portfolio.value && !atEnd.value)
+const instrumentsLabel = computed(() =>
+  instruments.value.map((instrument) => instrument.symbol).join(' · '),
+)
+function marketLabel(instrument: { market_type?: string; contract_type?: string | null }) {
+  return instrument.market_type
+    ? t(
+        `replay.marketTypes.${instrument.market_type === 'spot' ? 'spot' : instrument.contract_type === 'perpetual' ? 'perpetual' : 'contract'}`,
+      )
+    : ''
+}
+function instrumentKeydown(event: KeyboardEvent, position: number) {
+  const count = instruments.value.length
+  const target =
+    event.key === 'ArrowRight'
+      ? (position + 1) % count
+      : event.key === 'ArrowLeft'
+        ? (position + count - 1) % count
+        : event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? count - 1
+            : -1
+  if (target < 0) return
+  event.preventDefault()
+  const buttons = (
+    event.currentTarget as HTMLElement
+  ).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  buttons?.[target]?.focus({ preventScroll: true })
+  buttons?.[target]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  const instrument = instruments.value[target]
+  if (instrument) void props.state.setInstrument(instrument.role)
+}
 const chartLoading = computed(
   () => !renderedBars.value.length && (phases.candles === 'loading' || displayLoading.value),
 )
@@ -103,7 +144,7 @@ const resultMenu = computed(() =>
       event.selection,
       props.state.axis.value,
       props.state.trades.value,
-      props.state.insights.value,
+      [],
     )
     return {
       label: t(`replay.shortcuts.${event.kind}`),
@@ -117,12 +158,11 @@ const menuUi = {
   item: 'replay-compact-menu-item',
   itemTrailingIcon: 'size-3.5',
 }
-const warnings = computed(() => detail.value?.result?.quality_warnings?.length ?? 0)
 const metrics = computed(() => {
   // Final metrics only reserve skeleton dimensions during initial loading.
   // An indexing failure must keep the historical result unavailable.
   const reserveFinalMetrics = initializing.value && !errors.candles
-  const r = (desktop.value && !reserveFinalMetrics
+  const r = (desktop.value && !portfolio.value && !reserveFinalMetrics
     ? props.state.summaryResult.value
     : detail.value?.result) ?? {
     net_return_rate: null,
@@ -146,7 +186,7 @@ const metrics = computed(() => {
         { key: 'trades', value: r.trade_count === null ? '—' : String(r.trade_count), sign: 0 },
         { key: 'winRate', value: formatRatio(r.win_rate, locale.value), sign: 0 },
         { key: 'profitFactor', value: formatDecimal(r.profit_factor, locale.value), sign: 0 },
-        ...(desktop.value
+        ...(desktop.value && !portfolio.value
           ? [
               {
                 key: 'currentPosition',
@@ -171,11 +211,13 @@ const metadata = computed(() => {
           `replay.marketTypes.${d.conditions.market_type === 'spot' ? 'spot' : d.conditions.contract_type === 'perpetual' ? 'perpetual' : 'contract'}`,
         )
       : '',
-    d.strategy.direction ? t(`replay.direction.${d.strategy.direction}`) : '',
-    d.conditions.leverage ? `${formatDecimal(d.conditions.leverage, locale.value, 0)}×` : '',
+    !portfolio.value && d.strategy.direction ? t(`replay.direction.${d.strategy.direction}`) : '',
+    !portfolio.value && d.conditions.leverage
+      ? `${formatDecimal(d.conditions.leverage, locale.value, 0)}×`
+      : '',
   ].filter(Boolean)
 })
-function open(kind: 'conditions' | 'metrics' | 'report' | 'state' | 'warnings') {
+function open(kind: 'conditions' | 'metrics' | 'report' | 'state') {
   props.state.pause()
   reading.value = kind
 }
@@ -202,15 +244,20 @@ watch(scrollTop, async (value) => {
 })
 function select(time: number, markerId?: string) {
   const event = markerId ? events.value.find((e) => e.id === markerId) : null
-  if (desktop.value && event?.kind === 'insight') props.state.inspectInsight(event.selection)
-  else if (event) void props.state.locate(event.selection)
+  if (event) void props.state.locate(event.selection)
   else void props.state.selectCandle(time)
 }
 let rangeTimer: ReturnType<typeof setTimeout> | undefined
-function rangeChanged(range: { from: number; to: number }) {
+watch([displayLoading, displayInstrument, () => props.active], () => clearTimeout(rangeTimer))
+function rangeChanged(range: { from: number; to: number }, instrument: string) {
+  if (instrument !== displayInstrument.value) return
   viewRange.value = range
   clearTimeout(rangeTimer)
-  if (displayTimeframe.value === detail.value?.strategy.execution_timeframe || displayLoading.value)
+  if (
+    (displayInstrument.value === props.state.axisInstrument.value &&
+      displayTimeframe.value === detail.value?.strategy.execution_timeframe) ||
+    displayLoading.value
+  )
     return
   const window = props.state.displayWindow.value,
     d = detail.value
@@ -222,8 +269,15 @@ function rangeChanged(range: { from: number; to: number }) {
     (window?.timeframe === displayTimeframe.value && from >= window.from && to <= window.to)
   )
     return
+  const timeframe = displayTimeframe.value
   rangeTimer = setTimeout(() => {
-    if (props.active) void props.state.setTimeframe(displayTimeframe.value)
+    if (
+      props.active &&
+      !displayLoading.value &&
+      instrument === displayInstrument.value &&
+      timeframe === displayTimeframe.value
+    )
+      void props.state.setTimeframe(timeframe)
   }, 250)
 }
 function togglePlayback() {
@@ -294,7 +348,11 @@ onBeforeUnmount(() => {
     <template v-else-if="detail">
       <div class="replay-meta-line">
         <div class="replay-meta">
-          <strong>{{ detail.conditions.symbol }}</strong
+          <strong :title="instrumentsLabel">{{
+            portfolio
+              ? t('replay.instrumentCount', { count: instruments.length })
+              : detail.conditions.symbol
+          }}</strong
           ><span
             v-for="value in metadata"
             :key="value"
@@ -318,24 +376,19 @@ onBeforeUnmount(() => {
         <div class="replay-summary-heading">
           <span
             class="replay-result-label"
-            :class="{ 'is-historical': desktop && !atEnd }"
-            >{{ t(desktop && !atEnd ? 'replay.asOfResult' : 'replay.fullResult') }}</span
+            :class="{ 'is-historical': historical }"
+            >{{ t(historical ? 'replay.asOfResult' : 'replay.fullResult') }}</span
           ><button
             v-if="desktop"
             class="text-button replay-metrics-link"
             @click="open('metrics')"
           >
-            {{ t('replay.viewMetrics') }}<UIcon name="i-lucide-chevron-right" /></button
-          ><button
-            v-if="warnings"
-            class="text-button replay-warning"
-            @click="open('warnings')"
-          >
-            <UIcon name="i-lucide-triangle-alert" />{{ warnings }}
+            {{ t('replay.viewMetrics') }}<UIcon name="i-lucide-chevron-right" />
           </button>
         </div>
         <dl
           class="replay-summary-metrics"
+          :class="{ 'is-portfolio': portfolio }"
           :aria-busy="initializing && !errors.candles"
         >
           <div
@@ -386,7 +439,33 @@ onBeforeUnmount(() => {
           </template>
         </div>
         <div class="replay-chart-region">
-          <div class="replay-chart-toolbar">
+          <div
+            class="replay-chart-toolbar"
+            :class="{ 'has-instruments': instruments.length > 1 }"
+          >
+            <div
+              v-if="instruments.length > 1"
+              class="replay-instrument-tabs"
+              role="tablist"
+              :aria-label="t('replay.chartInstrument')"
+            >
+              <button
+                v-for="(instrument, position) in instruments"
+                :id="`replay-instrument-${instrument.role}`"
+                :key="instrument.role"
+                type="button"
+                role="tab"
+                :aria-selected="instrument.role === displayInstrument"
+                :tabindex="instrument.role === displayInstrument ? 0 : -1"
+                aria-controls="replay-instrument-chart"
+                :title="`${instrument.symbol} · ${marketLabel(instrument)} · ${instrument.role}`"
+                @click="state.setInstrument(instrument.role)"
+                @keydown="instrumentKeydown($event, position)"
+              >
+                <span>{{ instrument.symbol }}</span>
+                <small>{{ marketLabel(instrument) }}</small>
+              </button>
+            </div>
             <div
               v-if="!playing && availableTimeframes.length > 1"
               class="replay-periods"
@@ -461,35 +540,52 @@ onBeforeUnmount(() => {
           >
             {{ t(displayError) }}
           </div>
-          <ClientOnly>
-            <ReplayChart
-              :bars="renderedBars"
-              :events="renderedEvents"
-              :selection="selection"
-              :trade="selectedTrade"
-              :timeframe="displayTimeframe"
-              :playing="playing"
-              :follow="follow"
-              :range="requestedRange"
-              :volume="volume"
-              :symbol="detail.conditions.symbol"
-              :loading="chartLoading"
-              :load-error="errors.candles"
-              :empty-label="
-                !renderedBars.length && !chartLoading && !errors.candles
-                  ? t('replay.noCandles')
-                  : undefined
-              "
-              @select="select"
-              @range="rangeChanged"
-              @interact="interact"
-              @follow="follow = true"
-              @retry="state.retry('candles')"
-            />
-            <template #fallback>
-              <LoadingState class="replay-chart" />
-            </template>
-          </ClientOnly>
+          <div
+            id="replay-instrument-chart"
+            :role="instruments.length > 1 ? 'tabpanel' : undefined"
+            :aria-labelledby="
+              instruments.length > 1 ? `replay-instrument-${displayInstrument}` : undefined
+            "
+          >
+            <ClientOnly>
+              <KeepAlive :key="detail.id">
+                <ReplayChart
+                  :key="displayInstrument"
+                  :instrument="displayInstrument"
+                  :visible="active"
+                  :bars="renderedBars"
+                  :events="chartEvents"
+                  :selection="selection"
+                  :trade="selectedTrade"
+                  :timeframe="displayTimeframe"
+                  :playing="playing"
+                  :follow="follow"
+                  :range="requestedRange"
+                  :initial-range="viewRange"
+                  :initial-seek-revision="initialViewSeekRevision"
+                  :seek-revision="seekRevision"
+                  :seek-cutoff="seekCutoff"
+                  :volume="volume"
+                  :symbol="selectedInstrument?.symbol ?? detail.conditions.symbol ?? ''"
+                  :loading="chartLoading"
+                  :load-error="errors.candles"
+                  :empty-label="
+                    !renderedBars.length && !chartLoading && !errors.candles
+                      ? t('replay.noCandles')
+                      : undefined
+                  "
+                  @select="select"
+                  @range="rangeChanged"
+                  @interact="interact"
+                  @follow="follow = true"
+                  @retry="state.retry('candles')"
+                />
+              </KeepAlive>
+              <template #fallback>
+                <LoadingState class="replay-chart" />
+              </template>
+            </ClientOnly>
+          </div>
         </div>
         <div
           v-if="errors.candles && renderedBars.length"
@@ -505,7 +601,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div
-          v-if="!desktop && currentBar && (!atEnd || selection)"
+          v-if="!desktop && !portfolio && currentBar && (!atEnd || selection)"
           class="replay-current-state"
           :aria-busy="currentLoading"
         >
@@ -687,7 +783,7 @@ onBeforeUnmount(() => {
       <ReplayDetails
         v-model="reading"
         :state="state"
-        :historical="desktop && !atEnd"
+        :historical="historical"
       />
     </template>
   </div>

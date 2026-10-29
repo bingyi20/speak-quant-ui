@@ -32,6 +32,60 @@ export function evidenceViewportRange(range: ChartRange, step: number): ChartRan
 export type PlaybackViewportPolicy =
   { mode: 'following'; position: number } | { mode: 'filling' } | { mode: 'detached' }
 
+export interface PlaybackViewport {
+  policy: PlaybackViewportPolicy
+  /** Right edge in global logical candle coordinates, including fractional pans. */
+  right: number
+  spacing: number
+}
+
+/** Inverse of Lightweight Charts' logical-to-pixel projection. */
+export function playbackViewportRight(
+  index: number,
+  width: number,
+  spacing: number,
+  position: number,
+) {
+  return index + (width * (1 - position) - 1) / spacing - 0.5
+}
+
+/** Advance a suspended view in one step, with the same policy as individual playback ticks. */
+export function advancePlaybackViewport(
+  viewport: PlaybackViewport,
+  index: number,
+  width: number,
+  options: {
+    follow?: boolean
+    previousIndex?: number
+    shiftVisibleRangeOnNewBar?: boolean
+  } = {},
+): PlaybackViewport {
+  let right = viewport.right
+  const previous = options.previousIndex ?? index
+  if (options.shiftVisibleRangeOnNewBar && index > previous && previous <= Math.ceil(right)) {
+    // On touch layouts the SDK shifts only after the previous last candle enters
+    // its strict visible range. Count those appended candles without rendering them.
+    const left = Math.floor(right - width / viewport.spacing + 1)
+    right += Math.max(0, index - Math.max(previous, left))
+  }
+  let policy = viewport.policy
+  const x = width - 1 - (right - index + 0.5) * viewport.spacing
+  if (
+    options.follow !== false &&
+    policy.mode === 'filling' &&
+    x >= width * PLAYBACK_VIEWPORT_POSITION
+  )
+    policy = { mode: 'following', position: PLAYBACK_VIEWPORT_POSITION }
+  return {
+    ...viewport,
+    policy,
+    right:
+      options.follow !== false && policy.mode === 'following'
+        ? playbackViewportRight(index, width, viewport.spacing, policy.position)
+        : right,
+  }
+}
+
 /** Decide what new candles do after a manual pan/zoom, using the actual plot bounds. */
 export function playbackViewportPolicy(
   x: number,

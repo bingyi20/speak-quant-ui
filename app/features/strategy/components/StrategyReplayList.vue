@@ -75,7 +75,11 @@ function day(value: string) {
             :id="`${uid}-${replay.id}-conditions`"
             class="replay-conditions"
           >
-            <span class="replay-symbol">{{ replay.symbol }}</span>
+            <span class="replay-symbol">{{
+              replay.instruments
+                ? $t('replay.instrumentCount', { count: Object.keys(replay.instruments).length })
+                : replay.symbol
+            }}</span>
             <span class="replay-timeframe">{{ replay.execution_timeframe }}</span>
             <span
               class="replay-range"

@@ -341,7 +341,13 @@ function escape(event: KeyboardEvent) {
           :name="downloadSource.name"
           :strategy-name="downloadState.detail.value?.name ?? ''"
           :summary="downloadState.detail.value?.change_summary"
-          :symbol="downloadSource.symbol"
+          :symbol="
+            downloadSource.instruments
+              ? Object.values(downloadSource.instruments)
+                  .map((instrument) => instrument.symbol)
+                  .join(' · ')
+              : (downloadSource.symbol ?? '')
+          "
           :timeframe="downloadSource.execution_timeframe"
         />
       </section>

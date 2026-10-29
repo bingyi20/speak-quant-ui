@@ -25,7 +25,7 @@ const items = computed(() =>
     .map((r) => ({
       id: r.id,
       label: r.name,
-      description: `${r.symbol} · ${r.execution_timeframe} · ${r.start_at.slice(0, 10)}`,
+      description: `${r.instruments ? t('replay.instrumentCount', { count: Object.keys(r.instruments).length }) : (r.symbol ?? '—')} · ${r.execution_timeframe} · ${r.start_at.slice(0, 10)}`,
     })),
 )
 function reset() {

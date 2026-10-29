@@ -3,6 +3,7 @@ import { computed, reactive, ref, shallowRef } from 'vue'
 import { BoundedCache } from '~/lib/chart/cache'
 import type { ReplayApi } from './api'
 import { timeframeSeconds, toBar } from './normalize'
+import { replayInstruments, tradeInstrument } from './instruments'
 import type {
   CandleQuery,
   ReplayBar,
@@ -11,23 +12,20 @@ import type {
   ReplayDetail,
   ReplayDrawdownRange,
   ReplayEquityHistory,
-  ReplayInsight,
   ReplayReport,
   ReplayTrade,
 } from './types'
 
-type Resource = 'candles' | 'trades' | 'insights' | 'report'
+type Resource = 'candles' | 'trades' | 'report'
 type Phase = 'idle' | 'loading' | 'ready' | 'error'
 const emptyPhases = (): Record<Resource, Phase> => ({
   candles: 'idle',
   trades: 'idle',
-  insights: 'idle',
   report: 'idle',
 })
 const emptyErrors = (): Record<Resource, string> => ({
   candles: '',
   trades: '',
-  insights: '',
   report: '',
 })
 interface CandlePageIndex {
@@ -37,14 +35,24 @@ interface CandlePageIndex {
 
 export function createReplayDataState(api: ReplayApi) {
   const detail = shallowRef<ReplayDetail | null>(null)
+  const instruments = computed(() => replayInstruments(detail.value))
+  const axisInstrument = ref(''),
+    displayInstrument = ref('')
+  const selectedInstrument = computed(
+    () => instruments.value.find((item) => item.role === displayInstrument.value) ?? null,
+  )
+  const isAxisDisplay = computed(
+    () =>
+      displayInstrument.value === axisInstrument.value &&
+      displayTimeframe.value === detail.value?.strategy.execution_timeframe,
+  )
   const loading = ref(false),
     error = ref('')
   const phases = reactive(emptyPhases()),
     errors = reactive(emptyErrors())
   const axis = shallowRef<ReplayBar[]>([]),
     preview = shallowRef<ReplayBar[]>([])
-  const trades = shallowRef<ReplayTrade[]>([]),
-    insights = shallowRef<ReplayInsight[]>([])
+  const trades = shallowRef<ReplayTrade[]>([])
   const report = shallowRef<ReplayReport | null>(null)
   const candlesComplete = ref(false),
     tradesComplete = ref(false)
@@ -69,11 +77,7 @@ export function createReplayDataState(api: ReplayApi) {
       (a, b) => a.time - b.time,
     )
   })
-  const bars = computed(() =>
-    displayTimeframe.value === detail.value?.strategy.execution_timeframe
-      ? mainBars.value
-      : displayBars.value,
-  )
+  const bars = computed(() => (isAxisDisplay.value ? mainBars.value : displayBars.value))
   let controller = new AbortController(),
     generation = 0,
     displayGeneration = 0
@@ -83,7 +87,12 @@ export function createReplayDataState(api: ReplayApi) {
     tradePage = 1
   let scanning = false,
     trading = false
-  const displayWindow = shallowRef<{ timeframe: string; from: number; to: number } | null>(null)
+  const displayWindow = shallowRef<{
+    instrument: string
+    timeframe: string
+    from: number
+    to: number
+  } | null>(null)
   const valid = (g: number) => g === generation && !controller.signal.aborted
   function cancel() {
     generation++
@@ -107,11 +116,12 @@ export function createReplayDataState(api: ReplayApi) {
     axis.value = []
     preview.value = []
     trades.value = []
-    insights.value = []
     report.value = null
     displayBars.value = []
     availableTimeframes.value = []
     displayTimeframe.value = ''
+    displayInstrument.value = ''
+    axisInstrument.value = ''
     displayError.value = ''
     equityHistory.clear()
     appendDrawdown = null
@@ -188,11 +198,22 @@ export function createReplayDataState(api: ReplayApi) {
       if (inFlight.get(key) === request) inFlight.delete(key)
     }
   }
+  function validateInstrument(result: ReplayCandlePage, role: string) {
+    if (role && result.instrument !== role) throw new Error('Candle instrument mismatch')
+    const expected = instruments.value.find((item) => item.role === role)?.instrument_id
+    if (expected && result.instrument_id && expected !== result.instrument_id)
+      throw new Error('Candle instrument identity mismatch')
+  }
+  const axisQuery = () => (axisInstrument.value ? { instrument: axisInstrument.value } : {})
   function acceptCapabilities(result: ReplayCandlePage) {
+    validateInstrument(result, axisInstrument.value)
     const execution = detail.value!.strategy.execution_timeframe
     if (result.timeframe !== execution) throw new Error('Candle timeframe mismatch')
     // Older APIs expose no capability list: retain the single execution timeframe.
-    if (Array.isArray(result.available_timeframes))
+    if (
+      displayInstrument.value === axisInstrument.value &&
+      Array.isArray(result.available_timeframes)
+    )
       availableTimeframes.value = [
         ...new Set([
           execution,
@@ -211,6 +232,7 @@ export function createReplayDataState(api: ReplayApi) {
     const window = (timeframeSeconds(d.strategy.execution_timeframe) ?? 86400) * 200 * 1000
     try {
       const result = await page({
+        ...axisQuery(),
         limit: 2000,
         from: new Date(atStart ? start : Math.max(start, end - window)).toISOString(),
         to: new Date(atStart ? Math.min(end, start + window) : end).toISOString(),
@@ -233,7 +255,7 @@ export function createReplayDataState(api: ReplayApi) {
     try {
       do {
         const cursor = nextCursor,
-          result = await page({ limit: 2000, ...(cursor ? { cursor } : {}) })
+          result = await page({ ...axisQuery(), limit: 2000, ...(cursor ? { cursor } : {}) })
         if (!valid(g)) return
         acceptCapabilities(result)
         if (
@@ -267,7 +289,9 @@ export function createReplayDataState(api: ReplayApi) {
         nextCursor = result.next_cursor ?? undefined
         if (nextCursor) seen.add(nextCursor)
         if (!result.has_more) {
-          const count = detail.value?.counts?.candles
+          const count = axisInstrument.value
+            ? detail.value?.counts?.execution_steps
+            : detail.value?.counts?.candles
           if (count !== undefined && count !== axis.value.length)
             throw new Error('Incomplete candle history')
           candlesComplete.value = true
@@ -297,7 +321,11 @@ export function createReplayDataState(api: ReplayApi) {
     if (cached) return cached.find((c) => c.id === id) ?? null
     const g = generation,
       entry = pages[n]!
-    const result = await page({ limit: 2000, ...(entry.cursor ? { cursor: entry.cursor } : {}) })
+    const result = await page({
+      ...axisQuery(),
+      limit: 2000,
+      ...(entry.cursor ? { cursor: entry.cursor } : {}),
+    })
     if (!valid(g)) return null
     acceptCapabilities(result)
     if (
@@ -319,7 +347,25 @@ export function createReplayDataState(api: ReplayApi) {
         const result = await api.trades(currentId, tradePage, controller.signal)
         if (!valid(g)) return
         const rows = new Map(trades.value.map((t) => [t.id, t]))
-        result.items.forEach((t) => rows.set(t.id, t))
+        result.items.forEach((trade) => {
+          const instrument = tradeInstrument(trade, instruments.value)
+          const identity = instrument?.role
+            ? {
+                instrument_role: instrument.role,
+                instrument_id: instrument.instrument_id,
+                symbol: instrument.symbol,
+                market_type: instrument.market_type,
+                contract_type: instrument.contract_type,
+              }
+            : {}
+          rows.set(trade.id, {
+            ...identity,
+            ...trade,
+            fills: trade.fills
+              .map((fill) => ({ ...identity, ...fill }))
+              .sort((a, b) => a.sequence - b.sequence),
+          })
+        })
         if (
           result.page !== tradePage ||
           (tradePage < result.total_pages && rows.size === trades.value.length)
@@ -340,24 +386,6 @@ export function createReplayDataState(api: ReplayApi) {
       }
     } finally {
       if (valid(g)) trading = false
-    }
-  }
-  async function loadInsights() {
-    if (phases.insights === 'loading' || detail.value?.status !== 'completed') return
-    const g = generation
-    phases.insights = 'loading'
-    errors.insights = ''
-    try {
-      const result = await api.insights(currentId, controller.signal)
-      if (valid(g)) {
-        insights.value = result.items.slice().sort((a, b) => a.sequence - b.sequence)
-        phases.insights = 'ready'
-      }
-    } catch {
-      if (valid(g)) {
-        phases.insights = 'error'
-        errors.insights = 'replay.errors.insights'
-      }
     }
   }
   async function loadReport() {
@@ -399,12 +427,20 @@ export function createReplayDataState(api: ReplayApi) {
           result.conditions.start_at,
           result.strategy.execution_timeframe,
         )
+        axisInstrument.value =
+          instruments.value.find(
+            (item) =>
+              item.tradable !== false &&
+              item.timeframes.includes(result.strategy.execution_timeframe),
+          )?.role ??
+          instruments.value[0]?.role ??
+          ''
+        displayInstrument.value = axisInstrument.value
         displayTimeframe.value = result.strategy.execution_timeframe
         availableTimeframes.value = [result.strategy.execution_timeframe]
         void loadPreview(atStart)
         void loadCandles()
         void loadTrades()
-        void loadInsights()
       }
     } catch {
       if (valid(g)) error.value = 'replay.errors.detail'
@@ -413,12 +449,40 @@ export function createReplayDataState(api: ReplayApi) {
     }
   }
   async function setTimeframe(timeframe: string, range?: { from: number; to: number }) {
-    if (!detail.value || !availableTimeframes.value.includes(timeframe)) return false
+    return setDisplay(displayInstrument.value, timeframe, range)
+  }
+  async function setInstrument(
+    role: string,
+    range?: { from: number; to: number },
+    preferredTimeframe?: string,
+  ) {
+    const instrument = instruments.value.find((item) => item.role === role)
+    if (!instrument || !detail.value) return false
+    const execution = detail.value.strategy.execution_timeframe
+    const preferred = preferredTimeframe ?? displayTimeframe.value
+    const timeframe = instrument.timeframes.includes(preferred)
+      ? preferred
+      : instrument.timeframes.includes(execution)
+        ? execution
+        : instrument.timeframes[0]
+    if (!timeframe) return false
+    return setDisplay(role, timeframe, range)
+  }
+  async function setDisplay(role: string, timeframe: string, range?: { from: number; to: number }) {
+    const instrument = instruments.value.find((item) => item.role === role)
+    const capabilities =
+      role === displayInstrument.value ? availableTimeframes.value : (instrument?.timeframes ?? [])
+    if (!detail.value || !instrument || !capabilities.includes(timeframe)) return false
     displayRequest?.abort()
     const dg = ++displayGeneration,
       g = generation
     displayError.value = ''
-    if (timeframe === detail.value.strategy.execution_timeframe) {
+    if (role === axisInstrument.value && timeframe === detail.value.strategy.execution_timeframe) {
+      displayInstrument.value = role
+      availableTimeframes.value = instrument.role
+        ? instrument.timeframes
+        : availableTimeframes.value
+      displayWindow.value = null
       displayTimeframe.value = timeframe
       displayBars.value = []
       displayLoading.value = false
@@ -432,8 +496,10 @@ export function createReplayDataState(api: ReplayApi) {
     const end = Date.parse(d.conditions.end_at) / 1000,
       start = Date.parse(d.conditions.start_at) / 1000
     const step = timeframeSeconds(timeframe) ?? 86400
-    const from = Math.max(start, (range?.from ?? end - step * 200) - step * 30)
-    const to = Math.min(end, (range?.to ?? end) + step * 30)
+    const execution = timeframe === d.strategy.execution_timeframe
+    const from = execution ? start : Math.max(start, (range?.from ?? end - step * 200) - step * 30)
+    const to = execution ? end : Math.min(end, (range?.to ?? end) + step * 30)
+    let acceptedTimeframes = capabilities
     const rows: ReplayBar[] = []
     let cursor: string | undefined
     const cursors = new Set<string>()
@@ -442,6 +508,7 @@ export function createReplayDataState(api: ReplayApi) {
       do {
         const result = await page(
           {
+            ...(role ? { instrument: role } : {}),
             timeframe,
             from: new Date(from * 1000).toISOString(),
             to: new Date(to * 1000).toISOString(),
@@ -452,7 +519,15 @@ export function createReplayDataState(api: ReplayApi) {
           true,
         )
         if (!valid(g) || dg !== displayGeneration) return false
+        validateInstrument(result, role)
         if (result.timeframe !== timeframe) throw new Error('Timeframe mismatch')
+        if (result.available_timeframes)
+          acceptedTimeframes = result.available_timeframes.filter((value) =>
+            /^\d+[mhdwM]$/.test(value),
+          )
+        result.items.forEach((candle) =>
+          windowCache.set(`${role}:${timeframe}:${Date.parse(candle.time) / 1000}`, candle),
+        )
         const chunk = result.items.map(toBar)
         for (const row of chunk) {
           if (rows.length && row.time <= rows.at(-1)!.time)
@@ -467,8 +542,10 @@ export function createReplayDataState(api: ReplayApi) {
       } while (!signal.aborted)
       if (!valid(g) || dg !== displayGeneration) return false
       displayBars.value = rows
+      displayInstrument.value = role
+      availableTimeframes.value = acceptedTimeframes
       displayTimeframe.value = timeframe
-      displayWindow.value = { timeframe, from, to }
+      displayWindow.value = { instrument: role, timeframe, from, to }
       return true
     } catch {
       if (valid(g) && dg === displayGeneration && !signal.aborted)
@@ -502,12 +579,15 @@ export function createReplayDataState(api: ReplayApi) {
         d.strategy.execution_timeframe,
       )
     }
-    return { candles: loadCandles, trades: loadTrades, insights: loadInsights, report: loadReport }[
-      resource
-    ]()
+    return { candles: loadCandles, trades: loadTrades, report: loadReport }[resource]()
   }
   return {
     detail,
+    instruments,
+    axisInstrument,
+    displayInstrument,
+    selectedInstrument,
+    isAxisDisplay,
     loading,
     error,
     phases,
@@ -517,7 +597,6 @@ export function createReplayDataState(api: ReplayApi) {
     mainBars,
     indexById,
     trades,
-    insights,
     report,
     candlesComplete,
     tradesComplete,
@@ -535,6 +614,11 @@ export function createReplayDataState(api: ReplayApi) {
     loadReport,
     readCandle,
     setTimeframe,
+    setInstrument,
+    displayCandleAt: (time: number) =>
+      windowCache.get(
+        `${displayInstrument.value}:${detail.value?.strategy.execution_timeframe}:${time}`,
+      ) ?? null,
   }
 }
 export type ReplayDataState = ReturnType<typeof createReplayDataState>

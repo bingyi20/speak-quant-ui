@@ -4,7 +4,6 @@ import type {
   CandleQuery,
   ReplayCandlePage,
   ReplayDetail,
-  ReplayInsight,
   ReplayListPage,
   ReplayReport,
   ReplayTrade,
@@ -26,10 +25,6 @@ export const createReplayApi = (http: HttpClient) => ({
   trades: (id: string, page = 1, signal?: AbortSignal) =>
     http.requestJson<Page<ReplayTrade>>(`/replays/${encodeURIComponent(id)}/trades`, {
       query: { page, size: 100 },
-      signal,
-    }),
-  insights: (id: string, signal?: AbortSignal) =>
-    http.requestJson<{ items: ReplayInsight[] }>(`/replays/${encodeURIComponent(id)}/insights`, {
       signal,
     }),
   report: (id: string, signal?: AbortSignal) =>

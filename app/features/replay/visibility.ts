@@ -1,4 +1,5 @@
 import { nextBarTime } from './normalize'
+import { replayEventIndex } from './events'
 import type { ReplayBar, ReplayTrade, ReplayTradeView } from './types'
 
 export function closedBars(bars: readonly ReplayBar[], cutoff: number, timeframe: string) {
@@ -13,13 +14,39 @@ export function revealTrades(
   trades: readonly ReplayTrade[],
   indexes: ReadonlyMap<string, number>,
   index: number,
+  bars: readonly ReplayBar[] = [],
 ): ReplayTradeView[] {
   return trades
-    .filter((trade) => (indexes.get(trade.entry_candle_id) ?? Infinity) <= index)
+    .filter(
+      (trade) =>
+        (replayEventIndex(
+          bars,
+          indexes,
+          trade.entry_candle_id,
+          trade.entry_at,
+          trade.instrument_role,
+        ) ?? Infinity) <= index,
+    )
     .map((trade) => {
-      const fills = trade.fills.filter((fill) => (indexes.get(fill.candle_id) ?? Infinity) <= index)
+      const fills = trade.fills.filter(
+        (fill) =>
+          (replayEventIndex(
+            bars,
+            indexes,
+            fill.candle_id,
+            fill.occurred_at,
+            fill.instrument_role ?? trade.instrument_role,
+          ) ?? Infinity) <= index,
+      )
       const isComplete =
-        !!trade.exit_candle_id && (indexes.get(trade.exit_candle_id) ?? Infinity) <= index
+        !!trade.exit_candle_id &&
+        (replayEventIndex(
+          bars,
+          indexes,
+          trade.exit_candle_id,
+          trade.exit_at,
+          trade.instrument_role,
+        ) ?? Infinity) <= index
       if (isComplete) return { ...trade, fills, isComplete }
       return {
         ...trade,

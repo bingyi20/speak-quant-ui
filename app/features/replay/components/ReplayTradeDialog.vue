@@ -7,6 +7,7 @@ const props = defineProps<{
   trade: ReplayTradeView | null
   exitLabel: string
   selectedFill?: string
+  instrumentLabel?: string
 }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ ask: []; locate: [id: string]; closed: [] }>()
@@ -53,7 +54,7 @@ const pnlClass = computed(() =>
     :title="t('replay.tradeDetails')"
     :description="
       trade
-        ? `${t(`replay.direction.${trade.direction}`)} · ${date(trade.entry_at)} → ${trade.exit_at ? date(trade.exit_at) : t('replay.unclosed')}`
+        ? `${instrumentLabel ? instrumentLabel + ' · ' : ''}${t(`replay.direction.${trade.direction}`)} · ${date(trade.entry_at)} → ${trade.exit_at ? date(trade.exit_at) : t('replay.unclosed')}`
         : undefined
     "
     :ui="{

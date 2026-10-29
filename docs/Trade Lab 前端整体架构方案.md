@@ -250,7 +250,7 @@ features 的公开入口
 | 问答交互预览（仅本地测试） | `tests/preview/playwright.config.ts`、`tests/preview/questions.spec.ts`；`pnpm preview:questions` 复用测试夹具、独立浏览器上下文拦截 API，不增加生产路由 |
 | 消息界面与资产面板                | `app/features/conversation/components/ConversationWorkspace.vue`、`UserMessage.vue`、`AssistantMessage.vue`、`ConversationCreditNotice.vue`、`ConversationAssetListPanel.vue`、`ConversationAssetDetailPanel.vue` 分别维护列表与详情的布局和过渡；聊天与列表共用 `cards/MessageCard.vue`；`app/components/common/SplitPane.vue` 只处理列表固定宽度及详情比例调宽；样式 `app/assets/css/conversation.css` |
 | 策略详情与历史版本 | `app/features/strategy/api.ts`、`types.ts`、`detail-state.ts`、`composables/useStrategyDetail.ts`、`components/`（`StrategyReplayList.vue` 承载回测记录行）；契约见[策略详情模块技术方案](策略详情模块技术方案.md) |
-| 回测详情工作区 | `app/features/replay/api.ts`、`types.ts`、`normalize.ts`、`data-state.ts`、`events.ts`、`playback-state.ts`、`visibility.ts`、`historical-result.ts`、`composables/useReplayDetail.ts` 与 `components/`；桌面交易卡片的连续滚动、虚拟窗口与独立右侧跟随位于 `composables/useReplayTradeStrip.ts`；图表 SDK 位于 `app/lib/chart/lightweight.ts`，PC 独立交易明细弹窗位于 `app/features/replay/components/ReplayTradeDialog.vue`，共享洞察正文位于 `app/features/replay/components/ReplayInsightContent.vue`，买卖 TAG 与底部洞察圆点 primitive 位于 `app/lib/chart/trade-tags.ts`，桌面时间轴浮层 primitive 位于 `app/lib/chart/time-label.ts`，成交浮层四向定位位于 `app/lib/chart/tooltip-position.ts`，默认与证据区间视野策略位于 `app/lib/chart/viewport.ts`。职责与状态契约见[回测详情模块技术方案](回测详情模块技术方案.md) |
+| 回测详情工作区 | `app/features/replay/api.ts`、`types.ts`、`normalize.ts`、`instruments.ts`（冻结标的身份、能力及显示标签）、`data-state.ts`、`events.ts`、`playback-state.ts`、`visibility.ts`、`historical-result.ts`、`composables/useReplayDetail.ts` 与 `components/`；桌面交易卡片的连续滚动、虚拟窗口与独立右侧跟随位于 `composables/useReplayTradeStrip.ts`；图表 SDK 位于 `app/lib/chart/lightweight.ts`，PC 独立交易明细弹窗位于 `app/features/replay/components/ReplayTradeDialog.vue`，时间轴与折叠浮层共用成交点按钮位于 `app/features/replay/components/ReplayTradeMarker.vue`，买卖 TAG primitive 位于 `app/lib/chart/trade-tags.ts`，桌面时间轴浮层 primitive 位于 `app/lib/chart/time-label.ts`，成交浮层四向定位位于 `app/lib/chart/tooltip-position.ts`，默认与证据区间视野策略位于 `app/lib/chart/viewport.ts`。本版本不请求或展示洞察；职责与状态契约见[回测详情模块技术方案](回测详情模块技术方案.md) |
 | 运行包与开源声明 | `app/features/runner/api.ts`、`components/RunnerDownloadDialog.vue` 复用下载基础设施；`app/pages/open-source.vue` 与 `public/licenses/` 提供图表署名和许可证 |
 | 详情样式与复制 | `app/assets/css/asset-details.css`、`app/components/ui/CopyButton.vue`；Python 高亮组件按需加载，配色在主题文件 |
 | 账户设置与全局弹窗                | `app/features/account/components/`、`app/stores/overlays.ts`、`app/components/shell/GlobalOverlays.vue`                                                                           |
@@ -393,7 +393,7 @@ Conversation 页是稳定的工作台容器。右侧资产列表、Strategy 与 
 
 定义有限的图表适配接口：创建、设置/追加数据、定位、范围变化、标记、应用主题、销毁。Replay 控制器只调用 adapter，不直接访问具体 SDK。
 
-图表在客户端挂载，依赖按需加载；通过 ResizeObserver 响应面板尺寸。图表实例不进 Pinia 或 SSR payload。K 线使用 cursor 分段加载，缓存设置容量/淘汰规则；高频播放位置更新与低频资源数据分离，避免每帧深度响应式遍历全量 K 线。
+图表在客户端挂载，依赖按需加载；通过 ResizeObserver 响应面板尺寸。Replay 使用按回测隔离的 KeepAlive 缓存已访问标的，每个标的拥有独立容器和 SDK，首次访问才创建；隐藏时停止动画、交互监听与尺寸/主题观察，激活后同步主题及成交量设置，并按各自跟随策略和全局时间跳转一次补齐到持续显示应有的视图，关闭面板或切换回测时统一销毁。标的周期、缩放和视野不借用其它标的状态，跨标的交易定位只更新目标图。图表实例不进 Pinia 或 SSR payload。K 线使用 cursor 分段加载，缓存设置容量/淘汰规则；高频播放位置更新与低频资源数据分离，避免每帧深度响应式遍历全量 K 线。
 
 首期不预设 Web Worker；实际性能验证显示有必要时，再把纯计算移出主线程。
 

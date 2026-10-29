@@ -1,13 +1,40 @@
 import type { Page } from '#shared/types/http'
 
+export interface ReplayInstrumentBinding {
+  instrument_id?: string
+  symbol: string
+  market_type?: string
+  contract_type?: string | null
+  tradable?: boolean
+  leverage?: string | null
+}
+export interface ReplayInstrumentSnapshot extends ReplayInstrumentBinding {
+  id?: string
+  instrument_role?: string
+  required_feeds?: string[]
+}
+export interface ReplayInstrument extends ReplayInstrumentBinding {
+  role: string
+  timeframes: string[]
+}
+export interface ReplayInstrumentIdentity {
+  instrument_id?: string | null
+  instrument_role?: string | null
+  symbol?: string | null
+  market_type?: string | null
+  contract_type?: string | null
+  batch_id?: string | null
+  group_id?: string | null
+}
 export interface ReplaySummary {
   id: string
   name: string
   result_type: string
   strategy_node_id: string
-  symbol: string
-  market_type: string
+  symbol: string | null
+  market_type: string | null
   contract_type: string | null
+  instruments?: Record<string, ReplayInstrumentBinding>
   execution_timeframe: string
   auxiliary_timeframes: string[]
   start_at: string
@@ -56,18 +83,25 @@ export interface ReplayDetail {
     summary?: string | null
     change_summary?: string | null
   }
+  runtime_contract?: { api_version: number; [key: string]: unknown }
+  instrument_snapshots?: Record<string, ReplayInstrumentSnapshot>
+  instruments?: Record<string, ReplayInstrumentBinding>
   conditions: {
-    symbol: string
+    symbol?: string
     market_type?: string
     contract_type?: string | null
     leverage?: string | null
     start_at: string
     end_at: string
     initial_capital: string
+    instruments?: Record<string, ReplayInstrumentBinding>
+    execution_timeframe?: string
+    timeframe_bindings?: Record<string, string | Record<string, string>>
+    signal_levels?: Record<string, string>
   }
   execution_assumptions?: {
     capital_currency: string
-    position_sizing: { type: string; value: string }
+    position_sizing: { type: string; value: string | null }
     commission_rate: string
     slippage_rate: string
     data: {
@@ -80,7 +114,13 @@ export interface ReplayDetail {
   }
   result: ReplayResult | null
   playback?: { default_speed: number; available_speeds: number[] } | null
-  counts?: { trades: number; insights: number; candles: number }
+  counts?: {
+    trades: number
+    insights: number
+    candles: number
+    execution_steps?: number
+    candles_by_instrument?: Record<string, number>
+  }
   data_range?: {
     start_at: string | null
     end_at: string | null
@@ -141,6 +181,8 @@ export interface ReplayEquityHistory {
   range: ReplayDrawdownRange | null
 }
 export interface ReplayCandlePage {
+  instrument?: string
+  instrument_id?: string
   timeframe: string
   execution_timeframe?: string
   available_timeframes?: string[]
@@ -149,6 +191,7 @@ export interface ReplayCandlePage {
   next_cursor: string | null
 }
 export interface CandleQuery {
+  instrument?: string
   cursor?: string
   limit?: number
   from?: string
@@ -166,7 +209,7 @@ export interface ReplayBar {
   close: number
   volume: number
 }
-export interface ReplayFill {
+export interface ReplayFill extends ReplayInstrumentIdentity {
   id: string
   sequence: number
   action: string
@@ -181,7 +224,7 @@ export interface ReplayFill {
   position_after: string | null
   reason: string | null
 }
-export interface ReplayTrade {
+export interface ReplayTrade extends ReplayInstrumentIdentity {
   id: string
   sequence: number
   direction: string
@@ -239,6 +282,8 @@ export interface ReplayReport {
 }
 export type ReplayListPage = Page<ReplaySummary>
 export interface ReplaySelection {
+  instrumentRole?: string
+  time?: number
   candleId?: string
   /** Only explicit trade/fill navigation sets these IDs; insight references stay in evidence. */
   tradeId?: string
@@ -258,13 +303,20 @@ export interface ReplayQuestionReference {
   context: ReplayMessageContext
   label: string
 }
+export interface ReplayInstrumentView {
+  timeframe: string
+  range: { from: number; to: number } | null
+  follow: boolean
+  seekRevision?: number
+}
 export interface ReplayViewSnapshot {
+  instrumentViews?: Record<string, ReplayInstrumentView>
+  instrument?: string
   index: number
   speed: number
   timeframe: string
   range: { from: number; to: number } | null
   selection: ReplaySelection | null
-  tab: 'insights' | 'trades'
   expanded: boolean
   scrollTop: number
 }

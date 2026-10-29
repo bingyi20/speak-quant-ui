@@ -35,15 +35,21 @@ test('fast history loads never reveal a spinner and slow loads wait 200ms withou
   await page.reload()
   await expect(spinner).toHaveCount(1)
   await expect(spinner).toBeHidden()
-  const before = await spinner.boundingBox()
+  const slot = page.locator('.message-loading')
+  const beforeSlot = await slot.boundingBox()
+  const before = (await spinner.boundingBox())!
+  expect(beforeSlot).not.toBeNull()
+  expect(before).not.toBeNull()
   await page.clock.runFor(199)
   await expect(spinner).toBeHidden()
   await page.clock.runFor(1)
   await expect(spinner).toBeVisible()
-  // The reserved slot stays fixed when the ring becomes visible.
-  const after = await spinner.boundingBox()
-  expect(after?.x).toBe(before?.x)
-  expect(after?.y).toBe(before?.y)
+  // Rotation changes the ring's bounding box, but not its center or reserved slot.
+  const after = (await spinner.boundingBox())!
+  expect(after).not.toBeNull()
+  expect(after.x + after.width / 2).toBeCloseTo(before.x + before.width / 2, 2)
+  expect(after.y + after.height / 2).toBeCloseTo(before.y + before.height / 2, 2)
+  expect(await slot.boundingBox()).toEqual(beforeSlot)
   release()
   await expect(page.locator('.message-scroll')).toContainText('已有研究内容')
   await expect(spinner).toHaveCount(0)

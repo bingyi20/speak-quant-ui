@@ -38,6 +38,32 @@ export function buildDrawdownEvent(
   }
 }
 
+/** Cross-instrument candle IDs differ; execution timestamps share one account axis. */
+export function replayEventIndex(
+  bars: readonly ReplayBar[],
+  indexes: ReadonlyMap<string, number>,
+  candleId: string,
+  occurredAt?: string | null,
+  instrumentRole?: string | null,
+) {
+  const indexed = indexes.get(candleId)
+  if (indexed !== undefined || !instrumentRole || !occurredAt) return indexed
+  const time = Date.parse(occurredAt) / 1000
+  if (!Number.isFinite(time)) return undefined
+  let lo = 0,
+    hi = bars.length - 1,
+    found = -1
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (bars[mid]!.time <= time) {
+      found = mid
+      lo = mid + 1
+    } else hi = mid - 1
+  }
+  const bar = bars[found]
+  return bar && time <= (bar.closeTime ?? bar.time) ? found : undefined
+}
+
 export function buildReplayEvents(
   bars: readonly ReplayBar[],
   trades: readonly ReplayTrade[],
@@ -49,22 +75,50 @@ export function buildReplayEvents(
   const events: ReplayEvent[] = []
   for (const trade of trades)
     for (const fill of trade.fills) {
-      const index = indexes.get(fill.candle_id)
+      const index = replayEventIndex(
+        bars,
+        indexes,
+        fill.candle_id,
+        fill.occurred_at,
+        fill.instrument_role ?? trade.instrument_role,
+      )
       if (index === undefined) continue
       events.push({
         id: `fill:${fill.id}`,
         index,
-        time: bars[index]!.time,
+        time: trade.instrument_role ? Date.parse(fill.occurred_at) / 1000 : bars[index]!.time,
         kind: 'fill',
         sequence: fill.sequence,
-        selection: { candleId: fill.candle_id, tradeId: trade.id, fillId: fill.id },
+        selection: {
+          candleId: fill.candle_id,
+          tradeId: trade.id,
+          fillId: fill.id,
+          ...(trade.instrument_role
+            ? { instrumentRole: trade.instrument_role, time: Date.parse(fill.occurred_at) / 1000 }
+            : {}),
+        },
         fill,
         trade,
       })
     }
   for (const insight of insights) {
+    const trade = trades.find(
+      (item) =>
+        item.entry_candle_id === insight.candle_id ||
+        item.exit_candle_id === insight.candle_id ||
+        item.fills.some((fill) => fill.candle_id === insight.candle_id),
+    )
+    const role =
+      typeof insight.evidence?.instrument_role === 'string'
+        ? insight.evidence.instrument_role
+        : trade?.instrument_role
+    const at =
+      trade?.fills.find((fill) => fill.candle_id === insight.candle_id)?.occurred_at ??
+      (trade?.exit_candle_id === insight.candle_id ? trade.exit_at : trade?.entry_at)
     const index =
-      insight.scope === 'runtime' && insight.candle_id ? indexes.get(insight.candle_id) : undefined
+      insight.scope === 'runtime' && insight.candle_id
+        ? replayEventIndex(bars, indexes, insight.candle_id, at, role)
+        : undefined
     if (index === undefined) continue
     events.push({
       id: `insight:${insight.id}`,
@@ -72,7 +126,11 @@ export function buildReplayEvents(
       time: bars[index]!.time,
       kind: 'insight',
       sequence: insight.sequence,
-      selection: { insightId: insight.id, candleId: insight.candle_id! },
+      selection: {
+        insightId: insight.id,
+        candleId: insight.candle_id!,
+        ...(role ? { instrumentRole: role, time: bars[index]!.time } : {}),
+      },
       insight,
     })
   }
@@ -85,7 +143,15 @@ export function buildReplayEvents(
         )
         .sort((a, b) => new Decimal(a.net_pnl!).cmp(b.net_pnl!) * (kind === 'best' ? -1 : 1))
       const trade = sorted[0]
-      const index = trade?.exit_candle_id ? indexes.get(trade.exit_candle_id) : undefined
+      const index = trade?.exit_candle_id
+        ? replayEventIndex(
+            bars,
+            indexes,
+            trade.exit_candle_id,
+            trade.exit_at,
+            trade.instrument_role,
+          )
+        : undefined
       if (trade && index !== undefined)
         events.push({
           id: kind,
@@ -94,7 +160,10 @@ export function buildReplayEvents(
           time: bars[index]!.time,
           sequence: trade.sequence,
           trade,
-          selection: { tradeId: trade.id },
+          selection: {
+            tradeId: trade.id,
+            ...(trade.instrument_role ? { instrumentRole: trade.instrument_role } : {}),
+          },
         })
     }
     const event = buildDrawdownEvent(drawdown, indexes)
@@ -112,10 +181,31 @@ export function buildReplayEvents(
 export function resolveSelection(
   selection: ReplaySelection,
   bars: readonly ReplayBar[],
-  trades: readonly Pick<ReplayTrade, 'id' | 'entry_candle_id' | 'exit_candle_id' | 'fills'>[],
+  trades: readonly Pick<
+    ReplayTrade,
+    | 'id'
+    | 'entry_candle_id'
+    | 'exit_candle_id'
+    | 'fills'
+    | 'entry_at'
+    | 'exit_at'
+    | 'instrument_role'
+  >[],
   insights: readonly ReplayInsight[],
 ): ReplaySelection | null {
   const byId = new Map(bars.map((c) => [c.id, c]))
+  const relatedTimes = new Map<string, { time: number; role: string }>()
+  for (const trade of trades) {
+    if (!trade.instrument_role) continue
+    const put = (id: string | null, at: string | null) => {
+      const time = at ? Date.parse(at) / 1000 : NaN
+      if (id && Number.isFinite(time)) relatedTimes.set(id, { time, role: trade.instrument_role! })
+    }
+    put(trade.entry_candle_id, trade.entry_at)
+    put(trade.exit_candle_id, trade.exit_at)
+    for (const fill of trade.fills) put(fill.candle_id, fill.occurred_at)
+  }
+  const candleTime = (id: string) => byId.get(id)?.time ?? relatedTimes.get(id)?.time
   const insight = selection.insightId
     ? insights.find((i) => i.id === selection.insightId)
     : undefined
@@ -126,11 +216,17 @@ export function resolveSelection(
   if (insight) {
     if (insight.candle_id) result.candleId = insight.candle_id
     const e = insight.evidence
+    const related = insight.candle_id ? relatedTimes.get(insight.candle_id) : undefined
+    const role = typeof e?.instrument_role === 'string' ? e.instrument_role : related?.role
+    if (role) {
+      result.instrumentRole = role
+      result.time = insight.candle_id ? candleTime(insight.candle_id) : undefined
+    }
     if (!result.candleId && typeof e?.entry_candle_id === 'string')
       result.candleId = e.entry_candle_id
     if (typeof e?.entry_candle_id === 'string' && typeof e.exit_candle_id === 'string') {
-      const from = byId.get(e.entry_candle_id)?.time,
-        to = byId.get(e.exit_candle_id)?.time
+      const from = candleTime(e.entry_candle_id),
+        to = candleTime(e.exit_candle_id)
       if (from !== undefined && to !== undefined && from <= to) result.range = { from, to }
     }
     if (!result.range && typeof e?.start_at === 'string' && typeof e.end_at === 'string') {
@@ -147,21 +243,32 @@ export function resolveSelection(
   if (result.tradeId && !trade) return null
   if (trade) {
     result.tradeId = trade.id
+    if (trade.instrument_role) result.instrumentRole = trade.instrument_role
     if (!result.fillId) {
       const entry = byId.get(trade.entry_candle_id),
         exit = trade.exit_candle_id ? byId.get(trade.exit_candle_id) : undefined
-      if (!entry || (trade.exit_candle_id && !exit)) return null
-      result.range ??= { from: entry.time, to: exit?.time ?? entry.time }
-      result.candleId ??= exit?.id ?? entry.id
+      if (!trade.instrument_role && (!entry || (trade.exit_candle_id && !exit))) return null
+      const from = entry?.time ?? Date.parse(trade.entry_at) / 1000
+      const to = exit?.time ?? (trade.exit_at ? Date.parse(trade.exit_at) / 1000 : from)
+      if (!Number.isFinite(from) || !Number.isFinite(to)) return null
+      result.range ??= { from, to }
+      result.candleId ??= trade.exit_candle_id ?? trade.entry_candle_id
+      if (trade.instrument_role) result.time = to
     }
   }
   if (result.fillId) {
     const fill = trade?.fills.find((f) => f.id === result.fillId)
     if (!fill) return null
     result.candleId = fill.candle_id
+    if (trade?.instrument_role) result.time = Date.parse(fill.occurred_at) / 1000
     delete result.range
   }
-  if (result.candleId && !byId.has(result.candleId)) return null
+  if (
+    result.candleId &&
+    !byId.has(result.candleId) &&
+    (!result.instrumentRole || !Number.isFinite(result.time))
+  )
+    return null
   if (result.range) {
     const first = bars[0]?.time,
       last = bars.at(-1)?.time
