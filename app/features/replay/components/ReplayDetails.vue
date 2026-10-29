@@ -119,10 +119,14 @@ const rows = computed<Array<[string, string]>>(() => {
       [t('replay.netProfit'), formatDecimal(r?.net_profit, locale.value)],
       [t('replay.equity'), formatDecimal(s?.equity, locale.value)],
       [t('replay.cash'), formatDecimal(s?.cash, locale.value)],
-      [
-        t('replay.positionStatus'),
-        s?.direction ? t(`replay.holdingDirection.${s.direction}`) : '—',
-      ],
+      ...(!d.conditions.instruments
+        ? ([
+            [
+              t('replay.positionStatus'),
+              s?.direction ? t(`replay.holdingDirection.${s.direction}`) : '—',
+            ],
+          ] as Array<[string, string]>)
+        : []),
       [t('replay.unrealized'), formatDecimal(s?.unrealized, locale.value)],
       [
         t('replay.currentDrawdown'),

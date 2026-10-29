@@ -166,7 +166,10 @@ export const portfolioTrades = (['asset_a', 'asset_b', 'hedge'] as const).map((r
   }
 })
 
-export async function stubPortfolio(page: Page) {
+export async function stubPortfolio(
+  page: Page,
+  options: { equityAt?: (index: number) => string } = {},
+) {
   await stubReplay(page, { empty: true })
   const candleRequests: URL[] = [],
     tradeRequests: URL[] = [],
@@ -188,11 +191,17 @@ export async function stubPortfolio(page: Page) {
         json: { code: 40000, message: 'Invalid instrument or timeframe' },
       })
     }
-    const rows = portfolioCandles(role, timeframe).filter(
-      (c) =>
-        (!query.get('from') || Date.parse(c.time) >= Date.parse(query.get('from')!)) &&
-        (!query.get('to') || Date.parse(c.close_time) <= Date.parse(query.get('to')!)),
-    )
+    const rows = portfolioCandles(role, timeframe)
+      .map((c) =>
+        options.equityAt && c.state
+          ? { ...c, state: { ...c.state, equity: options.equityAt(c.sequence - 1) } }
+          : c,
+      )
+      .filter(
+        (c) =>
+          (!query.get('from') || Date.parse(c.time) >= Date.parse(query.get('from')!)) &&
+          (!query.get('to') || Date.parse(c.close_time) <= Date.parse(query.get('to')!)),
+      )
     const prefix = `${role}:${timeframe}:`,
       cursor = query.get('cursor')
     if (cursor && !cursor.startsWith(prefix)) {

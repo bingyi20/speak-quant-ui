@@ -83,7 +83,7 @@ const reading = ref<'conditions' | 'metrics' | 'report' | 'state' | null>(null),
   volume = ref(false)
 const complete = computed(() => detail.value?.status === 'completed')
 const portfolio = computed(() => !!detail.value?.conditions.instruments)
-const historical = computed(() => desktop.value && !portfolio.value && !atEnd.value)
+const historical = computed(() => (desktop.value || portfolio.value) && !atEnd.value)
 const instrumentsLabel = computed(() =>
   instruments.value.map((instrument) => instrument.symbol).join(' · '),
 )
@@ -163,7 +163,7 @@ const metrics = computed(() => {
   // Final metrics only reserve skeleton dimensions during initial loading.
   // An indexing failure must keep the historical result unavailable.
   const reserveFinalMetrics = initializing.value && !errors.candles
-  const r = (desktop.value && !portfolio.value && !reserveFinalMetrics
+  const r = ((desktop.value || portfolio.value) && !reserveFinalMetrics
     ? props.state.summaryResult.value
     : detail.value?.result) ?? {
     net_return_rate: null,

@@ -142,7 +142,10 @@ export function useReplayDetail(
       direction: own?.direction ?? null,
       quantity: own?.quantity ?? null,
       averagePrice: own?.averagePrice ?? null,
-      unrealized: own?.unrealized ?? null,
+      // Portfolio PnL belongs to the shared account, even on a display-only timeframe.
+      unrealized: data.detail.value?.conditions.instruments
+        ? state.unrealized
+        : (own?.unrealized ?? null),
       drawdown: currentHistory.value.currentDrawdown,
     }
   })

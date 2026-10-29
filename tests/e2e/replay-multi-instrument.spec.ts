@@ -404,6 +404,92 @@ test('portfolio tabs isolate chart feeds while trades, account result and the ti
   }
 })
 
+test('portfolio historical metrics follow the shared account cutoff across instruments and periods', async ({
+  page,
+  isMobile,
+}) => {
+  const { invalidRequests } = await stubPortfolio(page, {
+    // One shared execution account: peak, drawdown, recovery, then the frozen final result.
+    // The display-only 2h feed deliberately retains null state.
+    equityAt: (index) =>
+      index < 20
+        ? '10000'
+        : index < 50
+          ? '11000'
+          : index < 80
+            ? '10500'
+            : index < 100
+              ? '9900'
+              : index < 150
+                ? '10800'
+                : '10199',
+  })
+  const panel = await openPortfolio(page),
+    instruments = tabs(panel),
+    slider = panel.locator('.replay-timeline input'),
+    metrics = panel.locator('.replay-summary-metrics dd'),
+    resultLabel = panel.locator('.replay-result-label')
+  const finalMetrics = ['+1.9900%', '0.0000%', '3', '50.00%', '2.20']
+  await expect(resultLabel).toHaveText('最终结果')
+  await expect(metrics).toHaveText(finalMetrics)
+  const seek = async (index: number, expected: string[]) => {
+    const value = String(Date.parse(iso(index)) / 1000)
+    await slider.evaluate((input, next) => {
+      ;(input as HTMLInputElement).value = next
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }, value)
+    await expect(slider).toHaveValue(value)
+    await expect(resultLabel).toHaveText('截至此时')
+    await expect(metrics).toHaveText(expected)
+  }
+  await seek(0, ['0.0000%', '0.0000%', '0', '—', '—'])
+  await seek(20, ['+10.0000%', '0.0000%', '2', '—', '—'])
+  const earlierMetrics = ['+5.0000%', '4.5455%', '2', '50.00%', '1.38']
+  await seek(60, earlierMetrics)
+  await seek(90, ['-1.0000%', '10.0000%', '3', '50.00%', '1.38'])
+  await seek(110, ['+8.0000%', '10.0000%', '3', '33.33%', '0.69'])
+  // Rewinding removes the later trade and drawdown, rather than retaining future totals.
+  await seek(60, earlierMetrics)
+
+  await instruments.getByRole('tab', { name: /ETH\/USDT/ }).click()
+  await expect(panel.getByRole('img', { name: 'ETH/USDT 1h K 线图' })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  )
+  await expect(metrics).toHaveText(earlierMetrics)
+  await setTimeframe(page, panel, isMobile, '2h')
+  await expect(panel.getByRole('img', { name: 'ETH/USDT 2h K 线图' })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  )
+  await expect(metrics).toHaveText(earlierMetrics)
+  await expect(slider).toHaveValue(String(Date.parse(iso(60)) / 1000))
+  await expect(resultLabel).toHaveText('截至此时')
+  await panel.getByRole('button', { name: isMobile ? '全部指标' : '查看详情', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '截至此时', exact: true }),
+    detailRow = (label: string) =>
+      dialog
+        .locator('.replay-key-values > div')
+        .filter({ has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) })
+        .locator('dd')
+  await expect(detailRow('权益')).toHaveText('10,500.00')
+  await expect(detailRow('净利润')).toHaveText('500.00')
+  await expect(detailRow('现金')).toHaveText('10,000.00')
+  await expect(detailRow('浮动盈亏')).toHaveText('0.00')
+  await expect(detailRow('最大回撤')).toHaveText('4.5455%')
+  await expect(dialog.getByText('仓位状态', { exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await instruments.getByRole('tab', { name: /BTC\/USDT.*现货/ }).click()
+  await expect(metrics).toHaveText(earlierMetrics)
+  await expect(slider).toHaveValue(String(Date.parse(iso(60)) / 1000))
+
+  // At the endpoint the API result is authoritative, including its frozen PF and drawdown.
+  await slider.press('End')
+  await expect(resultLabel).toHaveText('最终结果')
+  await expect(metrics).toHaveText(finalMetrics)
+  expect(invalidRequests).toEqual([])
+})
+
 test('keyboard instrument tabs support a read-only feed without inventing execution candles', async ({
   page,
   isMobile,
