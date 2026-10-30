@@ -6,8 +6,10 @@ import type { StrategyVersion } from '../types'
 const props = defineProps<{
   titleId: string
   name?: string
+  summary?: string | null
   selected: string
   versions: StrategyVersion[]
+  currentNodeId?: string | null
   currentName?: string
   currentSummary?: string | null
   currentUpdatedAt?: string
@@ -27,17 +29,24 @@ const shortDate = (value: string) =>
     hourCycle: 'h23',
     timeZone,
   }).format(new Date(value))
-const selectedVersion = computed(() => props.versions.find((v) => v.id === props.selected))
+// History omits the frozen node represented by the current strategy option.
+const selectedId = computed(() =>
+  props.selected === props.currentNodeId ? 'current' : props.selected,
+)
+const selectedVersion = computed(() => props.versions.find((v) => v.id === selectedId.value))
 const title = computed(
   () =>
-    (props.selected === 'current' ? props.currentSummary : selectedVersion.value?.change_summary) ||
+    props.summary ||
+    (selectedId.value === 'current'
+      ? props.currentSummary
+      : selectedVersion.value?.change_summary) ||
     props.name ||
-    t(props.selected === 'current' ? 'strategy.current' : 'strategy.historical'),
+    t(selectedId.value === 'current' ? 'strategy.current' : 'strategy.historical'),
 )
 const description = computed(() =>
   [
     props.name !== title.value ? props.name : '',
-    props.selected === 'current'
+    selectedId.value === 'current'
       ? t('strategy.current')
       : selectedVersion.value
         ? formatDate(selectedVersion.value.formed_at, locale.value, timeZone)
@@ -63,7 +72,7 @@ const items = computed(() => [
 </script>
 <template>
   <USelect
-    :model-value="selected"
+    :model-value="selectedId"
     :items="items"
     value-key="id"
     :disabled="disabled"

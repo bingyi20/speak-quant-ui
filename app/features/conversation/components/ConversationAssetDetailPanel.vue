@@ -203,8 +203,10 @@ function escape(event: KeyboardEvent) {
             <StrategyVersionSelect
               :title-id="`${id}-strategy-title`"
               :name="title"
+              :summary="detail?.change_summary"
               :selected="version"
               :versions="versions"
+              :current-node-id="current?.current_node_id"
               :current-name="current?.name"
               :current-summary="current?.change_summary"
               :current-updated-at="current?.updated_at"
@@ -224,8 +226,10 @@ function escape(event: KeyboardEvent) {
             <StrategyVersionSelect
               :title-id="`${id}-linked-title`"
               :name="linkedStrategy.detail.value?.name"
+              :summary="linkedStrategy.detail.value?.change_summary"
               :selected="linkedStrategy.version.value"
               :versions="linkedStrategy.versions.value"
+              :current-node-id="linkedStrategy.current.value?.current_node_id"
               :current-name="linkedStrategy.current.value?.name"
               :current-summary="linkedStrategy.current.value?.change_summary"
               :current-updated-at="linkedStrategy.current.value?.updated_at"

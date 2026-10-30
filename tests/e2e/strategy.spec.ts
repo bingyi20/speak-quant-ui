@@ -8,6 +8,7 @@ import {
   stubConversation,
 } from './conversation-fixtures'
 import { currentStrategy, historyNode, replay, stubStrategyDetails } from './strategy-fixtures'
+import type { StrategyNode } from '../../app/features/strategy/types'
 
 test.use({ timezoneId: 'Asia/Shanghai' })
 
@@ -20,6 +21,96 @@ test.beforeEach(async ({ page }) => {
   await stubConversation(page, {
     initialMessages: [message('strategy', 1, 'assistant', '策略已生成', [strategyCard])],
   })
+})
+
+const currentFrozenNode: StrategyNode = {
+  id: currentStrategy.current_node_id!,
+  strategy_id: currentStrategy.id,
+  name: currentStrategy.name,
+  change_summary: currentStrategy.change_summary,
+  formed_at: currentStrategy.updated_at,
+  design: { format: 'markdown', content: '# 本次回测的冻结设计' },
+  code: { language: 'python', content: '# Frozen current node\nstop_pct = 0.03' },
+  replays: [currentStrategy.replays[0]!],
+}
+
+for (const target of [currentFrozenNode, historyNode]) {
+  test(`Replay-linked strategy uses the summary and selected option for ${target.id}`, async ({
+    page,
+  }) => {
+    const sourceReplay = target.replays[0]!
+    await stubConversation(page, {
+      initialMessages: [
+        message('replay', 1, 'assistant', '回测已完成', [
+          { ...replayCard, resource_id: sourceReplay.id, title: sourceReplay.name },
+        ]),
+      ],
+    })
+    await stubStrategyDetails(page, currentStrategy, [historyNode, currentFrozenNode])
+    // The backend omits the current frozen node from history to avoid a duplicate option.
+    await page.route(/\/api\/strategies\/[^/?]+\/history(?:\?.*)?$/, (route) =>
+      route.fulfill({
+        json: envelope({
+          items: [{ ...historyNode, replay_count: 1 }],
+          page: 1,
+          total_pages: 1,
+        }),
+      }),
+    )
+    await page.goto(`/conversations/${conversationId}`)
+    await page.locator('.message-list-shell .message-card').click()
+    const panel = page.locator('.asset-detail-panel')
+    await panel.getByRole('button', { name: '查看策略', exact: true }).click()
+    const selector = panel.getByRole('combobox', { name: '切换策略版本' })
+    await expect(panel.locator('.strategy-document')).toContainText(
+      target === currentFrozenNode ? '本次回测的冻结设计' : '历史设计',
+    )
+    await expect(selector.locator('.strategy-version-title')).toHaveText(target.change_summary!)
+    await selector.click()
+    await expect(page.getByRole('option')).toHaveCount(2)
+    await expect(page.locator('[role="option"][data-state="checked"]')).toHaveCount(1)
+    await expect(
+      page.getByRole('option', { name: target.change_summary!, exact: true }),
+    ).toHaveAttribute('data-state', 'checked')
+
+    const alternate = target === currentFrozenNode ? historyNode : currentStrategy
+    await page.getByRole('option', { name: alternate.change_summary!, exact: true }).click()
+    await expect(selector.locator('.strategy-version-title')).toHaveText(alternate.change_summary!)
+    await panel.getByRole('tab', { name: '代码', exact: true }).click()
+    await expect(panel.locator('code')).toContainText(alternate.code!.content)
+    await selector.click()
+    await expect(page.locator('[role="option"][data-state="checked"]')).toHaveCount(1)
+    await expect(
+      page.getByRole('option', { name: alternate.change_summary!, exact: true }),
+    ).toHaveAttribute('data-state', 'checked')
+    await page.keyboard.press('Escape')
+    await panel.getByRole('button', { name: '返回回测', exact: true }).click()
+    await expect(panel.locator('.asset-replay-heading .strategy-version-title')).toHaveText(
+      sourceReplay.name,
+    )
+  })
+}
+
+test('Replay-linked strategy keeps its node summary when version history fails', async ({
+  page,
+}) => {
+  await stubConversation(page, {
+    initialMessages: [
+      message('replay', 1, 'assistant', '回测已完成', [
+        { ...replayCard, resource_id: historyNode.replays[0]!.id },
+      ]),
+    ],
+  })
+  await stubStrategyDetails(page)
+  await page.route(/\/api\/strategies\/[^/?]+\/history(?:\?.*)?$/, (route) =>
+    route.fulfill({ status: 500, json: { detail: 'history unavailable' } }),
+  )
+  await page.goto(`/conversations/${conversationId}`)
+  await page.locator('.message-list-shell .message-card').click()
+  const panel = page.locator('.asset-detail-panel')
+  await panel.getByRole('button', { name: '查看策略', exact: true }).click()
+  await expect(panel.locator('.strategy-document')).toContainText('历史设计')
+  await expect(panel.locator('.strategy-version-title')).toHaveText(historyNode.change_summary!)
 })
 
 test('global version switches Design, code and replays; scopes reset and no old results fill a draft', async ({
