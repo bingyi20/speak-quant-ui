@@ -10,9 +10,12 @@ import {
 import {
   isOrderSettled,
   isOrderTerminal,
+  canResumeOrderPayment,
+  orderPaymentUrl,
   paymentUrl,
   providerDate,
 } from '~/features/billing/payment'
+import { isBillingOperation, isUpgradePaymentModeUnknown } from '~/features/billing/stores/billing'
 import { createHttpClient } from '~/lib/http/client'
 import type { BillingOrder, PaymentAction } from '~/features/billing/types'
 
@@ -105,6 +108,7 @@ describe('provider payment actions', () => {
       'https://checkout.stripe.com/',
     )
     expect(paymentUrl(action({ expires_at: '2026-10-14T08:00:00' }))).toBeNull()
+    expect(paymentUrl(action({ expires_at: 'not-a-date' }))).toBeNull()
     expect(paymentUrl(action({ action_type: 'none' }))).toBeNull()
     expect(paymentUrl(action({ url: null }))).toBeNull()
     expect(paymentUrl(null)).toBeNull()
@@ -116,6 +120,157 @@ describe('provider payment actions', () => {
     ]) {
       expect(paymentUrl(action({ url }))).toBeNull()
     }
+  })
+})
+
+describe('order-aware payment links', () => {
+  const pendingUpgrade = (patch: Partial<BillingOrder> = {}) =>
+    ({
+      ...order(),
+      id: '01M4T000000000000000000001',
+      kind: 'upgrade',
+      payment_mode: 'saved_method',
+      payment_action: action(),
+      ...patch,
+    }) as BillingOrder
+
+  it('allows the unfulfilled invoice payment fallback from a saved-method upgrade', () => {
+    const unpaid = pendingUpgrade()
+    expect(orderPaymentUrl(unpaid)).toBe(unpaid.payment_action!.url)
+    expect(canResumeOrderPayment(unpaid)).toBe(true)
+  })
+
+  it.each(['paid', 'failed', 'expired', 'canceled', 'refunded', 'partially_refunded', 'disputed'])(
+    'never reopens a historical URL for %s even when fulfillment remains pending',
+    (payment_status) => {
+      const result = pendingUpgrade({ payment_status })
+      expect(orderPaymentUrl(result)).toBeNull()
+      expect(canResumeOrderPayment(result)).toBe(false)
+      expect(canResumeOrderPayment({ ...result, payment_mode: 'stripe_page' })).toBe(false)
+    },
+  )
+
+  it.each(['fulfilled', 'closed', 'superseded'])(
+    'does not offer another payment when fulfillment is %s',
+    (fulfillment_status) => {
+      const result = pendingUpgrade({ fulfillment_status })
+      expect(orderPaymentUrl(result)).toBeNull()
+      expect(canResumeOrderPayment({ ...result, payment_mode: 'stripe_page' })).toBe(false)
+    },
+  )
+
+  it.each([null, action({ url: null }), action({ expires_at: '2000-01-01T00:00:00Z' })])(
+    'can resume a hosted upgrade by order ID when its old action is unusable',
+    (payment_action) => {
+      const hosted = pendingUpgrade({ payment_mode: 'stripe_page', payment_action })
+      expect(orderPaymentUrl(hosted)).toBeNull()
+      expect(canResumeOrderPayment(hosted)).toBe(true)
+      expect(canResumeOrderPayment({ ...hosted, payment_mode: 'saved_method' })).toBe(false)
+    },
+  )
+})
+
+describe('persisted billing operation boundaries', () => {
+  const id = '01M4T000000000000000000001'
+  const pending = { kind: 'order', key: 'original-key', path: `/billing/orders/${id}/payment-page` }
+
+  it('restores each supported hosted operation without changing its original key', () => {
+    expect(isBillingOperation(pending)).toBe(true)
+    expect(
+      isBillingOperation({
+        ...pending,
+        path: `/billing/orders/${id}/cancel`,
+        kind: 'order-cancel',
+      }),
+    ).toBe(true)
+    for (const payment_mode of ['saved_method', 'stripe_page']) {
+      expect(
+        isBillingOperation({
+          ...pending,
+          path: '/billing/subscription/upgrade',
+          body: { quote_id: id, payment_mode },
+        }),
+      ).toBe(true)
+    }
+    // Legacy requests remain recoverable records even when they cannot safely be resent.
+    expect(
+      isBillingOperation({
+        ...pending,
+        path: '/billing/subscription/upgrade',
+        body: { quote_id: id },
+      }),
+    ).toBe(true)
+  })
+
+  it.each([
+    `/billing/orders/${id}/delete`,
+    `/billing/orders/${id}/payment-page?other=1`,
+    `/billing/orders/${id.toLowerCase()}/payment-page`,
+    '/billing/orders/../subscription/upgrade',
+    '/billing/orders/not-an-order/payment-page',
+    `https://example.test/billing/orders/${id}/payment-page`,
+  ])('rejects unsupported or malformed dynamic paths: %s', (path) => {
+    expect(isBillingOperation({ ...pending, path })).toBe(false)
+  })
+
+  it('rejects request bodies and the wrong action kind on no-body order operations', () => {
+    expect(isBillingOperation({ ...pending, body: {} })).toBe(false)
+    expect(isBillingOperation({ ...pending, kind: 'portal' })).toBe(false)
+    expect(isBillingOperation({ ...pending, path: `/billing/orders/${id}/cancel` })).toBe(false)
+  })
+
+  it.each([undefined, '', 'automatic', 'STRIPE_PAGE'])(
+    'retains an ambiguous upgrade request with mode %s while blocking replay',
+    (paymentMode) => {
+      const body = Object.freeze({
+        quote_id: id,
+        ...(paymentMode === undefined ? {} : { payment_mode: paymentMode }),
+      })
+      const operation = Object.freeze({
+        kind: 'order' as const,
+        key: 'original-unknown-result-key',
+        path: '/billing/subscription/upgrade',
+        body,
+      })
+      const before = JSON.stringify(operation)
+      expect(isBillingOperation(operation)).toBe(true)
+      expect(isUpgradePaymentModeUnknown(operation)).toBe(true)
+      expect(JSON.stringify(operation)).toBe(before)
+    },
+  )
+
+  it.each(['saved_method', 'stripe_page'])(
+    'keeps explicit %s upgrades eligible for original-request recovery',
+    (payment_mode) => {
+      expect(
+        isUpgradePaymentModeUnknown({
+          ...pending,
+          kind: 'order',
+          path: '/billing/subscription/upgrade',
+          body: { quote_id: id, payment_mode },
+        }),
+      ).toBe(false)
+    },
+  )
+
+  it('limits the missing-mode block to upgrade creation, not top-ups or same-order resume', () => {
+    expect(isUpgradePaymentModeUnknown(null)).toBe(false)
+    expect(isUpgradePaymentModeUnknown({ ...pending, kind: 'order' })).toBe(false)
+    expect(
+      isUpgradePaymentModeUnknown({
+        ...pending,
+        kind: 'order',
+        path: '/billing/checkouts/topup',
+        body: { quote_id: id },
+      }),
+    ).toBe(false)
+    expect(
+      isUpgradePaymentModeUnknown({
+        ...pending,
+        kind: 'order',
+        path: '/billing/subscription/upgrade',
+      }),
+    ).toBe(true)
   })
 })
 
@@ -204,6 +359,40 @@ it('top-up previews send the exact USD amount and a quote key without creating c
   const headers = new Headers(options?.headers)
   expect(headers.get('Idempotency-Key')).toBe('topup-preview-key')
   expect(headers.get('Authorization')).toBe('Bearer memory-only-test-access')
+})
+
+it('hosted upgrade resume and cancellation use the same order, independent keys, and no request body', async () => {
+  const fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify({ code: 0, data: { id: '01M4T000000000000000000001' } }), {
+        status: 200,
+      }),
+  ) as unknown as typeof globalThis.fetch
+  const session = {
+    ensureReady: vi.fn().mockResolvedValue(undefined),
+    getToken: () => 'memory-only-test-access',
+    refresh: vi.fn(),
+    clear: vi.fn(),
+  }
+  const api = createBillingApi(
+    createHttpClient({ baseURL: 'http://localhost:6001/api', fetch, session }),
+  )
+  const id = '01M4T000000000000000000001'
+  await api.paymentPage(id, 'resume-original-key')
+  await api.cancelOrder(id, 'cancel-original-key')
+  expect(vi.mocked(fetch).mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
+    `/api/billing/orders/${id}/payment-page`,
+    `/api/billing/orders/${id}/cancel`,
+  ])
+  for (const [index, key] of ['resume-original-key', 'cancel-original-key'].entries()) {
+    const [, options] = vi.mocked(fetch).mock.calls[index]!
+    expect(options?.method).toBe('POST')
+    expect(options?.body).toBeUndefined()
+    expect(new Headers(options?.headers).get('Idempotency-Key')).toBe(key)
+    expect(new Headers(options?.headers).get('Authorization')).toBe(
+      'Bearer memory-only-test-access',
+    )
+  }
 })
 
 const returnContext: PaymentReturnContext = {

@@ -595,16 +595,10 @@
   font-size: 14px;
   line-height: 1.65;
 }
-.pricing-quote-expiry {
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  line-height: 1.7;
-}
 .pricing-feedback-error {
   color: var(--color-danger);
 }
-.pricing-feedback > button,
-.pricing-quote-dismiss {
+.pricing-feedback > button {
   min-height: 44px;
   padding: 8px 10px;
   color: var(--color-text-secondary);
@@ -612,53 +606,14 @@
   line-height: 1.5;
 }
 .pricing-feedback > button:hover:not(:disabled),
-.pricing-quote-dismiss:hover:not(:disabled),
-.pricing-feedback > button:focus-visible,
-.pricing-quote-dismiss:focus-visible {
+.pricing-feedback > button:focus-visible {
   color: var(--color-brand);
 }
-.pricing-feedback > button:disabled,
-.pricing-quote-dismiss:disabled {
+.pricing-feedback > button:disabled {
   color: var(--color-text-muted);
 }
 .pricing-loading {
   min-height: 320px;
-}
-.pricing-quote-confirm {
-  margin-bottom: 22px;
-  padding: 24px;
-  border-radius: 14px;
-  background: var(--color-bg-subtle);
-  line-height: 1.7;
-}
-.pricing-quote-confirm h3 {
-  font-size: 20px;
-  font-weight: 500;
-}
-.pricing-quote-total {
-  margin: 8px 0 12px;
-  font-size: 16px;
-  font-weight: 500;
-}
-.pricing-quote-confirm ul {
-  padding-left: 20px;
-  margin-bottom: 12px;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-.pricing-quote-confirm li + li {
-  margin-top: 5px;
-}
-.pricing-quote-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 18px;
-}
-.pricing-quote-actions .pricing-button {
-  width: auto;
-  min-width: 180px;
 }
 @media (max-width: 760px) {
   .pricing-feedback {
@@ -667,10 +622,236 @@
     gap: 10px;
     padding: 16px 18px;
   }
-  .pricing-quote-confirm {
-    padding: 20px;
+}
+
+/* A focused confirmation above either the full-screen plans dialog or public pricing. */
+.pricing-upgrade-modal {
+  width: min(480px, calc(100vw - 32px));
+  max-width: 480px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 26px;
+  border-radius: 20px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-panel);
+  outline: none;
+}
+.pricing-upgrade-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.pricing-upgrade-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+}
+.pricing-upgrade-close.icon-button {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -10px -10px -10px 0;
+}
+.pricing-upgrade-body {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.pricing-upgrade-summary {
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--color-bg-canvas);
+}
+.pricing-upgrade-plans {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+.pricing-upgrade-eyebrow {
+  margin-bottom: 8px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.pricing-upgrade-plans h3 {
+  margin-bottom: 3px;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.pricing-upgrade-credits {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.pricing-upgrade-arrow {
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+}
+.pricing-upgrade-terms {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-default);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.pricing-upgrade-terms p + p {
+  margin-top: 7px;
+}
+.pricing-upgrade-amounts {
+  margin-top: 22px;
+}
+.pricing-upgrade-amounts > div,
+.pricing-upgrade-payment {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+.pricing-upgrade-amounts dt,
+.pricing-upgrade-payment > span {
+  color: var(--color-text-secondary);
+}
+.pricing-upgrade-amounts dd {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pricing-upgrade-line-item dd {
+  font-weight: 500;
+}
+.pricing-upgrade-total {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-default);
+}
+.pricing-upgrade-total dd {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+}
+.pricing-upgrade-total dd > span {
+  margin-right: 3px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.pricing-upgrade-payment {
+  margin-top: 17px;
+}
+.pricing-upgrade-payment-detail {
+  text-align: right;
+}
+.pricing-upgrade-payment-detail > p {
+  font-weight: 500;
+}
+.pricing-upgrade-payment-detail > .is-unavailable {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+.pricing-upgrade-other {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: -6px;
+  color: var(--color-brand);
+  font-size: 12px;
+}
+.pricing-upgrade-other:hover:not(:disabled),
+.pricing-upgrade-other:focus-visible {
+  color: var(--color-brand-hover);
+}
+.pricing-upgrade-other:disabled {
+  color: var(--color-text-muted);
+}
+.pricing-upgrade-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+.pricing-upgrade-actions > button {
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.pricing-upgrade-cancel {
+  padding: 10px 16px;
+  border: 1px solid var(--color-border-default);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.pricing-upgrade-cancel:hover:not(:disabled),
+.pricing-upgrade-cancel:focus-visible {
+  color: var(--color-text-primary);
+}
+.pricing-upgrade-cancel:disabled {
+  color: var(--color-text-muted);
+}
+.pricing-upgrade-error {
+  margin-top: 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.pricing-upgrade-error .pricing-operation-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--color-brand);
+}
+.pricing-upgrade-error .pricing-operation-retry:hover:not(:disabled),
+.pricing-upgrade-error .pricing-operation-retry:focus-visible {
+  color: var(--color-brand-hover);
+}
+.pricing-upgrade-error .pricing-operation-retry:disabled {
+  color: var(--color-text-muted);
+}
+@media (min-width: 761px) {
+  .pricing-upgrade-modal {
+    width: 520px;
+    max-width: 520px;
   }
-  .pricing-quote-actions .pricing-button {
-    width: 100%;
+  .pricing-upgrade-plans > div {
+    text-align: left;
+  }
+  .pricing-upgrade-plans > div:last-child {
+    justify-self: end;
+  }
+}
+@media (max-width: 480px) {
+  .pricing-upgrade-modal {
+    padding: 18px 20px;
+  }
+  .pricing-upgrade-header h2 {
+    font-size: 18px;
+  }
+  .pricing-upgrade-header {
+    margin-bottom: 12px;
+  }
+  .pricing-upgrade-summary {
+    padding: 14px;
+  }
+  .pricing-upgrade-plans {
+    gap: 10px;
+  }
+  .pricing-upgrade-terms {
+    margin-top: 12px;
+    padding-top: 12px;
+    line-height: 1.65;
+  }
+  .pricing-upgrade-amounts,
+  .pricing-upgrade-actions {
+    margin-top: 12px;
+  }
+  .pricing-upgrade-total {
+    margin-top: 12px;
+    padding-top: 12px;
   }
 }

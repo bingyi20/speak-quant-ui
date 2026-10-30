@@ -4,6 +4,7 @@ import {
   billingAccount,
   billingBalance,
   billingOrder,
+  billingPaymentAction,
   billingQuote,
   stubBilling,
 } from './billing-fixtures'
@@ -29,10 +30,18 @@ async function openPricing(page: Page, english = false) {
   const dialog = page.getByRole('dialog', {
     name: english ? 'Choose the right plan for you' : '选择适合你的套餐',
     exact: true,
+    includeHidden: true,
   })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('article', { name: 'Basic', exact: true })).toBeVisible()
   return dialog
+}
+
+function upgradeDialog(page: Page, english = false) {
+  return page.getByRole('dialog', {
+    name: english ? 'Confirm plan change' : '确认套餐变更',
+    exact: true,
+  })
 }
 
 async function expectCheckoutInCurrentTab(page: Page, purchase: () => Promise<unknown>) {
@@ -234,17 +243,17 @@ test('subscription loading stays inside the selected button without moving the p
   }
 })
 
-test('upgrade preview loads only its selected plan button and restores controls after the quote', async ({
+test('upgrade preview opens a separate confirmation without shifting the plans and Escape restores its trigger', async ({
   page,
 }) => {
-  await stubBilling(page, { plan: 'basic' })
+  const billing = await stubBilling(page, { plan: 'basic' })
   const pending = await delayBillingMutation(page, '/api/billing/subscription/upgrade-preview')
   try {
     await page.goto('/new-task')
     const dialog = await openPricing(page)
-    const basic = dialog.getByRole('article', { name: 'Basic', exact: true }).getByRole('button')
-    const pro = dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button')
-    const max = dialog.getByRole('article', { name: 'Max', exact: true }).getByRole('button')
+    const basic = dialog.locator('.pricing-plan[aria-label="Basic"] button')
+    const pro = dialog.locator('.pricing-plan[aria-label="Pro"] button')
+    const max = dialog.locator('.pricing-plan[aria-label="Max"] button')
     await expect(pro).toBeEnabled()
     await pro.scrollIntoViewIfNeeded()
     await page.evaluate(() => document.fonts.ready)
@@ -263,17 +272,46 @@ test('upgrade preview loads only its selected plan button and restores controls 
     expect(pending.requests).toEqual([{ plan_code: 'pro' }])
 
     pending.release(false)
-    await expect(dialog.locator('.pricing-quote-confirm')).toBeVisible()
+    const upgrade = upgradeDialog(page)
+    await expect(upgrade).toBeVisible()
+    await expect(upgrade.locator('.pricing-upgrade-summary')).toContainText('Basic')
+    await expect(upgrade.locator('.pricing-upgrade-summary')).toContainText('Pro')
+    await expect(upgrade).toContainText('32.50')
+    await expect(upgrade.locator('.pricing-upgrade-payment-detail')).toContainText('Visa*0042')
+    await expect(dialog.locator('.pricing-quote-confirm')).toHaveCount(0)
     await expect(dialog.locator('.pricing-button-spinner')).toHaveCount(0)
+    expect(await planGeometry(dialog)).toEqual(before)
+    expect(
+      billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+    ).toHaveLength(0)
+    await expect(upgrade.locator('.pricing-upgrade-confirm')).toBeInViewport({ ratio: 1 })
+    await page.screenshot({
+      path: test.info().outputPath('upgrade-confirmation-modal.png'),
+      animations: 'disabled',
+    })
+
+    await page.keyboard.press('Escape')
+    await expect(upgrade).toBeHidden()
+    await expect(dialog).toBeVisible()
+    await expect(pro).toBeFocused()
     await expect(pro).toBeEnabled()
     await expect(max).toBeEnabled()
     await expect(basic).toBeDisabled()
+    await pro.click()
+    await expect(upgrade).toBeVisible()
+    await upgrade.locator('.pricing-upgrade-cancel').click()
+    await expect(upgrade).toBeHidden()
+    await expect(dialog).toBeVisible()
+    await expect(pro).toBeFocused()
+    expect(
+      billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+    ).toHaveLength(0)
   } finally {
     pending.release(false)
   }
 })
 
-test('upgrade confirmation keeps its spinner and layout until Stripe replaces the document', async ({
+test('upgrade confirmation keeps one payment action and its layout until Stripe replaces the document', async ({
   page,
 }) => {
   await stubBilling(page, { plan: 'basic' })
@@ -292,23 +330,22 @@ test('upgrade confirmation keeps its spinner and layout until Stripe replaces th
     await page.goto('/new-task')
     const dialog = await openPricing(page)
     await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
-    const quote = dialog.locator('.pricing-quote-confirm')
-    const confirm = quote.locator('.pricing-upgrade-confirm')
+    const upgrade = upgradeDialog(page)
+    const confirm = upgrade.locator('.pricing-upgrade-confirm')
     await expect(confirm).toBeEnabled()
     await confirm.scrollIntoViewIfNeeded()
     const before = await planGeometry(dialog)
-    const quoteHeight = (await quote.boundingBox())!.height
+    const modalHeight = (await upgrade.boundingBox())!.height
     const confirmHeight = (await confirm.boundingBox())!.height
     const confirmLabel = await confirm.innerText()
-    const quoteElement = (await quote.elementHandle())!
+    const modalElement = (await upgrade.elementHandle())!
     const departure = page.waitForEvent('console', {
       predicate: (message) => message.text().startsWith('billing-departure:'),
     })
-    await quoteElement.evaluate((element) => {
+    await modalElement.evaluate((element) => {
       window.addEventListener('beforeunload', () => {
         const confirm = element.querySelector<HTMLButtonElement>('.pricing-upgrade-confirm')!
-        const content = element.closest('.pricing-content')!
-        const grid = content.querySelector('.pricing-plan-grid')!
+        const grid = document.querySelector('.subscription-modal .pricing-plan-grid')!
         const gridRect = grid.getBoundingClientRect()
         const geometry = [...grid.querySelectorAll('article')].map((card) => {
           const cardRect = card.getBoundingClientRect()
@@ -330,7 +367,7 @@ test('upgrade confirmation keeps its spinner and layout until Stripe replaces th
         })
         console.debug(
           `billing-departure:${JSON.stringify({
-            quote: {
+            modal: {
               connected: element.isConnected,
               height: element.getBoundingClientRect().height,
             },
@@ -338,7 +375,7 @@ test('upgrade confirmation keeps its spinner and layout until Stripe replaces th
               busy: confirm.getAttribute('aria-busy'),
               disabled: confirm.disabled,
               spinners: confirm.querySelectorAll('.pricing-button-spinner').length,
-              allSpinners: content.querySelectorAll('.pricing-button-spinner').length,
+              allSpinners: element.querySelectorAll('.pricing-button-spinner').length,
               height: confirm.getBoundingClientRect().height,
             },
             geometry,
@@ -351,8 +388,16 @@ test('upgrade confirmation keeps its spinner and layout until Stripe replaces th
     await expect(confirm).toHaveAttribute('aria-busy', 'true')
     await expect(confirm).toHaveAccessibleName(confirmLabel)
     await expect(confirm.locator('.pricing-button-spinner')).toHaveCount(1)
+    await expect(upgrade.locator('.pricing-upgrade-cancel')).toBeDisabled()
+    await expect(upgrade.locator('.pricing-upgrade-other')).toBeDisabled()
     await expect(dialog.locator('.pricing-plan .pricing-button-spinner')).toHaveCount(0)
     await expect(dialog.locator('.pricing-loading')).toHaveCount(0)
+    await confirm.evaluate((button) => (button as HTMLButtonElement).click())
+    await confirm.press('Enter')
+    await page.keyboard.press('Escape')
+    await expect(upgrade).toBeVisible()
+    expect(pending.requests).toHaveLength(1)
+    expect(pending.requests[0]).toMatchObject({ payment_mode: 'saved_method' })
     expect(await planGeometry(dialog)).toEqual(before)
 
     pending.release(false)
@@ -360,7 +405,7 @@ test('upgrade confirmation keeps its spinner and layout until Stripe replaces th
     // Chromium suspends the old document during cross-site navigation. Inspect its final
     // beforeunload snapshot while the Stripe document response is still held.
     const departing = JSON.parse((await departure).text().slice('billing-departure:'.length))
-    expect(departing.quote).toEqual({ connected: true, height: quoteHeight })
+    expect(departing.modal).toEqual({ connected: true, height: modalHeight })
     expect(departing.confirm).toEqual({
       busy: 'true',
       disabled: true,
@@ -964,7 +1009,7 @@ test('public top-up payment reloads its original URL with the default plans tab'
   await expectCleanPricing(page)
 })
 
-test('upgrade confirms the full price and credit expiration before direct fulfillment without opening a tab', async ({
+test('upgrade confirmation uses the frozen quote and closes after direct fulfillment without opening a tab', async ({
   page,
 }) => {
   const billing = await stubBilling(page, { plan: 'basic' })
@@ -975,16 +1020,14 @@ test('upgrade confirms the full price and credit expiration before direct fulfil
     dialog.getByRole('article', { name: 'Basic', exact: true }).getByRole('button'),
   ).toBeDisabled()
   await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
-  const quote = dialog.locator('.pricing-quote-confirm')
-  await expect(quote).toBeVisible()
-  await expect(quote).toContainText('32.5')
-  await expect(quote).toContainText(/月度.*(?:失效|作废)/)
-  await expect(quote).toContainText(/(?:注册|赠送).*加购.*保留/)
-  await expect(quote).toContainText(/周期/)
+  const upgrade = upgradeDialog(page)
+  await expect(upgrade).toBeVisible()
+  await expect(upgrade).toContainText('32.50')
   expect(
     billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
   ).toHaveLength(0)
-  await quote.locator('.pricing-upgrade-confirm').click()
+  await upgrade.locator('.pricing-upgrade-confirm').click()
+  await expect(upgrade).toBeHidden()
   await expect(
     dialog
       .getByRole('article', { name: 'Pro', exact: true })
@@ -999,7 +1042,449 @@ test('upgrade confirms the full price and credit expiration before direct fulfil
   const payment = billing.requests.find(
     (item) => item.path === '/api/billing/subscription/upgrade',
   )!
-  expect(payment.body).toEqual({ quote_id: billing.quote!.quote_id })
+  expect(payment.body).toEqual({ quote_id: billing.quote!.quote_id, payment_mode: 'saved_method' })
+})
+
+test('upgrade preview recovery after reload reuses its request and opens confirmation without payment', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  billing.loseResponseNext.add('/api/billing/subscription/upgrade-preview')
+  await page.goto('/new-task')
+  let dialog = await openPricing(page)
+  await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+  await expect(dialog.locator('.pricing-operation-retry')).toBeVisible()
+  await expect(upgradeDialog(page)).toBeHidden()
+  await page.reload()
+  dialog = await openPricing(page)
+  await dialog.locator('.pricing-operation-retry').click()
+  const upgrade = upgradeDialog(page)
+  await expect(upgrade).toBeVisible()
+  await expect(upgrade.locator('.pricing-upgrade-summary')).toContainText('Pro')
+  await expect(upgrade.locator('.pricing-upgrade-confirm')).toBeEnabled()
+  const attempts = billing.requests.filter(
+    (item) => item.path === '/api/billing/subscription/upgrade-preview',
+  )
+  expect(attempts).toHaveLength(2)
+  expect(attempts[1]!.key).toBe(attempts[0]!.key)
+  expect(attempts[1]!.body).toEqual(attempts[0]!.body)
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(0)
+  await upgrade.locator('.pricing-upgrade-cancel').click()
+  await expect(upgrade).toBeHidden()
+  await expect(
+    dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button'),
+  ).toBeFocused()
+})
+
+test('fulfilled upgrade closes confirmation even when the subsequent entitlement refresh fails', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  billing.immediateFulfillment = true
+  await page.route('**/api/billing/subscription/upgrade', async (route) => {
+    billing.failNext.set('/api/billing/account', 3)
+    billing.failNext.set('/api/credits/balance', 3)
+    await route.fallback()
+  })
+  await page.goto('/new-task')
+  const dialog = await openPricing(page)
+  await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+  const upgrade = upgradeDialog(page)
+  await upgrade.locator('.pricing-upgrade-confirm').click()
+  await expect(upgrade).toBeHidden()
+  await expect(page.locator('.pricing-upgrade-confirm')).toHaveCount(0)
+  await expect(dialog.locator('.pricing-feedback-error')).toBeVisible()
+  expect(billing.order).toMatchObject({ payment_status: 'paid', fulfillment_status: 'fulfilled' })
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(1)
+  await expect(page).toHaveURL(`${origin}/new-task`)
+})
+
+test('upgrade other payment methods submits only stripe_page and navigates in the current tab', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  // This fixture would fulfill a saved-card charge immediately, so the alternate path must not use it.
+  billing.immediateFulfillment = true
+  const pending = await delayBillingMutation(page, '/api/billing/subscription/upgrade')
+  try {
+    await page.goto('/new-task')
+    const dialog = await openPricing(page)
+    await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+    const upgrade = upgradeDialog(page)
+    await expect(upgrade).toBeVisible()
+    const other = upgrade.locator('.pricing-upgrade-other')
+    const confirm = upgrade.locator('.pricing-upgrade-confirm')
+    const pages = page.context().pages().length
+    await other.click()
+    await expect.poll(() => pending.requests.length).toBe(1)
+    expect(pending.requests).toEqual([
+      { quote_id: billing.quote!.quote_id, payment_mode: 'stripe_page' },
+    ])
+    await expect(other).toHaveAttribute('aria-busy', 'true')
+    await expect(other).toBeDisabled()
+    await expect(confirm).toBeDisabled()
+    await expect(upgrade.locator('.pricing-upgrade-cancel')).toBeDisabled()
+    await confirm.evaluate((button) => (button as HTMLButtonElement).click())
+    await other.evaluate((button) => (button as HTMLButtonElement).click())
+    expect(pending.requests).toHaveLength(1)
+    pending.release(false)
+    await expect(page).toHaveURL(checkoutUrl)
+    expect(page.context().pages()).toHaveLength(pages)
+    expect(billing.order).toMatchObject({
+      payment_mode: 'stripe_page',
+      payment_status: 'requires_action',
+      fulfillment_status: 'pending',
+    })
+    expect(
+      billing.requests.filter((item) => item.path === '/api/billing/portal-sessions'),
+    ).toHaveLength(0)
+  } finally {
+    pending.release(false)
+  }
+})
+
+for (const mode of ['saved_method', 'stripe_page'] as const) {
+  test(`upgrade ${mode} keeps uncertain payment recovery in the dialog and retries the original mode and key`, async ({
+    page,
+  }) => {
+    const billing = await stubBilling(page, { plan: 'basic' })
+    billing.loseResponseNext.add('/api/billing/subscription/upgrade')
+    await page.goto('/new-task')
+    const dialog = await openPricing(page)
+    await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+    const upgrade = upgradeDialog(page)
+    await upgrade
+      .locator(mode === 'saved_method' ? '.pricing-upgrade-confirm' : '.pricing-upgrade-other')
+      .click()
+    await expect(upgrade.locator('.pricing-feedback-error')).toBeVisible()
+    const retry = upgrade.locator('.pricing-operation-retry')
+    await expect(retry).toBeVisible()
+    await expect(upgrade.locator('.pricing-upgrade-confirm')).toBeDisabled()
+    await expect(upgrade.locator('.pricing-upgrade-other')).toBeDisabled()
+    const acceptedId = billing.order!.id
+    await expectCheckoutInCurrentTab(page, () => retry.click())
+    expect(billing.order!.id).toBe(acceptedId)
+    const attempts = billing.requests.filter(
+      (item) => item.path === '/api/billing/subscription/upgrade',
+    )
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0]!.body).toEqual({ quote_id: billing.quote!.quote_id, payment_mode: mode })
+    expect(attempts[1]!.key).toBe(attempts[0]!.key)
+    expect(attempts[1]!.body).toEqual(attempts[0]!.body)
+    expect(
+      billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade-preview'),
+    ).toHaveLength(1)
+  })
+}
+
+for (const paymentMode of [undefined, 'unrecognized_mode']) {
+  test(`upgrade persisted request with ${paymentMode === undefined ? 'missing' : 'invalid'} payment mode stays blocked through reload without changing its request`, async ({
+    page,
+  }) => {
+    const billing = await stubBilling(page, { plan: 'pro' })
+    const storageKey = `speakquant-billing:${testUser.id}`
+    const body: Record<string, string> = { quote_id: '01M4T000000000000000000002' }
+    if (paymentMode !== undefined) body.payment_mode = paymentMode
+    const persisted = {
+      operation: {
+        kind: 'order',
+        path: '/billing/subscription/upgrade',
+        body,
+        key: 'unknown-upgrade-payment-mode-original-key',
+      },
+      orderId: null,
+    }
+    await page.addInitScript(
+      ({ key, saved }) => {
+        // Seed once so a reload cannot hide an accidental deletion or rewrite of the request.
+        const marker = 'billing-unknown-payment-mode-seeded'
+        if (sessionStorage.getItem(marker)) return
+        sessionStorage.setItem(marker, 'true')
+        localStorage.setItem(key, JSON.stringify(saved))
+      },
+      { key: storageKey, saved: persisted },
+    )
+    await page.goto('/new-task')
+    for (const reloaded of [false, true]) {
+      if (reloaded) await page.reload()
+      const dialog = await openPricing(page)
+      await expect(dialog.locator('.pricing-feedback-error')).toHaveText(
+        '无法确认付款方式，请联系支持核对原订单。',
+      )
+      await expect(dialog.locator('.pricing-operation-retry')).toHaveCount(0)
+      const upgrade = dialog.getByRole('article', { name: 'Max', exact: true }).getByRole('button')
+      await expect(upgrade).toBeDisabled()
+      await upgrade.evaluate((button) => (button as HTMLButtonElement).click())
+      await expect(upgradeDialog(page)).toBeHidden()
+      await expect(page.locator('.pricing-upgrade-other')).toHaveCount(0)
+      expect(
+        billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+      ).toHaveLength(0)
+      expect(
+        billing.requests.filter(
+          (item) => item.path === '/api/billing/subscription/upgrade-preview',
+        ),
+      ).toHaveLength(0)
+      expect(
+        await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? 'null'), storageKey),
+      ).toEqual(persisted)
+    }
+  })
+}
+
+for (const previousLink of ['expired', 'missing'] as const) {
+  test(`upgrade stripe_page resumes its same order after returning when its payment link is ${previousLink}`, async ({
+    page,
+  }) => {
+    const billing = await stubBilling(page, { plan: 'basic' })
+    await page.goto('/new-task')
+    const dialog = await openPricing(page)
+    await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+    await expectCheckoutInCurrentTab(page, () =>
+      upgradeDialog(page).locator('.pricing-upgrade-other').click(),
+    )
+    const orderId = billing.order!.id
+    billing.order!.payment_action =
+      previousLink === 'missing'
+        ? null
+        : {
+            ...billingPaymentAction(),
+            url: 'https://checkout.stripe.com/c/pay/expired_upgrade',
+            expires_at: '2000-01-01T00:00:00Z',
+          }
+    billing.quote!.expires_at = '2000-01-01T00:00:00Z'
+    await page.getByRole('link', { name: 'Back to pricing' }).click()
+    await expect(page).toHaveURL(`${origin}/pricing`)
+    const continuePayment = page
+      .getByRole('article', { name: 'Pro', exact: true })
+      .getByRole('button', { name: 'Continue payment', exact: true })
+    await expect(continuePayment).toBeEnabled()
+    await expectCheckoutInCurrentTab(page, () => continuePayment.click())
+    expect(billing.order!.id).toBe(orderId)
+    const resume = billing.requests.filter(
+      (item) => item.path === `/api/billing/orders/${orderId}/payment-page`,
+    )
+    expect(resume).toHaveLength(1)
+    expect(resume[0]!.method).toBe('POST')
+    expect(resume[0]!.body).toBeNull()
+    expect(resume[0]!.key).toBeTruthy()
+    const create = billing.requests.filter(
+      (item) => item.path === '/api/billing/subscription/upgrade',
+    )
+    expect(create).toHaveLength(1)
+    expect(resume[0]!.key).not.toBe(create[0]!.key)
+    expect(
+      billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade-preview'),
+    ).toHaveLength(1)
+  })
+}
+
+test('upgrade payment-page recovery after reload reuses the same order and continuation key', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  await page.goto('/new-task')
+  const dialog = await openPricing(page)
+  await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+  await expectCheckoutInCurrentTab(page, () =>
+    upgradeDialog(page).locator('.pricing-upgrade-other').click(),
+  )
+  const orderId = billing.order!.id
+  const paymentPage = `/api/billing/orders/${orderId}/payment-page`
+  billing.order!.payment_action = null
+  billing.loseResponseNext.add(paymentPage)
+  await page.getByRole('link', { name: 'Back to pricing' }).click()
+  await page.getByRole('button', { name: 'Continue payment', exact: true }).click()
+  await expect(page.locator('.pricing-operation-retry')).toBeVisible()
+  await page.reload()
+  await expect(page.locator('.pricing-operation-retry')).toBeVisible()
+  await expectCheckoutInCurrentTab(page, () => page.locator('.pricing-operation-retry').click())
+  expect(billing.order!.id).toBe(orderId)
+  const attempts = billing.requests.filter((item) => item.path === paymentPage)
+  expect(attempts).toHaveLength(2)
+  expect(attempts[0]!.body).toBeNull()
+  expect(attempts[1]!.body).toBeNull()
+  expect(attempts[1]!.key).toBe(attempts[0]!.key)
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(1)
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade-preview'),
+  ).toHaveLength(1)
+})
+
+test('upgrade already paid with pending fulfillment never navigates to a stale payment URL', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  billing.orderOverrides = { payment_status: 'paid', fulfillment_status: 'pending' }
+  await page.goto('/new-task')
+  const dialog = await openPricing(page)
+  await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+  const upgrade = upgradeDialog(page)
+  await upgrade.locator('.pricing-upgrade-confirm').click()
+  await expect(upgrade.locator('.pricing-feedback-error')).toBeVisible()
+  await expect(upgrade.locator('.pricing-upgrade-confirm')).toHaveAttribute('aria-busy', 'false')
+  await expect(page).toHaveURL(`${origin}/new-task`)
+  expect(billing.order).toMatchObject({ payment_status: 'paid', fulfillment_status: 'pending' })
+  expect(billing.order!.payment_action?.url).toBe(checkoutUrl)
+  await expect(upgrade.locator('.pricing-upgrade-confirm')).toBeDisabled()
+  await expect(upgrade.locator('.pricing-upgrade-other')).toBeDisabled()
+  await upgrade
+    .locator('.pricing-upgrade-confirm')
+    .evaluate((button) => (button as HTMLButtonElement).click())
+  await upgrade
+    .locator('.pricing-upgrade-other')
+    .evaluate((button) => (button as HTMLButtonElement).click())
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(1)
+})
+
+test.describe('upgrade preview contract', () => {
+  test.use({ timezoneId: 'Asia/Shanghai' })
+
+  test('upgrade displays the quoted current plan, card leading zeros and estimated new billing date', async ({
+    page,
+  }) => {
+    const billing = await stubBilling(page, { plan: 'basic' })
+    billing.upgradeQuoteOverrides = {
+      current_plan: {
+        code: 'basic',
+        version: 'paid-quote-snapshot',
+        price_usd: '15.25',
+        monthly_credits: '9234',
+      },
+    }
+    await page.goto('/new-task')
+    const dialog = await openPricing(page)
+    await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+    const upgrade = upgradeDialog(page)
+    await expect(upgrade.locator('.pricing-upgrade-summary')).toContainText('9,234')
+    await expect(upgrade.locator('.pricing-upgrade-summary')).not.toContainText('8,400')
+    await expect(upgrade.locator('.pricing-upgrade-payment-detail')).toContainText('Visa*0042')
+    await expect(upgrade.locator('.pricing-upgrade-period')).toContainText('预计下次扣款：')
+    // UTC December 1 at 20:30 is December 2 in Shanghai; the old account period ends in 2099.
+    await expect(upgrade.locator('.pricing-upgrade-period')).toContainText(/2026.*12.*2/)
+    await expect(upgrade.locator('.pricing-upgrade-period')).not.toContainText('2099')
+    expect(
+      billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+    ).toHaveLength(0)
+  })
+})
+
+test('upgrade shows an explicit null-card state without inventing a card summary', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  billing.upgradeQuoteOverrides = { payment_method: null }
+  await page.goto('/new-task')
+  const dialog = await openPricing(page)
+  await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+  const upgrade = upgradeDialog(page)
+  await expect(upgrade.locator('.pricing-upgrade-payment-detail')).toContainText(
+    '暂无可显示的默认银行卡',
+  )
+  await expect(upgrade.locator('.pricing-upgrade-payment-detail')).not.toContainText('0042')
+  await expect(upgrade.locator('.pricing-upgrade-payment-detail')).not.toContainText(/visa/i)
+  await expect(upgrade.locator('.pricing-upgrade-other')).toBeEnabled()
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(0)
+})
+
+test('expired upgrade quotes require a new quote and another explicit confirmation before payment', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  await page.clock.install()
+  await page.goto('/new-task')
+  const dialog = await openPricing(page)
+  await dialog.getByRole('article', { name: 'Pro', exact: true }).getByRole('button').click()
+  const upgrade = upgradeDialog(page)
+  await expect(upgrade.locator('.pricing-upgrade-amounts')).toContainText('32.50')
+  const oldQuoteId = billing.quote!.quote_id
+  await page.clock.fastForward(16 * 60_000)
+  const confirm = upgrade.locator('.pricing-upgrade-confirm')
+  if (await confirm.isEnabled()) await confirm.click()
+  await expect(upgrade.locator('.pricing-upgrade-refresh-quote')).toBeVisible()
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(0)
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade-preview'),
+  ).toHaveLength(1)
+
+  billing.upgradeQuoteOverrides = {
+    amount_usd: '45.75',
+    expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+  }
+  await upgrade.locator('.pricing-upgrade-refresh-quote').click()
+  await expect(upgrade.locator('.pricing-upgrade-amounts')).toContainText('45.75')
+  await expect(confirm).toBeEnabled()
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(0)
+  const previews = billing.requests.filter(
+    (item) => item.path === '/api/billing/subscription/upgrade-preview',
+  )
+  expect(previews).toHaveLength(2)
+  expect(previews[1]!.key).not.toBe(previews[0]!.key)
+  expect(billing.quote!.quote_id).not.toBe(oldQuoteId)
+  await expectCheckoutInCurrentTab(page, () => confirm.click())
+  const payments = billing.requests.filter(
+    (item) => item.path === '/api/billing/subscription/upgrade',
+  )
+  expect(payments).toHaveLength(1)
+  expect(payments[0]!.body).toEqual({
+    quote_id: billing.quote!.quote_id,
+    payment_mode: 'saved_method',
+  })
+})
+
+test('English public pricing uses the same upgrade dialog and returns focus after cancellation', async ({
+  page,
+}) => {
+  const billing = await stubBilling(page, { plan: 'basic' })
+  // Enter through the hydrated public navigation so browser mocks cover the catalog request.
+  await page.goto('/contact')
+  await expect(page.getByRole('button', { name: 'Language', exact: true })).toBeEnabled()
+  await page.getByRole('banner').getByRole('link', { name: 'Pricing', exact: true }).click()
+  await expect(page).toHaveURL(`${origin}/pricing`)
+  const pro = page.getByRole('article', { name: 'Pro', exact: true }).getByRole('button')
+  await expect(pro).toBeEnabled()
+  await pro.click()
+  const upgrade = upgradeDialog(page, true)
+  await expect(upgrade).toBeVisible()
+  await expect(upgrade.locator('.pricing-upgrade-summary')).toContainText('Basic')
+  await expect(upgrade.locator('.pricing-upgrade-summary')).toContainText('Pro')
+  await expect(upgrade.locator('.pricing-upgrade-confirm')).toHaveAccessibleName('Pay now')
+  await expect(upgrade.locator('.pricing-upgrade-cancel')).toHaveAccessibleName('Cancel')
+  await expect(upgrade.locator('.pricing-upgrade-payment-detail')).toContainText('Visa*0042')
+  await expect(upgrade.locator('.pricing-upgrade-terms')).toContainText(
+    'Unused monthly credits expire. Signup and top-up credits stay.',
+  )
+  await expect(upgrade.locator('.pricing-upgrade-period')).toContainText('Next billing (est.):')
+  await expect(upgrade.locator('.pricing-upgrade-other')).toHaveAccessibleName(
+    'Other payment methods',
+  )
+  expect(await upgrade.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await expect(upgrade.locator('.pricing-upgrade-confirm')).toBeInViewport({ ratio: 1 })
+  await page.screenshot({
+    path: test.info().outputPath('upgrade-confirmation-public-english.png'),
+    animations: 'disabled',
+  })
+  await upgrade.locator('.pricing-upgrade-cancel').click()
+  await expect(upgrade).toBeHidden()
+  await expect(pro).toBeFocused()
+  expect(
+    billing.requests.filter((item) => item.path === '/api/billing/subscription/upgrade'),
+  ).toHaveLength(0)
+  await expect(page).toHaveURL(`${origin}/pricing`)
 })
 
 test('failed checkout retries the same request and idempotency key after reload', async ({

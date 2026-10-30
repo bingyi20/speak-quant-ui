@@ -1,4 +1,5 @@
 export type PlanCode = 'basic' | 'pro' | 'max'
+export type UpgradePaymentMode = 'saved_method' | 'stripe_page'
 export interface Plan {
   code: PlanCode
   version: string
@@ -125,6 +126,7 @@ export interface PaymentAction {
 export interface BillingOrder {
   id: string
   kind: string
+  payment_mode?: UpgradePaymentMode | null
   plan_code: PlanCode | null
   plan_version: string | null
   amount_usd: string
@@ -154,6 +156,19 @@ export interface BillingQuote {
   monthly_credits?: string
   rank?: number
   old_plan_code?: PlanCode
+  current_plan?: Pick<Plan, 'code' | 'version' | 'price_usd' | 'monthly_credits'>
+  payment_method?: {
+    type: 'card'
+    brand: string
+    last4: string
+    exp_month: number | null
+    exp_year: number | null
+  } | null
+  billing_period_preview?: {
+    starts_at: string
+    ends_at: string
+    is_estimate: boolean
+  }
   old_monthly_credits_will_expire?: boolean
   reset_billing_cycle?: boolean
   signup_and_topup_preserved?: boolean

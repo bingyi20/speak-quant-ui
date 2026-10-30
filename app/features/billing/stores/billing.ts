@@ -5,7 +5,13 @@ import { safeReturnPath } from '~/lib/storage/safe-storage'
 import { savePaymentReturn } from '../return-context'
 import { ApiError } from '~/lib/http/error'
 import { createBillingApi } from '../api'
-import { isOrderTerminal, paymentUrl, providerDate } from '../payment'
+import {
+  canResumeOrderPayment,
+  isOrderTerminal,
+  orderPaymentUrl,
+  paymentUrl,
+  providerDate,
+} from '../payment'
 import { validateTopUpAmount } from '../catalog'
 import type {
   BillingAccount,
@@ -17,14 +23,24 @@ import type {
   PlanCatalog,
   PlanCode,
   Subscription,
+  UpgradePaymentMode,
 } from '../types'
 
-type OperationKind = 'order' | 'quote' | 'subscription' | 'portal'
+type OperationKind = 'order' | 'order-cancel' | 'quote' | 'subscription' | 'portal'
 interface BillingOperation {
   path: string
   body?: Record<string, string>
   key: string
   kind: OperationKind
+}
+function isUpgradePaymentMode(value: unknown): value is UpgradePaymentMode {
+  return value === 'saved_method' || value === 'stripe_page'
+}
+export function isUpgradePaymentModeUnknown(operation: BillingOperation | null) {
+  return (
+    operation?.path === '/billing/subscription/upgrade' &&
+    !isUpgradePaymentMode(operation.body?.payment_mode)
+  )
 }
 const allowedOperations: Record<string, OperationKind> = {
   '/billing/checkouts/subscription': 'order',
@@ -36,17 +52,27 @@ const allowedOperations: Record<string, OperationKind> = {
   '/billing/subscription/resume': 'subscription',
   '/billing/portal-sessions': 'portal',
 }
-function isOperation(value: unknown): value is BillingOperation {
+const orderOperationPath = /^\/billing\/orders\/([0-9A-Z]{26})\/(payment-page|cancel)$/
+export function isBillingOperation(value: unknown): value is BillingOperation {
   if (!value || typeof value !== 'object') return false
   const op = value as BillingOperation
+  const orderAction = typeof op.path === 'string' ? orderOperationPath.exec(op.path) : null
+  const allowedKind = orderAction
+    ? orderAction[2] === 'cancel'
+      ? 'order-cancel'
+      : 'order'
+    : allowedOperations[op.path]
   return (
-    allowedOperations[op.path] === op.kind &&
+    allowedKind !== undefined &&
+    allowedKind === op.kind &&
     typeof op.key === 'string' &&
     /^[\x21-\x7e]{1,255}$/.test(op.key) &&
-    (op.body === undefined ||
-      (typeof op.body === 'object' &&
-        op.body !== null &&
-        Object.values(op.body).every((v) => typeof v === 'string')))
+    (orderAction
+      ? op.body === undefined
+      : op.body === undefined ||
+        (typeof op.body === 'object' &&
+          op.body !== null &&
+          Object.values(op.body).every((v) => typeof v === 'string')))
   )
 }
 
@@ -73,6 +99,7 @@ export const useBillingStore = defineStore('billing', () => {
   const busy = ref(false)
   const operation = ref<BillingOperation | null>(null)
   const retryAvailable = computed(() => operation.value !== null && !busy.value)
+  const retryBlocked = computed(() => isUpgradePaymentModeUnknown(operation.value))
   let owner: string | null = null
   let generation = 0
   let controller = new AbortController()
@@ -284,7 +311,7 @@ export const useBillingStore = defineStore('billing', () => {
       try {
         const raw = localStorage.getItem(storageKey()!)
         const saved = raw ? JSON.parse(raw) : null
-        if (isOperation(saved?.operation)) operation.value = saved.operation
+        if (isBillingOperation(saved?.operation)) operation.value = saved.operation
         if (typeof saved?.orderId === 'string') savedOrderId = saved.orderId
       } catch {
         /* Invalid browser persistence is ignored. */
@@ -298,14 +325,15 @@ export const useBillingStore = defineStore('billing', () => {
       if (candidate) {
         await refreshOrder(candidate)
       }
-      if (operation.value) actionError.value = t('reconciliation')
+      if (operation.value)
+        actionError.value = t(retryBlocked.value ? 'paymentModeUnknown' : 'reconciliation')
     })().finally(() => {
       if (scope === generation) initializePromise = null
     })
     return initializePromise
   }
   function redirect(action: PaymentAction | null, order?: BillingOrder) {
-    const url = paymentUrl(action)
+    const url = order ? orderPaymentUrl(order) : paymentUrl(action)
     if (!url || !import.meta.client) return false
     if (order && owner) {
       try {
@@ -331,34 +359,45 @@ export const useBillingStore = defineStore('billing', () => {
     if (!op || busy.value || !ensureOwner()) {
       return
     }
+    if (isUpgradePaymentModeUnknown(op)) {
+      actionError.value = t('paymentModeUnknown')
+      // Keep the original request and key for reconciliation; never guess a legacy mode.
+      persist()
+      return
+    }
     const scope = generation
     busy.value = true
     actionError.value = null
     try {
       // Billing keys have no client-side 24-hour expiry. Persist the exact request before transport.
-      const result = await app.$http.requestJson<
-        | BillingOrder
-        | BillingQuote
-        | { subscription: Subscription }
-        | { payment_action: PaymentAction }
-      >(op.path, {
-        method: 'POST',
-        body: op.body,
-        idempotencyKey: op.key,
-        signal: controller.signal,
-      })
+      const orderAction = orderOperationPath.exec(op.path)
+      const result = orderAction
+        ? await (orderAction[2] === 'cancel'
+            ? api.cancelOrder(orderAction[1]!, op.key, controller.signal)
+            : api.paymentPage(orderAction[1]!, op.key, controller.signal))
+        : await app.$http.requestJson<
+            | BillingOrder
+            | BillingQuote
+            | { subscription: Subscription }
+            | { payment_action: PaymentAction }
+          >(op.path, {
+            method: 'POST',
+            body: op.body,
+            idempotencyKey: op.key,
+            signal: controller.signal,
+          })
       if (scope !== generation) {
         return
       }
       operation.value = null
-      if (op.kind === 'order') {
+      if (op.kind === 'order' || op.kind === 'order-cancel') {
         quote.value = null
         const order = result as BillingOrder
         await acceptOrder(order)
         if (scope !== generation) {
           return
         }
-        if (!isOrderTerminal(order) && redirect(order.payment_action, order)) return true
+        if (op.kind === 'order' && redirect(order.payment_action, order)) return true
         await refreshEntitlements()
       } else if (op.kind === 'quote') {
         quote.value = result as BillingQuote
@@ -375,6 +414,7 @@ export const useBillingStore = defineStore('billing', () => {
         !(e instanceof ApiError) ||
         ['network', 'timeout'].includes(e.kind) ||
         e.status === 503 ||
+        e.code === 40960 ||
         e.key === 'BILLING_RECONCILIATION_PENDING'
       if (!uncertain) operation.value = null
       if (e instanceof ApiError && e.key === 'QUOTE_STALE') clearQuote()
@@ -399,16 +439,19 @@ export const useBillingStore = defineStore('billing', () => {
       await refreshEntitlements()
       if (!account.value) return
     }
+    if (operation.value) {
+      actionError.value = t('inProgress')
+      return
+    }
     if (
       account.value.subscription &&
       activeOrder.value?.kind === 'upgrade' &&
       activeOrder.value.plan_code === code &&
-      !isOrderTerminal(activeOrder.value) &&
-      paymentUrl(activeOrder.value.payment_action)
+      canResumeOrderPayment(activeOrder.value)
     ) {
       return resumePayment()
     }
-    if (operation.value || (account.value.subscription && account.value.pending_order_id)) {
+    if (account.value.subscription && account.value.pending_order_id) {
       actionError.value = t('inProgress')
       return
     }
@@ -480,8 +523,16 @@ export const useBillingStore = defineStore('billing', () => {
       }
     }
   }
-  async function payQuote(value: BillingQuote) {
+  async function payQuote(value: BillingQuote, mode?: UpgradePaymentMode) {
     if (!(await requireAuth()) || busy.value || operation.value) return
+    const body: Record<string, string> = { quote_id: value.quote_id }
+    if (value.kind === 'upgrade') {
+      if (!isUpgradePaymentMode(mode)) {
+        actionError.value = t('paymentModeUnknown')
+        return
+      }
+      body.payment_mode = mode
+    }
     if (
       !Number.isFinite(providerDate(value.expires_at)) ||
       providerDate(value.expires_at) <= Date.now() ||
@@ -494,7 +545,7 @@ export const useBillingStore = defineStore('billing', () => {
     startOperation(
       value.kind === 'topup' ? '/billing/checkouts/topup' : '/billing/subscription/upgrade',
       'order',
-      { quote_id: value.quote_id },
+      body,
     )
     return execute()
   }
@@ -504,8 +555,24 @@ export const useBillingStore = defineStore('billing', () => {
   }
   async function resumePayment() {
     if (!ensureOwner() || !activeOrder.value || busy.value) return
+    const scope = generation
+    if (operation.value) {
+      actionError.value = t('inProgress')
+      return
+    }
     actionError.value = null
+    if (activeOrder.value.kind === 'upgrade' && activeOrder.value.payment_mode === 'stripe_page') {
+      if (!canResumeOrderPayment(activeOrder.value)) return
+      const path = `/billing/orders/${activeOrder.value.id}/payment-page`
+      if (!orderOperationPath.test(path)) {
+        actionError.value = t('paymentMismatch')
+        return
+      }
+      startOperation(path, 'order')
+      return execute()
+    }
     await refreshOrder()
+    if (scope !== generation) return
     if (orderError.value) {
       return
     }
@@ -513,6 +580,26 @@ export const useBillingStore = defineStore('billing', () => {
       return
     }
     return redirect(activeOrder.value.payment_action, activeOrder.value)
+  }
+  async function cancelUpgradeOrder() {
+    if (!ensureOwner() || !activeOrder.value || busy.value) return
+    if (operation.value) {
+      actionError.value = t('inProgress')
+      return
+    }
+    const order = activeOrder.value
+    if (order.kind !== 'upgrade' || order.payment_mode !== 'stripe_page') return
+    if (isOrderTerminal(order) || order.payment_status === 'paid') {
+      await refreshOrder(order.id)
+      return
+    }
+    const path = `/billing/orders/${order.id}/cancel`
+    if (!orderOperationPath.test(path)) {
+      actionError.value = t('paymentMismatch')
+      return
+    }
+    startOperation(path, 'order-cancel')
+    return execute()
   }
   async function openPortal() {
     if (!(await requireAuth()) || busy.value || operation.value) return
@@ -539,6 +626,7 @@ export const useBillingStore = defineStore('billing', () => {
     error,
     busy,
     retryAvailable,
+    retryBlocked,
     loadCatalog,
     refreshEntitlements,
     refreshOrders,
@@ -550,6 +638,7 @@ export const useBillingStore = defineStore('billing', () => {
     clearQuote,
     retryOperation,
     resumePayment,
+    cancelUpgradeOrder,
     openPortal,
     cancelRenewal: () => changeRenewal(false),
     resumeRenewal: () => changeRenewal(true),

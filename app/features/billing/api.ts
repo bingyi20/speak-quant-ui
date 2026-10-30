@@ -24,6 +24,18 @@ export function createBillingApi(http: HttpClient) {
       http.requestJson<CreditCharge>(`/credits/charges/${encodeURIComponent(id)}`, { signal }),
     order: (id: string, signal?: AbortSignal) =>
       http.requestJson<BillingOrder>(`/billing/orders/${encodeURIComponent(id)}`, { signal }),
+    paymentPage: (id: string, key: string, signal?: AbortSignal) =>
+      http.requestJson<BillingOrder>(`/billing/orders/${encodeURIComponent(id)}/payment-page`, {
+        method: 'POST',
+        idempotencyKey: key,
+        signal,
+      }),
+    cancelOrder: (id: string, key: string, signal?: AbortSignal) =>
+      http.requestJson<BillingOrder>(`/billing/orders/${encodeURIComponent(id)}/cancel`, {
+        method: 'POST',
+        idempotencyKey: key,
+        signal,
+      }),
     orders: (signal?: AbortSignal) =>
       http.requestJson<OrderPage>('/billing/orders', { query: { page: 1, size: 20 }, signal }),
     topUpQuote: (amount: string, key: string, signal?: AbortSignal) =>

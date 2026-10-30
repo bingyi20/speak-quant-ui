@@ -23,6 +23,7 @@ const billing = useBillingStore()
 const { active, run } = useBillingAction<'topup' | 'retry'>()
 const hydrated = ref(import.meta.client && !app.isHydrating)
 const activeTab = ref<PricingTab>(props.initialTab)
+const upgradeConfirmationOpen = ref(false)
 await useAsyncData('billing-plans', async () => {
   await billing.loadCatalog()
   return true
@@ -61,7 +62,7 @@ const showTabs = computed(
   () =>
     hydrated.value &&
     auth.isAuthenticated &&
-    billing.account?.topup_eligible === true &&
+    (billing.account?.topup_eligible === true || upgradeConfirmationOpen.value) &&
     !!topUpPlan.value,
 )
 const initialLoading = computed(
@@ -128,13 +129,13 @@ async function retryInitialLoad() {
       <component :is="headingTag">{{ t('billing.title') }}</component>
     </header>
     <div
-      v-if="billing.error && !eligibilityUnknown"
+      v-if="billing.error && !eligibilityUnknown && !upgradeConfirmationOpen"
       class="pricing-feedback pricing-feedback-error"
       role="alert"
     >
       <p>{{ billing.error }}</p>
       <button
-        v-if="billing.retryAvailable"
+        v-if="billing.retryAvailable && !billing.retryBlocked"
         type="button"
         class="pricing-operation-retry"
         :disabled="billing.busy || active !== null"
@@ -216,6 +217,7 @@ async function retryInitialLoad() {
           :subscription="subscription"
           :controls-disabled="controlsDisabled"
           :can-upgrade="canUpgrade"
+          @confirmation-change="upgradeConfirmationOpen = $event"
         />
       </template>
       <template #credits>
@@ -242,6 +244,7 @@ async function retryInitialLoad() {
       :controls-disabled="controlsDisabled || eligibilityUnknown"
       :can-upgrade="canUpgrade"
       :eligibility-pending="eligibilityUnknown"
+      @confirmation-change="upgradeConfirmationOpen = $event"
     />
     <p
       v-if="catalog"

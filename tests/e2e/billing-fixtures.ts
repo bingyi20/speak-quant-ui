@@ -100,6 +100,8 @@ export function billingOrder(kind = 'subscription', planCode = 'basic') {
   return {
     id: '01M4T000000000000000000001',
     kind,
+    payment_mode: (kind === 'upgrade' ? 'saved_method' : null) as
+      'saved_method' | 'stripe_page' | null,
     plan_code: plan.code,
     plan_version: plan.version,
     amount_usd: plan.price_usd,
@@ -107,7 +109,7 @@ export function billingOrder(kind = 'subscription', planCode = 'basic') {
     credits: plan.monthly_credits,
     payment_status: 'requires_action',
     fulfillment_status: 'pending',
-    payment_action: billingPaymentAction(),
+    payment_action: billingPaymentAction() as ReturnType<typeof billingPaymentAction> | null,
     subscription_id: null as string | null,
     created_at: '2026-10-13T08:00:00Z',
     paid_at: null as string | null,
@@ -117,7 +119,12 @@ export function billingOrder(kind = 'subscription', planCode = 'basic') {
   }
 }
 
-export function billingQuote(kind = 'topup', planCode = 'basic', amount = '10.25') {
+export function billingQuote(
+  kind = 'topup',
+  planCode = 'basic',
+  amount = '10.25',
+  currentPlanCode = 'basic',
+) {
   const plan = billingCatalog.plans.find((item) => item.code === planCode)!
   const common = {
     quote_id: '01M4T000000000000000000002',
@@ -134,7 +141,34 @@ export function billingQuote(kind = 'topup', planCode = 'basic', amount = '10.25
     ? {
         ...common,
         rank: plan.rank,
-        old_plan_code: 'basic',
+        old_plan_code: currentPlanCode,
+        current_plan: (() => {
+          const current = billingSubscription(currentPlanCode)
+          return {
+            code: current.plan_code,
+            version: current.plan_version,
+            price_usd: current.monthly_price_usd,
+            monthly_credits: current.monthly_credits,
+          }
+        })(),
+        payment_method: {
+          type: 'card',
+          brand: 'visa',
+          last4: '0042',
+          exp_month: 10,
+          exp_year: 2029,
+        } as {
+          type: string
+          brand: string
+          last4: string
+          exp_month: number | null
+          exp_year: number | null
+        } | null,
+        billing_period_preview: {
+          starts_at: '2026-11-01T20:30:00Z',
+          ends_at: '2026-12-01T20:30:00Z',
+          is_estimate: true,
+        },
         old_monthly_credits_will_expire: true,
         reset_billing_cycle: true,
         signup_and_topup_preserved: true,
@@ -157,6 +191,9 @@ export async function stubBilling(
     balance: billingBalance(options.available),
     order: null as ReturnType<typeof billingOrder> | null,
     quote: null as ReturnType<typeof billingQuote> | null,
+    upgradeQuoteOverrides: {} as Partial<ReturnType<typeof billingQuote>>,
+    orderOverrides: {} as Partial<ReturnType<typeof billingOrder>>,
+    quoteSequence: 0,
     requests: [] as {
       method: string
       path: string
@@ -236,19 +273,40 @@ export async function stubBilling(
         total_pages: state.order ? 1 : 0,
       }
     } else if (path.startsWith('/api/billing/orders/')) {
-      if (!state.order || !path.endsWith(state.order.id)) {
+      const orderId = path.split('/')[4]
+      if (!state.order || orderId !== state.order.id) {
         await route.fulfill({
           status: 404,
           json: { code: 40400, data: null, error: { key: 'RESOURCE_NOT_FOUND' } },
         })
         return
       }
+      if (method === 'POST' && path.endsWith('/payment-page')) {
+        if (state.order.kind !== 'upgrade' || state.order.payment_mode !== 'stripe_page') {
+          await route.fulfill({
+            status: 400,
+            json: { code: 40001, data: null, error: { key: 'BILLING_NOT_ELIGIBLE' } },
+          })
+          return
+        }
+        if (state.order.payment_status !== 'paid')
+          state.order.payment_action = billingPaymentAction()
+      }
       data = state.order
     } else if (path === '/api/billing/topup-quotes') {
       state.quote = billingQuote('topup', state.account.subscription?.plan_code, body?.amount_usd)
       data = state.quote
     } else if (path === '/api/billing/subscription/upgrade-preview') {
-      state.quote = billingQuote('upgrade', body?.plan_code)
+      state.quote = {
+        ...billingQuote(
+          'upgrade',
+          body?.plan_code,
+          undefined,
+          state.account.subscription?.plan_code,
+        ),
+        quote_id: String(++state.quoteSequence).padStart(26, '0'),
+        ...state.upgradeQuoteOverrides,
+      }
       data = state.quote
     } else if (
       path === '/api/billing/checkouts/subscription' ||
@@ -264,6 +322,9 @@ export async function stubBilling(
         kind,
         kind === 'subscription' ? body?.plan_code : state.quote?.plan_code,
       )
+      if (kind === 'upgrade')
+        state.order.payment_mode =
+          body?.payment_mode === 'stripe_page' ? 'stripe_page' : 'saved_method'
       if (kind !== 'subscription' && state.quote) {
         state.order.amount_usd = state.quote.amount_usd
         state.order.credits = state.quote.credits
@@ -272,13 +333,14 @@ export async function stubBilling(
         state.account.pending_order_id = state.order.id
         state.account.topup_eligible = false
       }
-      if (state.immediateFulfillment) {
+      if (state.immediateFulfillment && state.order.payment_mode !== 'stripe_page') {
         state.order.payment_status = 'paid'
         state.order.fulfillment_status = 'fulfilled'
-        state.order.payment_action.action_type = 'none'
+        state.order.payment_action!.action_type = 'none'
         state.account = billingAccount(state.order.plan_code)
         state.balance = billingBalance(state.order.credits)
       }
+      Object.assign(state.order, state.orderOverrides)
       data = state.order
     } else if (
       path === '/api/billing/subscription/cancel' ||

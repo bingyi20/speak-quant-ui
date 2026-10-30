@@ -18,7 +18,10 @@ export function providerDate(value: string) {
 }
 export function paymentUrl(action: PaymentAction | null): string | null {
   if (action?.action_type !== 'redirect' || !action.url) return null
-  if (action.expires_at && providerDate(action.expires_at) <= Date.now()) return null
+  if (action.expires_at) {
+    const expiry = providerDate(action.expires_at)
+    if (!Number.isFinite(expiry) || expiry <= Date.now()) return null
+  }
   try {
     const url = new URL(action.url)
     if (url.protocol !== 'https:' || url.username || url.password) return null
@@ -26,4 +29,29 @@ export function paymentUrl(action: PaymentAction | null): string | null {
   } catch {
     return null
   }
+}
+
+/** A saved action never overrides the order's authoritative payment/fulfillment state. */
+export function orderPaymentUrl(order: BillingOrder): string | null {
+  if (
+    order.payment_status === 'paid' ||
+    order.fulfillment_status !== 'pending' ||
+    isOrderTerminal(order)
+  )
+    return null
+  return paymentUrl(order.payment_action)
+}
+
+/** Hosted upgrade pages are renewed by order ID, even when the previous URL is missing/expired. */
+export function canResumeOrderPayment(order: BillingOrder): boolean {
+  if (
+    order.payment_status === 'paid' ||
+    order.fulfillment_status !== 'pending' ||
+    isOrderTerminal(order)
+  )
+    return false
+  return (
+    (order.kind === 'upgrade' && order.payment_mode === 'stripe_page') ||
+    orderPaymentUrl(order) !== null
+  )
 }
