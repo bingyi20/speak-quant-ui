@@ -68,6 +68,7 @@ function setup() {
   const api: ReplayApi = {
     detail: vi.fn().mockResolvedValue(detail),
     list: vi.fn(),
+    equityCurve: vi.fn(),
     candles: vi.fn().mockImplementation(async (_id, query) => result(query)),
     trades: vi.fn().mockResolvedValue({ items: [], page: 1, total_pages: 1 }),
     report: vi.fn(),

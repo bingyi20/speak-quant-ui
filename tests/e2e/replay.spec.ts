@@ -523,7 +523,7 @@ test('one historical cutoff controls candles, timeline and trades while paused',
   await panel.getByRole('button', { name: '暂停', exact: true }).click()
   const pausedAt = await slider.inputValue()
   await expect(chart).toHaveAttribute('data-visible-end', pausedAt)
-  await expect(panel.getByRole('tab')).toHaveCount(0)
+  await expect(panel.getByRole('tab')).toHaveCount(2)
   await expect(
     panel.locator(isMobile ? '.replay-speed option:checked' : '.replay-speed'),
   ).toContainText(isMobile ? '根/秒' : '1x')
@@ -1126,7 +1126,8 @@ test('desktop headline metrics follow cutoff while metadata and details stay com
     values = panel.locator('.replay-summary-metrics dd')
   await expect(panel.locator('.replay-result-label')).toHaveText('最终结果')
   await expect(values).toHaveCount(6)
-  await expect(values.last()).toHaveText('空仓')
+  await expect(panel.locator('.replay-summary-metrics dt').last()).toHaveText('年化 Sharpe')
+  await expect(values.last()).toHaveText('—')
   await expect(values.last()).toHaveCSS('font-weight', '400')
   await expect(panel.locator('.replay-primary-action')).toHaveCSS(
     'background-color',
@@ -1160,9 +1161,7 @@ test('desktop headline metrics follow cutoff while metadata and details stay com
   await expect(panel.locator('.replay-summary-metrics button')).toHaveCount(0)
   await slider.press('Home')
   for (let i = 0; i < 20; i++) await slider.press('ArrowRight')
-  await expect(values.last()).toHaveText('持有多仓')
   for (let i = 20; i < 50; i++) await slider.press('ArrowRight')
-  await expect(values.last()).toHaveText('空仓')
   await expect(panel.locator('.replay-result-label')).toHaveClass(/is-historical/)
   await expect(values.nth(2)).toHaveText('1')
   await expect(values.nth(3)).toHaveText('100.00%')
@@ -2410,7 +2409,7 @@ test('desktop insights hover in the chart and timeline while trades stay chronol
   await expect(slider).toHaveValue(String(Date.parse(iso(199)) / 1000))
   await panel.getByRole('button', { name: '回到最新', exact: true }).click()
   await page.waitForTimeout(320)
-  await expect(panel.locator('[role="tab"]')).toHaveCount(0)
+  await expect(panel.locator('[role="tab"]')).toHaveCount(2)
   const marker = panel.locator('[data-event-id="insight:i-130"]')
   await marker.hover()
   await expect(page.locator('.replay-insight-hover-surface')).toContainText('纯文本洞察 130')

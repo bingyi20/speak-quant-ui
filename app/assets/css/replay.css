@@ -110,6 +110,7 @@
   color: var(--color-chart-down);
 }
 .replay-chart-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -152,11 +153,45 @@
 }
 .replay-instrument-tabs button:hover,
 .replay-instrument-tabs button:focus-visible {
-  color: var(--color-brand);
+  color: var(--color-text-primary);
 }
 .replay-instrument-tabs small {
   font-size: 10px;
   color: var(--color-text-muted);
+}
+.replay-instrument-tabs .replay-equity-tab {
+  align-items: center;
+  font-weight: 500;
+}
+.replay-instrument-tabs .replay-equity-tab[aria-selected='true'] {
+  background: transparent;
+  color: var(--color-brand);
+}
+.replay-tab-divider {
+  flex: 0 0 1px;
+  height: 16px;
+  margin-inline: 3px;
+  background: var(--color-border-default);
+}
+.replay-chart-toolbar.is-equity .replay-candle-control {
+  visibility: hidden;
+  pointer-events: none;
+}
+.replay-equity-quote .replay-equity-values {
+  display: flex;
+  gap: 8px 24px;
+}
+.replay-equity-values dd {
+  white-space: nowrap;
+}
+.replay-equity-range {
+  display: none;
+}
+.replay-equity-chart:focus {
+  outline: none;
+}
+.replay-equity-block:has(.replay-equity-chart:focus-visible) .replay-equity-quote dt {
+  color: var(--color-brand);
 }
 .replay-trade-instrument {
   display: block;
@@ -201,10 +236,6 @@
 }
 .replay-period-select {
   display: none;
-}
-.replay-period-label {
-  font-size: 12px;
-  color: var(--color-text-secondary);
 }
 .replay-toolbar-spacer {
   flex: 1;
@@ -327,8 +358,10 @@
   .replay-chart-block > .replay-chart-loading,
   .replay-chart-empty,
   .replay-chart-failure {
-    /* Keep feedback above the sticky playback controls on short screens. */
-    padding-bottom: 48px;
+    /* Use the reserved quote area so feedback stays above sticky playback. */
+    height: 124px;
+    bottom: auto;
+    padding: 0;
   }
   .replay-chart-toolbar {
     min-height: 44px;
@@ -1127,13 +1160,10 @@
     flex-shrink: 0;
   }
   .replay-summary-metrics {
-    grid-template-columns: repeat(6, max-content);
+    grid-template-columns: repeat(6, minmax(0, max-content));
     justify-content: space-between;
     align-items: baseline;
     gap: 8px;
-  }
-  .replay-summary-metrics.is-portfolio {
-    grid-template-columns: repeat(5, max-content);
   }
   .replay-summary-metrics > div:last-of-type {
     text-align: right;
@@ -1567,4 +1597,50 @@
 }
 .replay-trade-dialog tr.is-selected {
   background: var(--color-bg-subtle);
+}
+
+/* Both chart modes reserve the same mobile quote area and plotting height. */
+@media (max-width: 760px) {
+  .replay-chart-block > .replay-quote {
+    height: 148px;
+    overflow: auto;
+  }
+  .replay-chart-block:has(> .replay-chart-loading, > .replay-chart-empty, > .replay-chart-failure)
+    > .replay-quote {
+    visibility: hidden;
+  }
+  .replay-summary-metrics,
+  .replay-summary-metrics.is-portfolio {
+    position: relative;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 8px;
+  }
+  .replay-summary-metrics > div:first-child dd {
+    font-size: 20px;
+  }
+  .replay-summary-metrics .replay-secondary-metric {
+    display: block;
+  }
+  .replay-summary-metrics > .detail-icon-button {
+    position: absolute;
+    top: -30px;
+    right: 0;
+  }
+}
+@media (min-width: 761px) {
+  .replay-equity-quote .replay-ohlc {
+    display: flex;
+    gap: 6px 20px;
+  }
+}
+
+@container (max-width: 480px) {
+  .replay-equity-range {
+    display: block;
+    position: absolute;
+    left: 8px;
+    bottom: 12px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+  }
 }

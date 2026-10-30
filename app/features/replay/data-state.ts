@@ -1,4 +1,5 @@
 import { createDrawdownHistory, verifiedDrawdownRange } from './historical-result'
+import { createReplayEquityState } from './equity-state'
 import { computed, reactive, ref, shallowRef } from 'vue'
 import { BoundedCache } from '~/lib/chart/cache'
 import type { ReplayApi } from './api'
@@ -34,6 +35,7 @@ interface CandlePageIndex {
 }
 
 export function createReplayDataState(api: ReplayApi) {
+  const equity = createReplayEquityState(api)
   const detail = shallowRef<ReplayDetail | null>(null)
   const instruments = computed(() => replayInstruments(detail.value))
   const axisInstrument = ref(''),
@@ -98,6 +100,7 @@ export function createReplayDataState(api: ReplayApi) {
     generation++
     displayGeneration++
     controller.abort()
+    equity.cancel()
     displayRequest?.abort()
     inFlight.clear()
     scanning = false
@@ -107,6 +110,7 @@ export function createReplayDataState(api: ReplayApi) {
   }
   function reset() {
     cancel()
+    equity.reset()
     controller = new AbortController()
     currentId = ''
     detail.value = null
@@ -407,6 +411,11 @@ export function createReplayDataState(api: ReplayApi) {
       }
     }
   }
+  function loadEquityCurve() {
+    return detail.value
+      ? equity.load(currentId, detail.value, controller.signal)
+      : Promise.resolve()
+  }
   async function load(id: string, atStart = false, preserve = false) {
     if (!preserve || currentId !== id) {
       reset()
@@ -606,12 +615,18 @@ export function createReplayDataState(api: ReplayApi) {
     displayError,
     drawdownRange,
     equityHistory,
+    equityCurve: equity.equityCurve,
+    equityLoading: equity.equityLoading,
+    equityError: equity.equityError,
+    equityComplete: equity.equityComplete,
     displayWindow,
     load,
     reset,
     cancel,
     retry,
     loadReport,
+    loadEquityCurve,
+    retryEquityCurve: loadEquityCurve,
     readCandle,
     setTimeframe,
     setInstrument,

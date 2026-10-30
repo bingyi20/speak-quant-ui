@@ -53,6 +53,9 @@ export interface ReplayResult {
   net_profit: string | null
   total_fee: string | null
   profit_factor?: string | null
+  /** Frozen full-run annualized ratio, independent of playback and chart selection. */
+  sharpe_ratio?: string | null
+  sharpe?: ReplaySharpe | null
   payoff_ratio?: string | null
   gross_return_rate?: string | null
   initial_capital?: string | null
@@ -66,6 +69,22 @@ export interface ReplayResult {
   short_metrics?: Record<string, string | number | null> | null
   quality_status?: string
   quality_warnings?: Array<string | { key?: string; message?: string; label?: string }>
+}
+export interface ReplaySharpe {
+  ratio: string | null
+  method: string | null
+  sampling_timeframe: string | null
+  annualization_factor: string | null
+  risk_free_rate: string | null
+  sample_count: number | null
+  unavailable_reason:
+    | 'insufficient_samples'
+    | 'zero_volatility'
+    | 'non_positive_equity'
+    | 'invalid_equity'
+    | 'unsupported_timeframe'
+    | 'not_calculated'
+    | null
 }
 export interface ReplayDetail {
   id: string
@@ -198,6 +217,34 @@ export interface CandleQuery {
   to?: string
   timeframe?: string
 }
+/** Independent frozen account samples; time is the equity-effective close, including milliseconds. */
+export interface ReplayEquityCurvePoint {
+  sequence: number
+  time: string
+  open_time: string | null
+  equity: string
+  net_return_rate: string
+  drawdown_rate: string
+  is_initial: boolean
+}
+export interface ReplayEquityCurve {
+  capital_currency: string
+  execution_timeframe: string
+  initial_capital: string
+  start_at: string
+  end_at: string
+  items: ReplayEquityCurvePoint[]
+}
+export interface ReplayEquityCurvePage extends ReplayEquityCurve {
+  has_more: boolean
+  next_cursor: string | null
+}
+export interface EquityCurveQuery {
+  cursor?: string
+  limit?: number
+  from?: string
+  to?: string
+}
 /** Numeric drawing projection. Raw Decimal values and state stay in bounded page storage. */
 export interface ReplayBar {
   id: string
@@ -310,6 +357,7 @@ export interface ReplayInstrumentView {
   seekRevision?: number
 }
 export interface ReplayViewSnapshot {
+  chartView?: 'candles' | 'equity'
   instrumentViews?: Record<string, ReplayInstrumentView>
   instrument?: string
   index: number

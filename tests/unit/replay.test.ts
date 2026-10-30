@@ -10,6 +10,7 @@ function setup() {
   const api: ReplayApi = {
     detail: vi.fn().mockResolvedValue(replayDetail),
     list: vi.fn(),
+    equityCurve: vi.fn(),
     candles: vi
       .fn()
       .mockResolvedValue({ timeframe: '1h', items: raw, has_more: false, next_cursor: null }),

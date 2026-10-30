@@ -13,7 +13,7 @@ async function openPortfolio(page: Page) {
 }
 
 function tabs(panel: Locator) {
-  return panel.getByRole('tablist', { name: '行情标的', exact: true })
+  return panel.getByRole('tablist', { name: '图表视图', exact: true })
 }
 
 function tradeCards(panel: Locator, isMobile: boolean) {
@@ -178,6 +178,16 @@ async function panChart(page: Page, chart: Locator, fraction: number) {
   await waitForChartPaint(page)
 }
 
+async function leaveChartHover(page: Page, chart: Locator) {
+  await chart.scrollIntoViewIfNeeded()
+  const box = (await chart.boundingBox())!
+  // The SDK ignores an iOS mouseleave without a matching mouseenter. A real
+  // enter/leave pair clears the reference chart's crosshair point just as
+  // deactivation clears it on the cached chart before comparing marker pixels.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.move(0, 0)
+}
+
 async function prepareCatchupPage(page: Page) {
   await stubPortfolio(page)
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -217,7 +227,7 @@ test('portfolio tabs isolate chart feeds while trades, account result and the ti
   page.on('pageerror', (error) => pageErrors.push(error.message))
   const panel = await openPortfolio(page),
     instruments = tabs(panel)
-  await expect(instruments.getByRole('tab')).toHaveCount(4)
+  await expect(instruments.getByRole('tab')).toHaveCount(5)
   await expect(instruments.getByRole('tab', { name: /BTC\/USDT.*现货/ })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -429,7 +439,7 @@ test('portfolio historical metrics follow the shared account cutoff across instr
     slider = panel.locator('.replay-timeline input'),
     metrics = panel.locator('.replay-summary-metrics dd'),
     resultLabel = panel.locator('.replay-result-label')
-  const finalMetrics = ['+1.9900%', '0.0000%', '3', '50.00%', '2.20']
+  const finalMetrics = ['+1.9900%', '0.0000%', '3', '50.00%', '2.20', '—']
   await expect(resultLabel).toHaveText('最终结果')
   await expect(metrics).toHaveText(finalMetrics)
   const seek = async (index: number, expected: string[]) => {
@@ -440,16 +450,16 @@ test('portfolio historical metrics follow the shared account cutoff across instr
     }, value)
     await expect(slider).toHaveValue(value)
     await expect(resultLabel).toHaveText('截至此时')
-    await expect(metrics).toHaveText(expected)
+    await expect(metrics).toHaveText([...expected, '—'])
   }
   await seek(0, ['0.0000%', '0.0000%', '0', '—', '—'])
   await seek(20, ['+10.0000%', '0.0000%', '2', '—', '—'])
-  const earlierMetrics = ['+5.0000%', '4.5455%', '2', '50.00%', '1.38']
-  await seek(60, earlierMetrics)
+  const earlierMetrics = ['+5.0000%', '4.5455%', '2', '50.00%', '1.38', '—']
+  await seek(60, earlierMetrics.slice(0, 5))
   await seek(90, ['-1.0000%', '10.0000%', '3', '50.00%', '1.38'])
   await seek(110, ['+8.0000%', '10.0000%', '3', '33.33%', '0.69'])
   // Rewinding removes the later trade and drawdown, rather than retaining future totals.
-  await seek(60, earlierMetrics)
+  await seek(60, earlierMetrics.slice(0, 5))
 
   await instruments.getByRole('tab', { name: /ETH\/USDT/ }).click()
   await expect(panel.getByRole('img', { name: 'ETH/USDT 1h K 线图' })).toHaveAttribute(
@@ -497,7 +507,7 @@ test('keyboard instrument tabs support a read-only feed without inventing execut
   const { candleRequests, invalidRequests } = await stubPortfolio(page)
   const panel = await openPortfolio(page),
     instruments = tabs(panel),
-    first = instruments.getByRole('tab').first(),
+    first = instruments.getByRole('tab', { name: /BTC\/USDT.*现货/ }),
     benchmark = instruments.getByRole('tab', { name: /SOL\/USDT/ })
   const end = await panel.locator('.replay-timeline input').getAttribute('max')
   await first.focus()
@@ -609,12 +619,13 @@ test('a failed instrument switch preserves the current chart and the same tab ca
   await expect(panel.locator('.replay-inline-error')).toHaveCount(0)
 })
 
-test('legacy single-instrument replays retain their chart without a redundant instrument tab', async ({
+test('legacy single-instrument replays retain their chart alongside the account equity tab', async ({
   page,
 }) => {
   const { requested } = await stubReplay(page)
   const panel = await openPortfolio(page)
-  await expect(tabs(panel)).toHaveCount(0)
+  await expect(tabs(panel).getByRole('tab')).toHaveCount(2)
+  await expect(tabs(panel).getByRole('tab', { name: '资金曲线', exact: true })).toBeVisible()
   await expect(panel.getByRole('img', { name: 'BTC/USDT 1h K 线图' })).toBeVisible()
   expect(requested.every((url) => !new URL(url).searchParams.has('instrument'))).toBe(true)
 })
@@ -795,7 +806,7 @@ for (const scenario of ['following', 'detached', 'filling', 'global seek'] as co
       // reactivation and then catches up to the same output as the live chart.
       expect(await canvas!.evaluate((element) => element.toDataURL())).toBe(dormantImage)
       await referencePage.bringToFront()
-      await referencePage.mouse.move(0, 0)
+      await leaveChartHover(referencePage, reference.chart)
       if (scenario === 'global seek') await waitForChartPaint(referencePage)
       else await referencePage.clock.runFor(100)
       const expected = await chartFrame(reference.chart),
@@ -810,7 +821,7 @@ for (const scenario of ['following', 'detached', 'filling', 'global seek'] as co
       await hidden.eth.click()
       await expect(hidden.eth).toHaveAttribute('aria-selected', 'true')
       await expect(hidden.chart).toHaveAttribute('aria-busy', 'false')
-      await page.mouse.move(0, 0)
+      await leaveChartHover(page, hidden.chart)
       if (scenario === 'global seek') await waitForChartPaint(page)
       else await page.clock.runFor(150)
       expect(
@@ -854,10 +865,17 @@ test('English instrument tabs expose keyboard selection and translated market la
   await page.goto(`/conversations/${conversationId}`)
   await page.locator('.message-list-shell .message-card').click()
   const panel = page.locator('.asset-detail-panel'),
-    instruments = panel.getByRole('tablist', { name: 'Chart instrument', exact: true }),
+    instruments = panel.getByRole('tablist', { name: 'Chart view', exact: true }),
     first = instruments.getByRole('tab', { name: /BTC\/USDT.*Spot/ }),
     second = instruments.getByRole('tab', { name: /ETH\/USDT.*Perpetual/ })
   await expect(first).toHaveAttribute('aria-selected', 'true')
+  await expect
+    .poll(() =>
+      panel
+        .locator('.replay-summary-metrics')
+        .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    )
+    .toBe(true)
   await first.focus()
   await first.press('ArrowRight')
   await expect(second).toBeFocused()

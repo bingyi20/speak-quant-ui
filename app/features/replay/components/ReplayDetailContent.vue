@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { formatDate, formatDateTime, formatDecimal, formatRatio } from '~/lib/format'
 import ReplayChart from './ReplayChart.client.vue'
+import ReplayEquityChart from './ReplayEquityChart.client.vue'
 import ReplayTimeline from './ReplayTimeline.vue'
 import ReplayEvidencePanel from './ReplayEvidencePanel.vue'
 import ReplayDetails from './ReplayDetails.vue'
@@ -58,6 +59,11 @@ const {
   viewRange,
   follow,
   scrollTop,
+  chartView,
+  equityCurve,
+  equityLoading,
+  equityError,
+  equityCutoff,
 } = props.state
 const desktop = ref(false)
 let desktopQuery: MediaQueryList | undefined
@@ -95,7 +101,7 @@ function marketLabel(instrument: { market_type?: string; contract_type?: string 
     : ''
 }
 function instrumentKeydown(event: KeyboardEvent, position: number) {
-  const count = instruments.value.length
+  const count = instruments.value.length + 1
   const target =
     event.key === 'ArrowRight'
       ? (position + 1) % count
@@ -113,8 +119,11 @@ function instrumentKeydown(event: KeyboardEvent, position: number) {
   ).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
   buttons?.[target]?.focus({ preventScroll: true })
   buttons?.[target]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  const instrument = instruments.value[target]
-  if (instrument) void props.state.setInstrument(instrument.role)
+  if (target === 0) props.state.showEquity()
+  else {
+    const instrument = instruments.value[target - 1]
+    if (instrument) void props.state.setInstrument(instrument.role)
+  }
 }
 const chartLoading = computed(
   () => !renderedBars.value.length && (phases.candles === 'loading' || displayLoading.value),
@@ -187,18 +196,11 @@ const metrics = computed(() => {
         { key: 'trades', value: r.trade_count === null ? '—' : String(r.trade_count), sign: 0 },
         { key: 'winRate', value: formatRatio(r.win_rate, locale.value), sign: 0 },
         { key: 'profitFactor', value: formatDecimal(r.profit_factor, locale.value), sign: 0 },
-        ...(desktop.value && !portfolio.value
-          ? [
-              {
-                key: 'currentPosition',
-                value:
-                  currentLoading.value || gapTime.value || !currentState.value?.direction
-                    ? '—'
-                    : t(`replay.holdingDirection.${currentState.value.direction}`),
-                sign: 0,
-              },
-            ]
-          : []),
+        {
+          key: 'sharpe',
+          value: formatDecimal(detail.value?.result?.sharpe_ratio, locale.value),
+          sign: 0,
+        },
       ]
     : []
 })
@@ -397,15 +399,22 @@ onBeforeUnmount(() => {
             :key="metric.key"
             :class="{ 'replay-secondary-metric': ['winRate', 'profitFactor'].includes(metric.key) }"
           >
-            <dt>{{ t(metric.key === 'trades' ? 'replay.tradeTotal' : `replay.${metric.key}`) }}</dt>
+            <dt :title="metric.key === 'sharpe' ? t('replay.sharpeHint') : undefined">
+              {{ t(metric.key === 'trades' ? 'replay.tradeTotal' : `replay.${metric.key}`) }}
+            </dt>
             <dd :class="{ 'is-positive': metric.sign > 0, 'is-negative': metric.sign < 0 }">
               <span
-                :class="{ 'replay-metric-pending': initializing && !errors.candles }"
-                :aria-hidden="initializing && !errors.candles ? true : undefined"
+                :class="{
+                  'replay-metric-pending':
+                    metric.key !== 'sharpe' && initializing && !errors.candles,
+                }"
+                :aria-hidden="
+                  metric.key !== 'sharpe' && initializing && !errors.candles ? true : undefined
+                "
                 >{{ metric.sign > 0 ? '+' : '' }}{{ metric.value }}</span
               >
               <LoadingSkeleton
-                v-if="initializing && !errors.candles"
+                v-if="metric.key !== 'sharpe' && initializing && !errors.candles"
                 class="replay-metric-skeleton"
               />
             </dd>
@@ -441,27 +450,46 @@ onBeforeUnmount(() => {
         </div>
         <div class="replay-chart-region">
           <div
-            class="replay-chart-toolbar"
-            :class="{ 'has-instruments': instruments.length > 1 }"
+            class="replay-chart-toolbar has-instruments"
+            :class="{ 'is-equity': chartView === 'equity' }"
           >
             <div
-              v-if="instruments.length > 1"
               class="replay-instrument-tabs"
               role="tablist"
-              :aria-label="t('replay.chartInstrument')"
+              :aria-label="t('replay.chartView')"
             >
+              <button
+                id="replay-equity-tab"
+                class="replay-equity-tab"
+                type="button"
+                role="tab"
+                :aria-selected="chartView === 'equity'"
+                :tabindex="chartView === 'equity' ? 0 : -1"
+                aria-controls="replay-instrument-chart"
+                @click="state.showEquity"
+                @keydown="instrumentKeydown($event, 0)"
+              >
+                <UIcon name="i-lucide-chart-no-axes-combined" />
+                {{ t('replay.equityCurve') }}
+              </button>
+              <span
+                class="replay-tab-divider"
+                aria-hidden="true"
+              />
               <button
                 v-for="(instrument, position) in instruments"
                 :id="`replay-instrument-${instrument.role}`"
                 :key="instrument.role"
                 type="button"
                 role="tab"
-                :aria-selected="instrument.role === displayInstrument"
-                :tabindex="instrument.role === displayInstrument ? 0 : -1"
+                :aria-selected="chartView === 'candles' && instrument.role === displayInstrument"
+                :tabindex="
+                  chartView === 'candles' && instrument.role === displayInstrument ? 0 : -1
+                "
                 aria-controls="replay-instrument-chart"
                 :title="`${instrument.symbol} · ${marketLabel(instrument)} · ${instrument.role}`"
                 @click="state.setInstrument(instrument.role)"
-                @keydown="instrumentKeydown($event, position)"
+                @keydown="instrumentKeydown($event, position + 1)"
               >
                 <span>{{ instrument.symbol }}</span>
                 <small>{{ marketLabel(instrument) }}</small>
@@ -469,7 +497,8 @@ onBeforeUnmount(() => {
             </div>
             <div
               v-if="!playing && availableTimeframes.length > 1"
-              class="replay-periods"
+              class="replay-periods replay-candle-control"
+              :inert="chartView === 'equity'"
               :aria-label="t('replay.viewTimeframe')"
             >
               <button
@@ -483,7 +512,8 @@ onBeforeUnmount(() => {
             </div>
             <USelect
               v-if="!playing && availableTimeframes.length > 1"
-              class="replay-period-select"
+              class="replay-period-select replay-candle-control"
+              :inert="chartView === 'equity'"
               :model-value="displayTimeframe"
               :items="availableTimeframes"
               :aria-label="t('replay.viewTimeframe')"
@@ -491,20 +521,20 @@ onBeforeUnmount(() => {
               @update:model-value="state.setTimeframe"
             />
             <span
-              v-else
-              class="replay-period-label"
-              >{{ displayTimeframe }}</span
-            >
-            <span
               v-if="displayTimeframe !== detail.strategy.execution_timeframe"
-              class="replay-muted"
+              class="replay-muted replay-candle-control"
               >{{ t('replay.execution', { timeframe: detail.strategy.execution_timeframe }) }}</span
             >
             <LoadingSpinner
-              v-if="displayLoading && renderedBars.length"
+              v-if="chartView === 'candles' && displayLoading && renderedBars.length"
               size="sm"
               :decorative="false"
             />
+            <span
+              v-if="chartView === 'equity'"
+              class="replay-equity-range"
+              >{{ t('replay.equityFullRange') }}</span
+            >
             <span class="replay-toolbar-spacer" />
             <UDropdownMenu
               v-if="desktop"
@@ -526,7 +556,8 @@ onBeforeUnmount(() => {
               :text="t('replay.volume')"
               :delay-duration="400"
               ><button
-                class="detail-icon-button"
+                class="detail-icon-button replay-candle-control"
+                :inert="chartView === 'equity'"
                 :aria-pressed="volume"
                 :aria-label="t('replay.volume')"
                 @click="volume = !volume"
@@ -535,7 +566,7 @@ onBeforeUnmount(() => {
             ></UTooltip>
           </div>
           <div
-            v-if="displayError"
+            v-if="chartView === 'candles' && displayError"
             class="replay-inline-error"
             role="alert"
           >
@@ -543,17 +574,20 @@ onBeforeUnmount(() => {
           </div>
           <div
             id="replay-instrument-chart"
-            :role="instruments.length > 1 ? 'tabpanel' : undefined"
+            role="tabpanel"
             :aria-labelledby="
-              instruments.length > 1 ? `replay-instrument-${displayInstrument}` : undefined
+              chartView === 'equity'
+                ? 'replay-equity-tab'
+                : `replay-instrument-${displayInstrument}`
             "
           >
             <ClientOnly>
               <KeepAlive :key="detail.id">
                 <ReplayChart
-                  :key="displayInstrument"
+                  v-if="chartView === 'candles'"
+                  :key="`candles:${displayInstrument}`"
                   :instrument="displayInstrument"
-                  :visible="active"
+                  :visible="active && chartView === 'candles'"
                   :bars="renderedBars"
                   :events="chartEvents"
                   :selection="selection"
@@ -581,6 +615,23 @@ onBeforeUnmount(() => {
                   @interact="interact"
                   @follow="follow = true"
                   @retry="state.retry('candles')"
+                />
+                <ReplayEquityChart
+                  v-else
+                  key="equity"
+                  :visible="active && chartView === 'equity'"
+                  :points="equityCurve?.items ?? []"
+                  :start-at="equityCurve?.start_at ?? detail.conditions.start_at"
+                  :end-at="equityCurve?.end_at ?? detail.conditions.end_at"
+                  :cutoff="equityCutoff"
+                  :capital-currency="
+                    equityCurve?.capital_currency ??
+                    detail.execution_assumptions?.capital_currency ??
+                    ''
+                  "
+                  :loading="equityLoading"
+                  :load-error="equityError"
+                  @retry="state.retryEquityCurve"
                 />
               </KeepAlive>
               <template #fallback>

@@ -44,7 +44,7 @@ test('delayed replay detail and candles show centered loading without moving the
   const loading = panel.locator('.replay-chart-loading')
   await expect(loading).toBeVisible()
   await expect(loading.locator('.loading-spinner')).toBeVisible()
-  await expect(panel.locator('.replay-metric-skeleton')).toHaveCount(isMobile ? 5 : 6)
+  await expect(panel.locator('.replay-metric-skeleton')).toHaveCount(5)
   const before = (await plot.boundingBox())!
   const chartRegion = (await panel.locator('.replay-chart-block').boundingBox())!
   const spinner = (await loading.locator('.loading-spinner').boundingBox())!

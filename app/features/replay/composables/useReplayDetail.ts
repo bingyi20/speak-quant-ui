@@ -43,6 +43,8 @@ export function useReplayDetail(
     locateError = ref(''),
     gapTime = ref<number | null>(null)
   const expanded = ref(true)
+  const chartView = ref<'candles' | 'equity'>('candles')
+  const initialEquityOverview = ref(true)
   const viewRange = shallowRef<{ from: number; to: number } | null>(null)
   const requestedRange = shallowRef<(ChartViewportRequest & { revision: number }) | null>(null)
   // Cached charts consume explicit navigation once when they become visible again.
@@ -107,6 +109,23 @@ export function useReplayDetail(
         currentBar.value.time)
       : -Infinity,
   )
+  // v3 account samples use the shared execution boundary, not a venue candle's
+  // close-time minus one millisecond. Display instruments never choose this clock.
+  const equityCutoff = computed(() => {
+    if (atEnd.value) return Date.parse(data.detail.value!.conditions.end_at) / 1000
+    if (!currentBar.value)
+      return initialEquityOverview.value && data.detail.value
+        ? Date.parse(data.detail.value.conditions.end_at) / 1000
+        : -Infinity
+    return data.detail.value?.conditions.instruments
+      ? (nextBarTime(currentBar.value.time, data.detail.value.strategy.execution_timeframe) ??
+          cutoff.value)
+      : cutoff.value
+  })
+  function showEquity() {
+    chartView.value = 'equity'
+    void data.loadEquityCurve()
+  }
   const visibleTrades = computed(() =>
     revealTrades(data.trades.value, data.indexById, index.value, data.axis.value),
   )
@@ -243,6 +262,7 @@ export function useReplayDetail(
     instrumentViews.set(data.displayInstrument.value, currentInstrumentView())
     snapshots.delete(currentId)
     snapshots.set(currentId, {
+      chartView: chartView.value,
       instrumentViews: Object.fromEntries(instrumentViews),
       index: index.value,
       speed: speed.value,
@@ -419,6 +439,7 @@ export function useReplayDetail(
     movePlayhead = true,
     alignment: 'reveal' | 'center' = 'reveal',
   ) {
+    chartView.value = 'candles'
     // Evidence inspection changes the viewport, not the playback clock.
     if (movePlayhead) pause()
     const evidenceTicket = ++evidenceGeneration
@@ -677,6 +698,9 @@ export function useReplayDetail(
     }
   }
   async function setInstrument(role: string) {
+    const returningFromEquity = chartView.value === 'equity'
+    chartView.value = 'candles'
+    if (returningFromEquity && role === data.displayInstrument.value) return true
     pause()
     const ticket = seekGeneration
     const saved =
@@ -781,6 +805,8 @@ export function useReplayDetail(
       seekRevision.value = 0
       seekCutoff.value = null
       restore = currentId ? snapshots.get(currentId) : undefined
+      initialEquityOverview.value = !restore
+      chartView.value = restore?.chartView ?? 'candles'
       for (const [role, view] of Object.entries(restore?.instrumentViews ?? {}))
         instrumentViews.set(role, { ...view, seekRevision: 0 })
       if (!currentId) return
@@ -791,6 +817,7 @@ export function useReplayDetail(
         preferredSpeed = restore?.speed
       void data.load(currentId, !!pendingAuto).then(() => {
         if (ownerId !== currentId || !alive) return
+        if (chartView.value === 'equity') void data.loadEquityCurve()
         speed.value = preferredSpeed ?? baseSpeed.value
         const supported = [...speeds.value, ...[0.5, 1, 2, 5, 10].map((n) => n * baseSpeed.value)]
         if (!supported.includes(speed.value)) speed.value = baseSpeed.value
@@ -885,6 +912,9 @@ export function useReplayDetail(
     initializing,
     atEnd,
     cutoff,
+    equityCutoff,
+    chartView,
+    showEquity,
     visibleTrades,
     status,
     index,

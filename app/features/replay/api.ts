@@ -2,8 +2,10 @@ import type { HttpClient } from '~/lib/http/client'
 import type { Page } from '#shared/types/http'
 import type {
   CandleQuery,
+  EquityCurveQuery,
   ReplayCandlePage,
   ReplayDetail,
+  ReplayEquityCurvePage,
   ReplayListPage,
   ReplayReport,
   ReplayTrade,
@@ -19,6 +21,11 @@ export const createReplayApi = (http: HttpClient) => ({
     }),
   candles: (id: string, query: CandleQuery = {}, signal?: AbortSignal) =>
     http.requestJson<ReplayCandlePage>(`/replays/${encodeURIComponent(id)}/candles`, {
+      query: { limit: 2000, ...query },
+      signal,
+    }),
+  equityCurve: (id: string, query: EquityCurveQuery = {}, signal?: AbortSignal) =>
+    http.requestJson<ReplayEquityCurvePage>(`/replays/${encodeURIComponent(id)}/equity-curve`, {
       query: { limit: 2000, ...query },
       signal,
     }),
